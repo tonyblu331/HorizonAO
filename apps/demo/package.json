@@ -1,0 +1,34 @@
+{
+  "name": "@horizonao/demo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "test": "vitest run --passWithNoTests --exclude e2e/**",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "typecheck:tsgo": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@horizonao/core": "workspace:*",
+    "@react-three/drei": "10.7.7",
+    "@react-three/fiber": "9.6.1",
+    "@tanstack/react-router": "1.170.3",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "three": "0.184.0"
+  },
+  "devDependencies": {
+    "@babel/core": "7.29.0",
+    "@playwright/test": "1.60.0",
+    "@rolldown/plugin-babel": "0.2.3",
+    "@types/babel__core": "7.20.5",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "@types/three": "0.184.1",
+    "@vitejs/plugin-react": "6.0.2",
+    "babel-plugin-react-compiler": "1.0.0",
+    "vite": "8.0.13"
+  }
+}

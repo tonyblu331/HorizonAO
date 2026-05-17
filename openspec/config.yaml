@@ -1,0 +1,24 @@
+schema: spec-driven
+
+context: |
+  Stack: pnpm monorepo, Vite 8, React 19, R3F 9, Three 0.184, TanStack Router, tsdown.
+  Rendering: WebGPU-first via async R3F Canvas gl callback; WebGL2 fallback is allowed by Three WebGPURenderer.
+  Testing: Vitest for library behavior; Playwright for route/canvas smoke tests.
+  TypeScript: TS 6 stable plus TS7 native-preview via tsgo.
+
+strict_tdd: true
+
+testing:
+  runner: pnpm test
+  unit: vitest
+  e2e: playwright
+  typecheck: pnpm typecheck
+  ts7_preview: pnpm typecheck:tsgo
+
+rules:
+  specs:
+    - Use RFC 2119 keywords.
+    - Use Given/When/Then scenarios.
+  apply:
+    - Do not run build commands.
+    - Verify claims against docs or package metadata before depending on them.

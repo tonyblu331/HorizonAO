@@ -1,0 +1,29 @@
+{
+  "name": "@horizonao/core",
+  "version": "0.0.0",
+  "description": "Core settings and future WebGPU pass primitives for HorizonAO.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "typecheck:tsgo": "tsgo --noEmit"
+  },
+  "peerDependencies": {
+    "three": ">=0.184.0"
+  },
+  "devDependencies": {
+    "tsdown": "0.22.0"
+  }
+}

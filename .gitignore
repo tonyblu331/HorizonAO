@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+test-results/
+playwright-report/
+.vite/
+.vite-demo*.log
+*.tsbuildinfo
+apps/demo/src/routeTree.gen.ts
