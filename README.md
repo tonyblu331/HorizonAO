@@ -1,33 +1,34 @@
 # HorizonAO
 
-High quality, compact Horizon Based Ambient Occlusion research for WebGPU-first Three.js scenes.
+Focused TSL/WebGPU ambient occlusion node proposal for Three.js.
 
-HorizonAO is a small rendering lab for building and validating a modern ambient occlusion pipeline in the browser. The project starts with a WebGPU-first demo scene suite, a typed core package, and test coverage around the public behavior before the AO shader work grows teeth.
+HorizonAO is a focused TSL/WebGPU AO node that keeps the `GTAONode` integration model, improves the sampling and denoise path, stays AA-agnostic, and proves every extra pass with screenshots and timings before it becomes part of the core.
 
 ![HorizonAO](https://dummyimage.com/1200x520/0a0f11/f5f1e8&text=HorizonAO)
 
-## Why
+## Proposal
 
-Ambient occlusion sells contact, scale, and depth. Bad AO does the opposite: it smears corners, darkens everything equally, and hides poor lighting behind mush.
+Three.js already has a useful AO integration shape in `GTAONode`. HorizonAO starts from that contract instead of inventing a parallel rendering pipeline. The goal is a sharper Horizon Based Ambient Occlusion node for TSL/WebGPU that can be judged as an incremental core-quality proposal.
 
-HorizonAO is shaped around a stricter goal:
+The constraints are deliberate:
 
-- crisp contact shadows without over-darkening the scene
-- compact settings suitable for real-time demos
-- WebGPU-first renderer setup with WebGL fallback through Three.js
-- testable scene routes for visual and E2E validation
-- a library API that stays small until the renderer design is proven
+- keep the `GTAONode` style of integration
+- improve sampling before adding knobs
+- improve denoise before adding more passes
+- stay anti-aliasing agnostic
+- require screenshots and timings for every extra pass
+- keep the public API small until the visual/performance evidence is real
 
 ## Demo Scenes
 
-The demo app includes routes for:
+The demo app exists to prove the node proposal under recognizable geometry and lighting conditions:
 
 - **Primitive Grid**: instanced boxes on an XZ grid for baseline depth and contact testing.
 - **Sponza**: architectural glTF scene for scale, texture, and lighting stress.
 - **Suzanne**: neutral clay material for reading shadows and future AO clearly.
 - **Stanford Bunny**: classic geometry benchmark via a browser-friendly GLB mirror.
 
-Each scene has its own camera target and third-person orbit controls so the first frame is actually useful. Concepts first, code second. Otherwise you just made a spinning postcard.
+Each scene has its own camera target and third-person orbit controls so screenshots are repeatable enough to compare sampling, denoise, and timing changes. Concepts first, code second. Otherwise you just made a spinning postcard.
 
 ## Stack
 
@@ -64,6 +65,16 @@ Open:
 ```text
 http://127.0.0.1:5173/
 ```
+
+## Evidence Loop
+
+Every proposed core change should answer three questions:
+
+- What visual artifact does this fix?
+- What does it cost in timing?
+- Which screenshot proves the tradeoff?
+
+If a pass cannot justify itself with screenshots and timings, it does not belong in the core. Ponete las pilas: rendering code without evidence is just vibes with uniforms.
 
 ## Quality Checks
 
