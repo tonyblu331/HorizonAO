@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test'
+import type { HorizonAoDebugView } from '@horizonao/core'
 import { PARITY_SCENES } from '../src/parityScenes'
 
 const routes = Object.values(PARITY_SCENES)
+const renderedDebugViews = ['raw-ao', 'linear-depth', 'normal'] as const satisfies readonly HorizonAoDebugView[]
+const measuredBaselines = ['three-gtao-node', 'horizonao-raw'] as const
 
 for (const fixture of routes) {
   test(`paints a non-empty canvas on ${fixture.route}`, async ({ page }) => {
@@ -53,6 +56,11 @@ for (const fixture of routes) {
 
     await page.getByLabel('AO debug view').selectOption('edge-confidence')
     await expect(panel).toHaveAttribute('data-debug-view', 'edge-confidence')
+    await expect(panel).toHaveAttribute('data-debug-view-status', 'metadata-only')
+
+    await page.getByLabel('AO debug view').selectOption('normal')
+    await expect(panel).toHaveAttribute('data-debug-view', 'normal')
+    await expect(panel).toHaveAttribute('data-debug-view-status', 'rendered')
   })
 
   test(`captures a parity screenshot artifact on ${fixture.route}`, async ({ page }, testInfo) => {
@@ -77,6 +85,7 @@ for (const fixture of routes) {
         baseline: element.dataset.baseline,
         baselineStatus: element.dataset.baselineStatus,
         debugView: element.dataset.debugView,
+        debugViewStatus: element.dataset.debugViewStatus,
         renderBackend: element.dataset.renderBackend,
         resolution: element.dataset.resolution,
         dpr: element.dataset.dpr,
@@ -106,6 +115,8 @@ for (const fixture of routes) {
     await page.getByLabel('AO baseline').selectOption('three-gtao-node')
     await expect(panel).toHaveAttribute('data-baseline', 'three-gtao-node')
     await expect(panel).toHaveAttribute('data-baseline-status', 'available')
+    await page.getByLabel('AO debug view').selectOption('raw-ao')
+    await expect(panel).toHaveAttribute('data-debug-view-status', 'rendered')
     await expect
       .poll(async () => panel.getAttribute('data-gpu-timing'), { timeout: 10_000 })
       .toMatch(/^(captured|unsupported)$/)
@@ -137,6 +148,7 @@ for (const fixture of routes) {
         baseline: element.dataset.baseline,
         baselineStatus: element.dataset.baselineStatus,
         debugView: element.dataset.debugView,
+        debugViewStatus: element.dataset.debugViewStatus,
         renderBackend: element.dataset.renderBackend,
         resolution: element.dataset.resolution,
         dpr: element.dataset.dpr,
@@ -166,6 +178,8 @@ for (const fixture of routes) {
     await page.getByLabel('AO baseline').selectOption('horizonao-raw')
     await expect(panel).toHaveAttribute('data-baseline', 'horizonao-raw')
     await expect(panel).toHaveAttribute('data-baseline-status', 'available')
+    await page.getByLabel('AO debug view').selectOption('raw-ao')
+    await expect(panel).toHaveAttribute('data-debug-view-status', 'rendered')
     await expect
       .poll(async () => panel.getAttribute('data-gpu-timing'), { timeout: 10_000 })
       .toMatch(/^(captured|unsupported)$/)
@@ -197,6 +211,7 @@ for (const fixture of routes) {
         baseline: element.dataset.baseline,
         baselineStatus: element.dataset.baselineStatus,
         debugView: element.dataset.debugView,
+        debugViewStatus: element.dataset.debugViewStatus,
         renderBackend: element.dataset.renderBackend,
         resolution: element.dataset.resolution,
         dpr: element.dataset.dpr,
@@ -212,3 +227,40 @@ for (const fixture of routes) {
     })
   })
 }
+
+test('renders implemented AO debug views on the grid scene', async ({ page }) => {
+  const pageErrors: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') pageErrors.push(message.text())
+  })
+  page.on('pageerror', (error) => pageErrors.push(error.message))
+
+  await page.goto(PARITY_SCENES.grid.route)
+
+  const panel = page.getByLabel('Parity harness')
+  const canvas = page.locator('canvas').first()
+  await expect(panel).toBeVisible()
+  await expect(canvas).toBeVisible()
+
+  for (const baseline of measuredBaselines) {
+    await page.getByLabel('AO baseline').selectOption(baseline)
+    await expect(panel).toHaveAttribute('data-baseline', baseline)
+
+    for (const debugView of renderedDebugViews) {
+      await page.getByLabel('AO debug view').selectOption(debugView)
+      await expect(panel).toHaveAttribute('data-debug-view', debugView)
+      await expect(panel).toHaveAttribute('data-debug-view-status', 'rendered')
+      await expect(panel).toHaveAttribute('data-artifact', new RegExp(`^grid__${baseline}__${debugView}__`))
+      await page.waitForTimeout(250)
+
+      const hasPixels = await canvas.evaluate((node) => {
+        const canvasElement = node as HTMLCanvasElement
+        return canvasElement.width > 0 && canvasElement.height > 0
+      })
+
+      expect(hasPixels).toBe(true)
+    }
+  }
+
+  expect(pageErrors).toEqual([])
+})

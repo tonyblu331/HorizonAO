@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   HORIZON_AO_BASELINES,
   HORIZON_AO_DEBUG_VIEWS,
+  HORIZON_AO_RENDERED_DEBUG_VIEWS,
   createParityCaptureDescriptor,
   createParityArtifactName,
   createGpuTimingRecord,
   estimateRenderTargetBytes,
   createUnsupportedGpuTimingRecord,
+  getHorizonAoDebugViewStatus,
   type ParitySceneFixture,
 } from './parityHarness'
 
@@ -46,6 +48,9 @@ describe('createParityCaptureDescriptor', () => {
     expect(HORIZON_AO_BASELINES['n8ao-webgpu'].status).toBe('unverified')
     expect(HORIZON_AO_BASELINES['horizonao-raw'].status).toBe('available')
     expect(HORIZON_AO_DEBUG_VIEWS).toContain('edge-confidence')
+    expect(HORIZON_AO_RENDERED_DEBUG_VIEWS).toEqual(['none', 'raw-ao', 'linear-depth', 'normal'])
+    expect(getHorizonAoDebugViewStatus('normal')).toBe('rendered')
+    expect(getHorizonAoDebugViewStatus('edge-confidence')).toBe('metadata-only')
   })
 
   it('creates stable screenshot artifact names from comparison facts', () => {
