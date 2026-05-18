@@ -5,6 +5,7 @@ import {
   createParityArtifactName,
   createParityCaptureDescriptor,
   estimateRenderTargetBytes,
+  getHorizonAoDebugViewStatus,
   type GpuTimingRecord,
   type HorizonAoBaseline,
   type HorizonAoDebugView,
@@ -52,6 +53,7 @@ export function ParityHarnessPanel({
     bytesPerPixel: 2,
   })
   const artifactName = createParityArtifactName(descriptor, 'png')
+  const debugViewStatus = getHorizonAoDebugViewStatus(debugView)
 
   return (
     <aside
@@ -61,6 +63,7 @@ export function ParityHarnessPanel({
       data-baseline={descriptor.baseline}
       data-baseline-status={descriptor.baselineStatus}
       data-debug-view={descriptor.debugView}
+      data-debug-view-status={debugViewStatus}
       data-render-backend={renderBackend}
       data-resolution={`${descriptor.viewport.pixelWidth}x${descriptor.viewport.pixelHeight}`}
       data-dpr={descriptor.viewport.dpr.toFixed(2)}
@@ -130,6 +133,10 @@ export function ParityHarnessPanel({
         <div>
           <dt>AO target</dt>
           <dd>{formatBytes(memoryBytes)}</dd>
+        </div>
+        <div>
+          <dt>Debug view</dt>
+          <dd>{debugViewStatus}</dd>
         </div>
         <div>
           <dt>Artifact</dt>

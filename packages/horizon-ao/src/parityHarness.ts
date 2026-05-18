@@ -11,6 +11,10 @@ export const HORIZON_AO_DEBUG_VIEWS = [
 
 export type HorizonAoDebugView = (typeof HORIZON_AO_DEBUG_VIEWS)[number]
 
+export const HORIZON_AO_RENDERED_DEBUG_VIEWS = ['none', 'raw-ao', 'linear-depth', 'normal'] as const satisfies readonly HorizonAoDebugView[]
+
+export type HorizonAoDebugViewStatus = 'rendered' | 'metadata-only'
+
 export type HorizonAoBaselineStatus = 'available' | 'pending' | 'unverified'
 
 export const HORIZON_AO_BASELINES = {
@@ -149,6 +153,12 @@ export function createParityArtifactName(
     `${descriptor.viewport.pixelWidth}x${descriptor.viewport.pixelHeight}`,
     `dpr${descriptor.viewport.dpr.toFixed(2)}`,
   ].join('__') + `.${extension}`
+}
+
+export function getHorizonAoDebugViewStatus(debugView: HorizonAoDebugView): HorizonAoDebugViewStatus {
+  return HORIZON_AO_RENDERED_DEBUG_VIEWS.some((renderedView) => renderedView === debugView)
+    ? 'rendered'
+    : 'metadata-only'
 }
 
 export function createGpuTimingRecord(

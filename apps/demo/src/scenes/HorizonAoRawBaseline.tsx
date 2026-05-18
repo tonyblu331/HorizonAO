@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
-import { mrt, normalView, output, pass, vec3, vec4 } from 'three/tsl'
+import { mrt, normalView, output, pass } from 'three/tsl'
 import {
   createGpuTimingRecord,
   createUnsupportedGpuTimingRecord,
@@ -9,6 +9,7 @@ import {
   type GpuTimingRecord,
   type HorizonAoDebugView,
 } from '@horizonao/core'
+import { createAoDebugOutput } from './aoDebugOutput'
 
 interface HorizonAoRawBaselineProps {
   readonly debugView: HorizonAoDebugView
@@ -34,14 +35,18 @@ export function HorizonAoRawBaseline({ debugView, onGpuTiming }: HorizonAoRawBas
 
     const sceneColor = scenePass.getTextureNode('output')
     const sceneDepth = scenePass.getTextureNode('depth')
+    const sceneLinearDepth = scenePass.getLinearDepthNode('depth')
     const sceneNormal = scenePass.getTextureNode('normal')
     const aoNode = horizonAO(sceneDepth, sceneNormal, camera)
     const aoValue = aoNode.getTextureNode().r
 
-    renderPipeline.outputNode =
-      debugView === 'raw-ao'
-        ? vec4(vec3(aoValue), 1)
-        : sceneColor.mul(vec4(vec3(aoValue), 1))
+    renderPipeline.outputNode = createAoDebugOutput({
+      sceneColor,
+      sceneLinearDepth,
+      sceneNormal,
+      aoValue,
+      debugView,
+    })
 
     return renderPipeline
   }, [camera, debugView, renderer, scene])
