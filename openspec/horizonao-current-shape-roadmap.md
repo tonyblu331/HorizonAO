@@ -140,9 +140,9 @@ Kernel structure:
 - `sampleNormal`
 - `buildSliceFrame`
 - `computeSampleOffset`
-- `updateHorizon`
-- `marchHorizonPair`
-- `resolveSliceOcclusion`
+- `updateSignedHorizonCosine`
+- `marchSignedHorizonPair`
+- `resolveSignedHorizonSliceAccessibility`
 - magic-square sample rotation and radius jitter
 
 Approximation flow:
@@ -387,7 +387,7 @@ Tasks:
 - verify resize and DPR reset
 - add resolution-scale debug preview
 
-### Active PR-04: Signed Horizon Math v2
+### Completed PR-04: Signed Horizon Math v2
 
 Goal: revise raw AO math only after debug output is trustworthy.
 
@@ -396,16 +396,18 @@ Tasks:
 - add CPU scalar reference cases before TSL changes
 - validate no-occluder, symmetric occluder, far-background, and full-blocker cases
 - define the signed horizon arc convention and cosine normalization constant
-- next PR should replace ambiguous cosine accumulator with signed horizon-angle terminology in TSL
+- align the TSL helper and variable names with signed-horizon accessibility
+- add CPU parity guards for invalid/reversed horizon inputs and the current cosine-horizon resolve
 - compare raw output against Three `GTAONode` after the TSL port
 
 Exit criteria:
 
 - CPU reference tests pass
-- TSL output remains unchanged in this reference PR
+- TSL output remains scalar accessibility with the public API unchanged
 - screenshots already show real scalar AO, not scene color
+- full analytic angle-domain shader rewrite remains deferred until a visual parity harness can prove it is not a regression
 
-### Next PR-05: Sampling And Denoise Ablation
+### Active PR-05: Sampling And Denoise Ablation
 
 Goal: choose sample rotation/noise based on post-denoise image quality.
 

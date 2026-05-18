@@ -8,6 +8,7 @@ import {
   computeSampleStepsPerSlice,
   generateMagicSquareIndices,
   resolveAccessibility,
+  resolveSignedHorizonCosineSliceAccessibility,
   resolveSignedHorizonAccessibility,
   resolveSignedHorizonSliceAccessibility,
 } from './horizonAoMath'
@@ -126,6 +127,50 @@ describe('HorizonAO scalar math policy', () => {
         positiveHorizonAngleRad: Math.PI,
       }),
     ).toBeCloseTo(1)
+  })
+
+  it('treats non-finite signed-horizon arc inputs as inaccessible', () => {
+    expect(
+      resolveSignedHorizonSliceAccessibility({
+        normalAngleRad: Number.NaN,
+        negativeHorizonAngleRad: -Math.PI / 2,
+        positiveHorizonAngleRad: Math.PI / 2,
+      }),
+    ).toBe(0)
+  })
+
+  it('keeps reversed signed-horizon arc inputs stable', () => {
+    const forward = resolveSignedHorizonSliceAccessibility({
+      normalAngleRad: 0,
+      negativeHorizonAngleRad: -Math.PI / 4,
+      positiveHorizonAngleRad: Math.PI / 4,
+    })
+    const reversed = resolveSignedHorizonSliceAccessibility({
+      normalAngleRad: 0,
+      negativeHorizonAngleRad: Math.PI / 4,
+      positiveHorizonAngleRad: -Math.PI / 4,
+    })
+
+    expect(reversed).toBeCloseTo(forward)
+  })
+
+  it('mirrors the current cos-horizon slice resolve for centered normals', () => {
+    expect(
+      resolveSignedHorizonCosineSliceAccessibility({
+        positiveCosHorizon: 0,
+        negativeCosHorizon: 0,
+        projectedNormalOnTangent: 0,
+        projectedNormalOnView: 1,
+      }),
+    ).toBeCloseTo(1)
+    expect(
+      resolveSignedHorizonCosineSliceAccessibility({
+        positiveCosHorizon: 1,
+        negativeCosHorizon: 1,
+        projectedNormalOnTangent: 0,
+        projectedNormalOnView: 1,
+      }),
+    ).toBe(0)
   })
 
   it('averages signed-horizon slices before intensity mapping', () => {
