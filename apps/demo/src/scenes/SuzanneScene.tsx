@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useGLTF } from '@react-three/drei'
 import { Mesh, MeshStandardMaterial } from 'three'
 import { modelSources } from '../assets/modelSources'
+import { PARITY_SCENES } from '../parityScenes'
 import { GroundPlane } from './GroundPlane'
 import { HorizonEnvironment } from './HorizonEnvironment'
 import { ScenePage } from './ScenePage'
@@ -11,8 +12,9 @@ export function SuzanneScene() {
     <ScenePage
       title="Suzanne"
       subtitle="Blender's classic monkey mesh in neutral clay material, tuned for shadow and AO readability."
-      camera={{ position: [3.2, 2.05, 4.8], fov: 34, near: 0.04, far: 40 }}
-      controls={{ target: [0, 1.1, 0], minDistance: 1.8, maxDistance: 9 }}
+      fixture={PARITY_SCENES.suzanne}
+      camera={PARITY_SCENES.suzanne.camera}
+      controls={{ target: PARITY_SCENES.suzanne.camera.target, minDistance: 1.8, maxDistance: 9 }}
     >
       <HorizonEnvironment background="#0b1114" fog="#0b1114" fogNear={12} fogFar={40} />
       <GroundPlane />

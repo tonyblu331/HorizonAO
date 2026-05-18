@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test'
+import { PARITY_SCENES } from '../src/parityScenes'
 
-const routes = ['/', '/sponza', '/suzanne', '/bunny'] as const
+const routes = Object.values(PARITY_SCENES)
 
-for (const route of routes) {
-  test(`paints a non-empty canvas on ${route}`, async ({ page }) => {
-    await page.goto(route)
+for (const fixture of routes) {
+  test(`paints a non-empty canvas on ${fixture.route}`, async ({ page }) => {
+    await page.goto(fixture.route)
 
     const canvas = page.locator('canvas').first()
     await expect(canvas).toBeVisible()
@@ -24,5 +25,190 @@ for (const route of routes) {
     })
 
     expect(painted).toBe(true)
+  })
+
+  test(`exposes parity harness metadata on ${fixture.route}`, async ({ page }) => {
+    await page.goto(fixture.route)
+
+    const panel = page.getByLabel('Parity harness')
+    await expect(panel).toBeVisible()
+    await expect(panel).toHaveAttribute('data-scene', fixture.key)
+    await expect(panel).toHaveAttribute('data-baseline', 'scene-only')
+    await expect(panel).toHaveAttribute('data-debug-view', 'none')
+    await expect(panel).toHaveAttribute('data-render-backend', /^(webgpu|webgl-fallback|unknown)$/)
+    await expect(panel).toHaveAttribute('data-resolution', /\d+x\d+/)
+    await expect(panel).toHaveAttribute('data-dpr', /\d+\.\d{2}/)
+    await expect(panel).toHaveAttribute('data-artifact', new RegExp(`^${fixture.key}__scene-only__none__`))
+    await expect(panel).toHaveAttribute('data-gpu-timing', 'unavailable')
+    await expect(panel).toHaveAttribute('data-gpu-timing-source', 'not-measured')
+
+    await page.getByLabel('AO baseline').selectOption('three-gtao-node')
+    await expect(panel).toHaveAttribute('data-baseline-status', 'available')
+
+    await page.getByLabel('AO baseline').selectOption('horizonao-raw')
+    await expect(panel).toHaveAttribute('data-baseline-status', 'available')
+
+    await page.getByLabel('AO baseline').selectOption('n8ao-webgpu')
+    await expect(panel).toHaveAttribute('data-baseline-status', 'unverified')
+
+    await page.getByLabel('AO debug view').selectOption('edge-confidence')
+    await expect(panel).toHaveAttribute('data-debug-view', 'edge-confidence')
+  })
+
+  test(`captures a parity screenshot artifact on ${fixture.route}`, async ({ page }, testInfo) => {
+    await page.goto(fixture.route)
+
+    const panel = page.getByLabel('Parity harness')
+    await expect(panel).toBeVisible()
+
+    const artifactName = await panel.getAttribute('data-artifact')
+    expect(artifactName).toBeTruthy()
+
+    const screenshot = await page.screenshot({ fullPage: false })
+    await testInfo.attach(artifactName ?? `${fixture.key}.png`, {
+      body: screenshot,
+      contentType: 'image/png',
+    })
+
+    const metadata = await panel.evaluate((node) => {
+      const element = node as HTMLElement
+      return {
+        scene: element.dataset.scene,
+        baseline: element.dataset.baseline,
+        baselineStatus: element.dataset.baselineStatus,
+        debugView: element.dataset.debugView,
+        renderBackend: element.dataset.renderBackend,
+        resolution: element.dataset.resolution,
+        dpr: element.dataset.dpr,
+        gpuTiming: element.dataset.gpuTiming,
+        gpuTimingSource: element.dataset.gpuTimingSource,
+        gpuTimingMs: element.dataset.gpuTimingMs,
+      }
+    })
+
+    await testInfo.attach(`${fixture.key}__metadata.json`, {
+      body: JSON.stringify(metadata, null, 2),
+      contentType: 'application/json',
+    })
+  })
+
+  test(`captures the Three GTAONode baseline on ${fixture.route}`, async ({ page }, testInfo) => {
+    const pageErrors: string[] = []
+    page.on('console', (message) => {
+      if (message.type() === 'error') pageErrors.push(message.text())
+    })
+    page.on('pageerror', (error) => pageErrors.push(error.message))
+
+    await page.goto(fixture.route)
+
+    const panel = page.getByLabel('Parity harness')
+    await expect(panel).toBeVisible()
+    await page.getByLabel('AO baseline').selectOption('three-gtao-node')
+    await expect(panel).toHaveAttribute('data-baseline', 'three-gtao-node')
+    await expect(panel).toHaveAttribute('data-baseline-status', 'available')
+    await expect
+      .poll(async () => panel.getAttribute('data-gpu-timing'), { timeout: 10_000 })
+      .toMatch(/^(captured|unsupported)$/)
+    const artifactName = await panel.getAttribute('data-artifact')
+    expect(artifactName).toBeTruthy()
+
+    const canvas = page.locator('canvas').first()
+    await expect(canvas).toBeVisible()
+    await page.waitForTimeout(750)
+
+    const hasPixels = await canvas.evaluate((node) => {
+      const canvasElement = node as HTMLCanvasElement
+      return canvasElement.width > 0 && canvasElement.height > 0
+    })
+
+    expect(hasPixels).toBe(true)
+    expect(pageErrors).toEqual([])
+
+    const screenshot = await page.screenshot({ fullPage: false })
+    await testInfo.attach(artifactName ?? `${fixture.key}__three-gtao-node.png`, {
+      body: screenshot,
+      contentType: 'image/png',
+    })
+
+    const metadata = await panel.evaluate((node) => {
+      const element = node as HTMLElement
+      return {
+        scene: element.dataset.scene,
+        baseline: element.dataset.baseline,
+        baselineStatus: element.dataset.baselineStatus,
+        debugView: element.dataset.debugView,
+        renderBackend: element.dataset.renderBackend,
+        resolution: element.dataset.resolution,
+        dpr: element.dataset.dpr,
+        gpuTiming: element.dataset.gpuTiming,
+        gpuTimingSource: element.dataset.gpuTimingSource,
+        gpuTimingMs: element.dataset.gpuTimingMs,
+      }
+    })
+
+    await testInfo.attach(`${fixture.key}__three-gtao-node__metadata.json`, {
+      body: JSON.stringify(metadata, null, 2),
+      contentType: 'application/json',
+    })
+  })
+
+  test(`captures the HorizonAO raw baseline on ${fixture.route}`, async ({ page }, testInfo) => {
+    const pageErrors: string[] = []
+    page.on('console', (message) => {
+      if (message.type() === 'error') pageErrors.push(message.text())
+    })
+    page.on('pageerror', (error) => pageErrors.push(error.message))
+
+    await page.goto(fixture.route)
+
+    const panel = page.getByLabel('Parity harness')
+    await expect(panel).toBeVisible()
+    await page.getByLabel('AO baseline').selectOption('horizonao-raw')
+    await expect(panel).toHaveAttribute('data-baseline', 'horizonao-raw')
+    await expect(panel).toHaveAttribute('data-baseline-status', 'available')
+    await expect
+      .poll(async () => panel.getAttribute('data-gpu-timing'), { timeout: 10_000 })
+      .toMatch(/^(captured|unsupported)$/)
+    const artifactName = await panel.getAttribute('data-artifact')
+    expect(artifactName).toBeTruthy()
+
+    const canvas = page.locator('canvas').first()
+    await expect(canvas).toBeVisible()
+    await page.waitForTimeout(750)
+
+    const hasPixels = await canvas.evaluate((node) => {
+      const canvasElement = node as HTMLCanvasElement
+      return canvasElement.width > 0 && canvasElement.height > 0
+    })
+
+    expect(hasPixels).toBe(true)
+    expect(pageErrors).toEqual([])
+
+    const screenshot = await page.screenshot({ fullPage: false })
+    await testInfo.attach(artifactName ?? `${fixture.key}__horizonao-raw.png`, {
+      body: screenshot,
+      contentType: 'image/png',
+    })
+
+    const metadata = await panel.evaluate((node) => {
+      const element = node as HTMLElement
+      return {
+        scene: element.dataset.scene,
+        baseline: element.dataset.baseline,
+        baselineStatus: element.dataset.baselineStatus,
+        debugView: element.dataset.debugView,
+        renderBackend: element.dataset.renderBackend,
+        resolution: element.dataset.resolution,
+        dpr: element.dataset.dpr,
+        gpuTiming: element.dataset.gpuTiming,
+        gpuTimingSource: element.dataset.gpuTimingSource,
+        gpuTimingMs: element.dataset.gpuTimingMs,
+      }
+    })
+
+    await testInfo.attach(`${fixture.key}__horizonao-raw__metadata.json`, {
+      body: JSON.stringify(metadata, null, 2),
+      contentType: 'application/json',
+    })
   })
 }

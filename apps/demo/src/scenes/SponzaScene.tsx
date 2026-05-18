@@ -1,5 +1,6 @@
 import { Clone, useGLTF } from '@react-three/drei'
 import { modelSources } from '../assets/modelSources'
+import { PARITY_SCENES } from '../parityScenes'
 import { GroundPlane } from './GroundPlane'
 import { HorizonEnvironment } from './HorizonEnvironment'
 import { ScenePage } from './ScenePage'
@@ -9,8 +10,14 @@ export function SponzaScene() {
     <ScenePage
       title="Sponza"
       subtitle="Large architectural interior from Khronos glTF Sample Assets, useful for lighting and occlusion stress."
-      camera={{ position: [0, 5.2, 8.4], fov: 48, near: 0.04, far: 180 }}
-      controls={{ target: [0, 0.35, 0], minDistance: 1.4, maxDistance: 22, maxPolarAngle: Math.PI * 0.49 }}
+      fixture={PARITY_SCENES.sponza}
+      camera={PARITY_SCENES.sponza.camera}
+      controls={{
+        target: PARITY_SCENES.sponza.camera.target,
+        minDistance: 1.4,
+        maxDistance: 22,
+        maxPolarAngle: Math.PI * 0.49,
+      }}
     >
       <HorizonEnvironment background="#101315" fog="#101315" fogNear={26} fogFar={95} />
       <GroundPlane />
