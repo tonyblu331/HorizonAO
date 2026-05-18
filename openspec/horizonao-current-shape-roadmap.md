@@ -11,8 +11,9 @@ Latest completed change: `openspec/changes/verify-horizonao-math-denoise/`
 
 Latest research revision: `openspec/horizonao-math-revision-2025.md`
 
-Latest implementation fix: HorizonAO AO debug output feedback loop fixed in
-`HorizonAoDenoiseNode` by separating pass-output sampling from nested denoise sampling.
+Latest active change: signed horizon math v2 CPU reference.
+
+Latest implementation fix: HorizonAO AO debug output feedback loop fixed in `HorizonAoDenoiseNode` by separating pass-output sampling from nested denoise sampling.
 
 Purpose:
 
@@ -386,22 +387,23 @@ Tasks:
 - verify resize and DPR reset
 - add resolution-scale debug preview
 
-### Next PR-04: Signed Horizon Math v2
+### Active PR-04: Signed Horizon Math v2
 
 Goal: revise raw AO math only after debug output is trustworthy.
 
 Tasks:
 
-- replace ambiguous cosine accumulator with signed horizon-angle terminology
-- create CPU scalar reference cases before TSL changes
+- add CPU scalar reference cases before TSL changes
 - validate no-occluder, symmetric occluder, far-background, and full-blocker cases
-- compare raw output against Three `GTAONode`
+- define the signed horizon arc convention and cosine normalization constant
+- next PR should replace ambiguous cosine accumulator with signed horizon-angle terminology in TSL
+- compare raw output against Three `GTAONode` after the TSL port
 
 Exit criteria:
 
 - CPU reference tests pass
-- TSL output matches reference cases within tolerance
-- screenshots show real AO, not scene color
+- TSL output remains unchanged in this reference PR
+- screenshots already show real scalar AO, not scene color
 
 ### Next PR-05: Sampling And Denoise Ablation
 

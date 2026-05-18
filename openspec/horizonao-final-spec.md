@@ -201,7 +201,7 @@ For slice direction s_i:
   A = saturate(mean_i(A_i))
 ```
 
-This should be implemented only after CPU scalar reference cases exist. Do not copy an arc-integration formula from any paper or implementation without reference tests.
+This should be implemented only after CPU scalar reference cases exist. The CPU reference convention is: integrate `max(0, cos(theta - normalAngle))` over the visible signed horizon arc and normalize by the full cosine hemisphere integral of `2`. Do not copy an arc-integration formula from any paper or implementation without reference tests.
 
 Center-biased sampling spends more taps near the current pixel because contact AO and small creases dominate perceived quality. Larger-radius samples matter, but they should be weighted down by falloff and validated against haloing.
 

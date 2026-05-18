@@ -18,13 +18,18 @@ export {
 export {
   DEFAULT_HORIZON_AO_KERNEL_OPTIONS,
   HORIZON_AO_CENTER_BIAS_EXPONENT,
+  HORIZON_AO_FULL_HEMISPHERE_COSINE_INTEGRAL,
   clampHorizonAoKernelOptions,
   computeCenterBiasedSampleDistance,
   computeFalloffWeight,
   computeSampleStepsPerSlice,
   generateMagicSquareIndices,
   resolveAccessibility,
+  resolveSignedHorizonAccessibility,
+  resolveSignedHorizonSliceAccessibility,
   type HorizonAoKernelOptions,
+  type SignedHorizonArcOptions,
+  type SignedHorizonSlice,
 } from './horizonAoMath'
 export {
   createParityCaptureDescriptor,

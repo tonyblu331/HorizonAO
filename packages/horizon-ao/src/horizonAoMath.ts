@@ -19,6 +19,7 @@ export const DEFAULT_HORIZON_AO_KERNEL_OPTIONS = {
 } as const satisfies Required<HorizonAoKernelOptions>
 
 export const HORIZON_AO_CENTER_BIAS_EXPONENT = 1.35
+export const HORIZON_AO_FULL_HEMISPHERE_COSINE_INTEGRAL = 2
 
 export function clampHorizonAoKernelOptions(
   options: HorizonAoKernelOptions = {},
@@ -90,6 +91,76 @@ export function resolveAccessibility({
   const accessibility = clampNumber(accumulatedSliceVisibility / safeSlices, 0, 1)
 
   return Math.pow(accessibility, safeIntensity)
+}
+
+export interface SignedHorizonArcOptions {
+  readonly normalAngleRad: number
+  readonly minHorizonAngleRad: number
+  readonly maxHorizonAngleRad: number
+}
+
+export interface SignedHorizonSlice {
+  readonly normalAngleRad: number
+  readonly negativeHorizonAngleRad: number
+  readonly positiveHorizonAngleRad: number
+}
+
+export function integrateSignedHorizonArcAccessibility({
+  normalAngleRad,
+  minHorizonAngleRad,
+  maxHorizonAngleRad,
+}: SignedHorizonArcOptions): number {
+  if (
+    !Number.isFinite(normalAngleRad) ||
+    !Number.isFinite(minHorizonAngleRad) ||
+    !Number.isFinite(maxHorizonAngleRad)
+  ) {
+    return 0
+  }
+
+  const minAngle = Math.min(minHorizonAngleRad, maxHorizonAngleRad)
+  const maxAngle = Math.max(minHorizonAngleRad, maxHorizonAngleRad)
+  const visibleMin = Math.max(minAngle, normalAngleRad - Math.PI / 2)
+  const visibleMax = Math.min(maxAngle, normalAngleRad + Math.PI / 2)
+
+  if (visibleMax <= visibleMin) return 0
+
+  const integratedCosine =
+    Math.sin(visibleMax - normalAngleRad) - Math.sin(visibleMin - normalAngleRad)
+
+  return clampNumber(integratedCosine / HORIZON_AO_FULL_HEMISPHERE_COSINE_INTEGRAL, 0, 1)
+}
+
+export function resolveSignedHorizonSliceAccessibility({
+  normalAngleRad,
+  negativeHorizonAngleRad,
+  positiveHorizonAngleRad,
+}: SignedHorizonSlice): number {
+  return integrateSignedHorizonArcAccessibility({
+    normalAngleRad,
+    minHorizonAngleRad: negativeHorizonAngleRad,
+    maxHorizonAngleRad: positiveHorizonAngleRad,
+  })
+}
+
+export function resolveSignedHorizonAccessibility({
+  slices,
+  intensity = 1,
+}: {
+  readonly slices: readonly SignedHorizonSlice[]
+  readonly intensity?: number
+}): number {
+  if (slices.length === 0) return 0
+
+  const accumulatedAccessibility = slices.reduce(
+    (sum, slice) => sum + resolveSignedHorizonSliceAccessibility(slice),
+    0,
+  )
+
+  return Math.pow(
+    clampNumber(accumulatedAccessibility / slices.length, 0, 1),
+    clampNumber(intensity, 0, 4),
+  )
 }
 
 export function generateMagicSquareIndices(size = 5): number[] {
