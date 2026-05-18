@@ -41,20 +41,20 @@ Verified reference points:
 
 ### Parity Table
 
-| Capability | Three.js GTAONode | Three.js GTAOPass | N8AO | N8AO-WebGPU | XeGTAO | CACAO / ASSAO | HorizonAO v1 verdict |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| WebGPU / TSL integration | ✓ | Gap, WebGL pass | Gap, WebGL2 | Unverified | Gap, native/reference code | Gap, native/reference code | Must be native TSL/WebGPU |
-| Boring depth + normal + camera contract | ✓ | Partial, scene/pass oriented | Partial, scene/pass oriented | Unverified | ✓ conceptually | ✓ | Keep |
-| Normal MRT path | ✓ | ✓ via G-buffer | Internal scene path | Unverified | Engine-dependent | ✓ | Required |
-| Normal reconstruction fallback | ✓ | Possible via internal path | Internal behavior | Unverified | Engine-dependent | ✓ | Required |
-| Resolution scale | ✓ | Manual pass sizing | ✓ half-res | Unverified | Engine-dependent | ✓ deinterleave/adaptive paths | Required |
-| Denoise | Manual `DenoiseNode` if temporal off | ✓ Poisson denoise | ✓ denoise controls | Unverified | ✓ expected | ✓ edge-aware blur | Required |
-| Temporal | Optional, tied to TRAA | Gap | Accumulation, no motion vectors | Unverified | Engine-dependent | Not core | Optional AO-specific only |
-| AA agnostic | Partial, temporal path requires TRAA | ✓ | Recommends SMAA | Unverified | ✓ conceptually | ✓ | Required |
-| Debug views | Limited | Output modes | ✓ display/debug modes | Unverified | Implementation-dependent | Sample/debug tooling | Required |
-| Measurable GPU timings | Not productized | Not productized | Debug timing via WebGL timer query | Unverified | Reference expected | Reference expected | Required in harness |
-| Compact API | Medium | Pass-heavy | Large artist API | Unverified | Reference, not JS API | Native SDK style | Keep boring |
-| Production credibility | Good baseline, tied to Three | Legacy/WebGL useful | Mature WebGL competitor | Not verified | Strong algorithmic reference | Strong production reference | Earn through parity harness |
+| Capability                              | Three.js GTAONode                    | Three.js GTAOPass            | N8AO                               | N8AO-WebGPU  | XeGTAO                       | CACAO / ASSAO                 | HorizonAO v1 verdict        |
+| --------------------------------------- | ------------------------------------ | ---------------------------- | ---------------------------------- | ------------ | ---------------------------- | ----------------------------- | --------------------------- |
+| WebGPU / TSL integration                | ✓                                    | Gap, WebGL pass              | Gap, WebGL2                        | Unverified   | Gap, native/reference code   | Gap, native/reference code    | Must be native TSL/WebGPU   |
+| Boring depth + normal + camera contract | ✓                                    | Partial, scene/pass oriented | Partial, scene/pass oriented       | Unverified   | ✓ conceptually               | ✓                             | Keep                        |
+| Normal MRT path                         | ✓                                    | ✓ via G-buffer               | Internal scene path                | Unverified   | Engine-dependent             | ✓                             | Required                    |
+| Normal reconstruction fallback          | ✓                                    | Possible via internal path   | Internal behavior                  | Unverified   | Engine-dependent             | ✓                             | Required                    |
+| Resolution scale                        | ✓                                    | Manual pass sizing           | ✓ half-res                         | Unverified   | Engine-dependent             | ✓ deinterleave/adaptive paths | Required                    |
+| Denoise                                 | Manual `DenoiseNode` if temporal off | ✓ Poisson denoise            | ✓ denoise controls                 | Unverified   | ✓ expected                   | ✓ edge-aware blur             | Required                    |
+| Temporal                                | Optional, tied to TRAA               | Gap                          | Accumulation, no motion vectors    | Unverified   | Engine-dependent             | Not core                      | Optional AO-specific only   |
+| AA agnostic                             | Partial, temporal path requires TRAA | ✓                            | Recommends SMAA                    | Unverified   | ✓ conceptually               | ✓                             | Required                    |
+| Debug views                             | Limited                              | Output modes                 | ✓ display/debug modes              | Unverified   | Implementation-dependent     | Sample/debug tooling          | Required                    |
+| Measurable GPU timings                  | Not productized                      | Not productized              | Debug timing via WebGL timer query | Unverified   | Reference expected           | Reference expected            | Required in harness         |
+| Compact API                             | Medium                               | Pass-heavy                   | Large artist API                   | Unverified   | Reference, not JS API        | Native SDK style              | Keep boring                 |
+| Production credibility                  | Good baseline, tied to Three         | Legacy/WebGL useful          | Mature WebGL competitor            | Not verified | Strong algorithmic reference | Strong production reference   | Earn through parity harness |
 
 ### Candid Verdicts
 
@@ -92,15 +92,15 @@ Do not overbuild this graph. The v1 graph has one job: produce AO and composite 
 
 ### Pass Responsibilities
 
-| Stage | Responsibility | Must not do |
-| --- | --- | --- |
-| Scene color / depth / normal | Provide color, depth, and normal nodes or textures | Re-render geometry by default |
-| Linear depth / normal policy | Resolve depth convention and normal source | Hide mismatched spaces |
-| Horizon AO core | Compute raw scalar occlusion | Composite, blur, or temporal blend |
-| Edge-aware denoise | Reduce AO noise using depth and normal edges | Invent lighting data |
-| Optional AO temporal | Reuse AO history with confidence and rejection | Depend on TRAA |
-| AO composite | Apply scalar AO to scene color or expose AO texture | Own final AA |
-| Final AA | TRAA, SMAA, FXAA, MSAA resolve path, or none | Feed back into AO unless explicitly configured |
+| Stage                        | Responsibility                                      | Must not do                                    |
+| ---------------------------- | --------------------------------------------------- | ---------------------------------------------- |
+| Scene color / depth / normal | Provide color, depth, and normal nodes or textures  | Re-render geometry by default                  |
+| Linear depth / normal policy | Resolve depth convention and normal source          | Hide mismatched spaces                         |
+| Horizon AO core              | Compute raw scalar occlusion                        | Composite, blur, or temporal blend             |
+| Edge-aware denoise           | Reduce AO noise using depth and normal edges        | Invent lighting data                           |
+| Optional AO temporal         | Reuse AO history with confidence and rejection      | Depend on TRAA                                 |
+| AO composite                 | Apply scalar AO to scene color or expose AO texture | Own final AA                                   |
+| Final AA                     | TRAA, SMAA, FXAA, MSAA resolve path, or none        | Feed back into AO unless explicitly configured |
 
 ## 4. Geometry Policy
 
@@ -147,17 +147,19 @@ Allowed exceptions:
 
 HorizonAO is AA-agnostic. It should work before final antialiasing and must not require any specific AA system.
 
-| AA path | Required behavior |
-| --- | --- |
-| TRAA | AO can run before TRAA. AO-specific temporal may use velocity/history, but must not require `TRAANode`. If TRAA is active, validate ghosting and history rejection independently. |
-| SMAA | AO runs before SMAA. SMAA cleans final geometric/color edges but does not fix noisy AO. Denoise still belongs inside HorizonAO. |
-| FXAA | AO runs before FXAA. FXAA may soften final AO/composite edges, but raw AO must still be acceptable. |
-| MSAA resolved paths | AO consumes resolved or texture-readable depth/normal policy as provided by Three/WebGPU. Do not assume unresolved MSAA textures are sampleable in the AO node. |
-| No AA | AO must still be usable. This is the hard truth test for raw sampling and denoise. |
+| AA path             | Required behavior                                                                                                                                                                 |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TRAA                | AO can run before TRAA. AO-specific temporal may use velocity/history, but must not require `TRAANode`. If TRAA is active, validate ghosting and history rejection independently. |
+| SMAA                | AO runs before SMAA. SMAA cleans final geometric/color edges but does not fix noisy AO. Denoise still belongs inside HorizonAO.                                                   |
+| FXAA                | AO runs before FXAA. FXAA may soften final AO/composite edges, but raw AO must still be acceptable.                                                                               |
+| MSAA resolved paths | AO consumes resolved or texture-readable depth/normal policy as provided by Three/WebGPU. Do not assume unresolved MSAA textures are sampleable in the AO node.                   |
+| No AA               | AO must still be usable. This is the hard truth test for raw sampling and denoise.                                                                                                |
 
 HorizonAO is not an AA system. If AO shimmers, fix AO sampling, denoise, radius policy, or AO history. Do not hide it behind final AA and call it solved.
 
 ## 6. Core Math
+
+Current revision note: see `openspec/horizonao-math-revision-2025.md`. The next math direction is signed horizon-angle integration with CPU scalar references, but it is blocked until HorizonAO `raw-ao` and `denoised-ao` debug views visibly render scalar grayscale AO instead of the scene color.
 
 Ambient accessibility:
 
@@ -177,15 +179,37 @@ Where:
 
 HorizonAO approximates this integral in screen space. It does not trace scene geometry. It samples neighboring depth, reconstructs local positions or depth deltas, estimates horizon angles around the current pixel, and turns missing accessible hemisphere into scalar occlusion.
 
+Implementation terminology must distinguish accessibility from occlusion. The stored scalar should be documented as accessibility when `1` means fully open and `0` means fully dark. If a pass stores strict occlusion instead, it must explicitly store `O = 1 - A` and composite accordingly.
+
 ### Practical Horizon/GTAO Approximation
 
 Horizon slices divide the projected hemisphere into a small number of oriented screen-space directions. Each slice searches for the strongest horizon formed by nearby depth samples.
+
+The revised estimator should use explicit signed horizon angles:
+
+```text
+For slice direction s_i:
+  b_i = normalize(cross(s_i, viewDir))
+  t_i = cross(b_i, viewDir)
+  n_i = normalize(n - b_i dot n * b_i)
+  gamma_i = atan2(dot(n_i, t_i), dot(n_i, viewDir))
+
+  h_i+ = max horizon angle in +s_i
+  h_i- = max horizon angle in -s_i
+
+  A_i = integrated visible arc around gamma_i using h_i+ and h_i-
+  A = saturate(mean_i(A_i))
+```
+
+This should be implemented only after CPU scalar reference cases exist. Do not copy an arc-integration formula from any paper or implementation without reference tests.
 
 Center-biased sampling spends more taps near the current pixel because contact AO and small creases dominate perceived quality. Larger-radius samples matter, but they should be weighted down by falloff and validated against haloing.
 
 Radius falloff attenuates samples as distance approaches the configured world-space or view-space AO radius. The product API exposes radius and falloff. It does not expose a grab bag of theory knobs unless those knobs survive ablation.
 
 Depth and normal-aware denoise is mandatory because low sample counts are noisy. The denoiser must avoid bleeding across depth and normal discontinuities. It should output or internally track edge confidence for debugging.
+
+Sampling must be evaluated after denoise, not only in raw AO. The next sampling ablation should compare magic-square rotation, blue-noise or void-and-cluster texture, and filter-adapted sampling inspired by EA SEED 2024.
 
 Optional AO history confidence may combine previous AO with current AO if temporal is enabled. Confidence should reject history on depth changes, normal changes, camera cuts, resize, DPR change, projection changes, and optionally velocity mismatch. Temporal is an optimization and stability feature, not a crutch for a weak spatial result.
 
@@ -208,7 +232,7 @@ const ao = horizonAO(depthNode, normalNode, camera, {
 
   outputFormat: 'auto',
   debug: 'none',
-});
+})
 ```
 
 ### Proposed Types
@@ -222,21 +246,21 @@ type HorizonAoDebugView =
   | 'normal'
   | 'edge-confidence'
   | 'history-rejection'
-  | 'resolution-scale';
+  | 'resolution-scale'
 
 interface HorizonAoOptions {
-  radius?: number;
-  intensity?: number;
-  falloff?: number;
-  slices?: number;
-  samples?: number;
-  resolutionScale?: number;
-  denoise?: boolean;
-  temporal?: boolean;
-  velocityNode?: Node;
-  maskNode?: Node;
-  outputFormat?: 'auto' | 'r8' | 'r16f';
-  debug?: HorizonAoDebugView;
+  radius?: number
+  intensity?: number
+  falloff?: number
+  slices?: number
+  samples?: number
+  resolutionScale?: number
+  denoise?: boolean
+  temporal?: boolean
+  velocityNode?: Node
+  maskNode?: Node
+  outputFormat?: 'auto' | 'r8' | 'r16f'
+  debug?: HorizonAoDebugView
 }
 ```
 
@@ -244,29 +268,29 @@ Avoid names like `visibilityMode`, `memoryMode`, `geometryMode`, or `qualityArch
 
 ### Defaults
 
-| Option | Default | Reason |
-| --- | --- | --- |
-| `radius` | `1.25` | Useful starting radius, scene-scale tunable |
-| `intensity` | `1.0` | Neutral scalar AO |
-| `falloff` | `0.85` | Bias away from long-range halos |
-| `slices` | `3` | Lean GTAO-style starting point |
-| `samples` | `12` | Moderate spatial cost |
-| `resolutionScale` | `0.5` | Common performance baseline, must be validated |
-| `denoise` | `true` | Low-sample AO needs denoise |
-| `temporal` | `false` | Must not be default until stable |
-| `outputFormat` | `auto` | Let implementation choose `r8` or `r16f` based on platform and debug needs |
-| `debug` | `none` | Production default |
+| Option            | Default | Reason                                                                     |
+| ----------------- | ------- | -------------------------------------------------------------------------- |
+| `radius`          | `1.25`  | Useful starting radius, scene-scale tunable                                |
+| `intensity`       | `1.0`   | Neutral scalar AO                                                          |
+| `falloff`         | `0.85`  | Bias away from long-range halos                                            |
+| `slices`          | `3`     | Lean GTAO-style starting point                                             |
+| `samples`         | `12`    | Moderate spatial cost                                                      |
+| `resolutionScale` | `0.5`   | Common performance baseline, must be validated                             |
+| `denoise`         | `true`  | Low-sample AO needs denoise                                                |
+| `temporal`        | `false` | Must not be default until stable                                           |
+| `outputFormat`    | `auto`  | Let implementation choose `r8` or `r16f` based on platform and debug needs |
+| `debug`           | `none`  | Production default                                                         |
 
 ## 8. Presets
 
 Presets are starting points, not quality claims. They must be backed by screenshots and GPU timings before release notes say anything stronger.
 
-| Preset | slices | samples | resolutionScale | denoise | temporal | Intent |
-| --- | ---: | ---: | ---: | --- | --- | --- |
-| Fast | 2 | 8 | 0.5 | true | false | Lowest reasonable cost path for demos and low-power devices |
-| Balanced | 3 | 12 | 0.5 | true | false | Default candidate. Must look good without temporal |
-| Quality | 4 | 16 | 0.75 or 1.0 | true | false | Higher spatial quality for desktop/WebGPU demos |
-| Experimental | 4+ | 16+ | variable | true | optional | Research switchboard, not v1 default |
+| Preset       | slices | samples | resolutionScale | denoise | temporal | Intent                                                      |
+| ------------ | -----: | ------: | --------------: | ------- | -------- | ----------------------------------------------------------- |
+| Fast         |      2 |       8 |             0.5 | true    | false    | Lowest reasonable cost path for demos and low-power devices |
+| Balanced     |      3 |      12 |             0.5 | true    | false    | Default candidate. Must look good without temporal          |
+| Quality      |      4 |      16 |     0.75 or 1.0 | true    | false    | Higher spatial quality for desktop/WebGPU demos             |
+| Experimental |     4+ |     16+ |        variable | true    | optional | Research switchboard, not v1 default                        |
 
 Balanced must not require temporal. If Balanced only looks good with temporal, the raw AO or denoise is not good enough. Ponete las pilas.
 
@@ -341,6 +365,12 @@ Minimum scene matrix:
 
 PR-00: parity harness
 
+PR-00.5: fix debug output feedback loop
+
+- Fix HorizonAO raw and denoised debug views so they render scalar grayscale AO.
+- Add visual or pixel-level E2E assertions that reject colored-scene output in AO debug views.
+- Do not proceed to math v2 while this fails.
+
 - Add comparable scenes, cameras, screenshot capture, debug toggles, and GPU timing plumbing.
 - Establish Three.js `GTAONode` baseline.
 - Establish N8AO WebGL2 baseline if integration is practical in the harness.
@@ -351,6 +381,12 @@ PR-01: raw horizon AO kernel
 - Consume depth, normal, and camera.
 - Support normal MRT path first.
 - Add raw AO debug view.
+
+PR-01.5: signed horizon math v2
+
+- Add CPU scalar references for no-occluder, full-blocker, symmetric occluder, and far-background cases.
+- Replace ambiguous cosine accumulator with signed horizon-angle integration only after references pass.
+- Compare against Three `GTAONode` and XeGTAO-style expectations.
 
 PR-02: denoise
 
@@ -494,3 +530,8 @@ That is the product. Compact AO, measured honestly, with no scope creep.
 - Intel ASSAO article: https://www.intel.com/content/www/us/en/developer/articles/technical/adaptive-screen-space-ambient-occlusion.html
 - AMD FidelityFX CACAO manual: https://gpuopen.com/manuals/fidelityfx_sdk/techniques/combined-adaptive-compute-ambient-occlusion/
 - FidelityFX CACAO repository: https://github.com/GPUOpen-Effects/FidelityFX-CACAO
+- Wu 2025 Efficient Stereo-Aware SSAO: https://kevincosner.github.io/publications/Wu2025ESS/
+- EA SEED 2024 Filter-Adapted Spatio-Temporal Sampling: https://www.ea.com/seed/news/spatio-temporal-sampling
+- Chinese lightweight real-time rendering parameter optimization: https://www.cjig.cn/zh/article/doi/10.11834/jig.240483/
+- LUT-Opt 2026: https://arxiv.org/abs/2604.25178
+- Korean point-cloud AO, JKSCI 2025: https://journal.kci.go.kr/jksci/archive/articleView?artiId=ART003280480

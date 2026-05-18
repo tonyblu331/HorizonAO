@@ -7,7 +7,11 @@ Scope: active change `verify-horizonao-math-denoise`
 
 ## Active SDD Change
 
-Current active change: `openspec/changes/verify-horizonao-math-denoise/`
+Latest completed change: `openspec/changes/verify-horizonao-math-denoise/`
+
+Latest research revision: `openspec/horizonao-math-revision-2025.md`
+
+Current blocker: issue #9, HorizonAO AO debug output feedback loop.
 
 Purpose:
 
@@ -16,6 +20,8 @@ Purpose:
 - add spatial depth/normal-aware denoise
 - render `denoised-ao` as real output, not metadata
 - keep temporal, XR/stereo, bitmask AO, bent normals, and N8AO integration out of this PR
+
+Post-merge visual review revised the verdict: the code path exists, but local screenshots show HorizonAO `raw-ao` and `denoised-ao` displaying the colored scene instead of grayscale AO under the WebGL fallback path. Console logs report a framebuffer/texture feedback loop. Fix that before math v2.
 
 ## 1. Current Product Shape
 
@@ -30,7 +36,7 @@ It is implemented enough to prove the integration contract:
 - capture repeatable metadata and screenshots in Playwright
 - expose rendered debug views for raw AO, denoised AO, linear depth, and normals
 
-It is not yet production-quality AO. The missing pieces are still the real ones: quality tuning, WebGPU-native validation, proper GPU timing capture, failure-case screenshots, and measured comparison against non-Three baselines.
+It is not yet production-quality AO. The missing pieces are still the real ones: correct scalar AO debug output, quality tuning, WebGPU-native validation, proper GPU timing capture, failure-case screenshots, and measured comparison against non-Three baselines.
 
 ## 2. Implemented Core API
 
@@ -323,7 +329,25 @@ This is the right comparison shape. Same scene, same camera, same route, same re
 
 ## 10. Roadmap
 
-Next PRs after `verify-horizonao-math-denoise`:
+Next PRs after `verify-horizonao-math-denoise` and the 2025+ math revision:
+
+### Next PR-00: Fix AO Debug Output Feedback Loop
+
+Goal: make HorizonAO debug views prove actual scalar AO.
+
+Tasks:
+
+- fix issue #9
+- remove the framebuffer/texture feedback loop in local fallback
+- make `horizonao-raw/raw-ao` render grayscale AO
+- make `horizonao-raw/denoised-ao` render grayscale denoised AO
+- add an E2E assertion that rejects colored-scene output in AO debug views
+
+Exit criteria:
+
+- screenshots show grayscale AO for HorizonAO raw and denoised views
+- no feedback-loop warning
+- debug metadata and pixels agree
 
 ### Next PR-01: Raw And Denoised Failure-Case Review
 
@@ -360,6 +384,39 @@ Tasks:
 - report AO target bytes from actual scaled targets
 - verify resize and DPR reset
 - add resolution-scale debug preview
+
+### Next PR-04: Signed Horizon Math v2
+
+Goal: revise raw AO math only after debug output is trustworthy.
+
+Tasks:
+
+- replace ambiguous cosine accumulator with signed horizon-angle terminology
+- create CPU scalar reference cases before TSL changes
+- validate no-occluder, symmetric occluder, far-background, and full-blocker cases
+- compare raw output against Three `GTAONode`
+
+Exit criteria:
+
+- CPU reference tests pass
+- TSL output matches reference cases within tolerance
+- screenshots show real AO, not scene color
+
+### Next PR-05: Sampling And Denoise Ablation
+
+Goal: choose sample rotation/noise based on post-denoise image quality.
+
+Candidates:
+
+- current magic-square rotation
+- blue-noise or void-and-cluster texture
+- filter-adapted pattern inspired by EA SEED 2024
+
+Exit criteria:
+
+- raw and denoised screenshots exist for each candidate
+- no fake performance claims
+- selected pattern is justified by visible artifact reduction
 
 Historical roadmap below remains useful context but is superseded by the next-PR list above.
 
