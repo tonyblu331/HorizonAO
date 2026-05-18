@@ -7,7 +7,12 @@ Scope: active change `verify-horizonao-math-denoise`
 
 ## Active SDD Change
 
-Current active change: `openspec/changes/verify-horizonao-math-denoise/`
+Latest completed change: `openspec/changes/verify-horizonao-math-denoise/`
+
+Latest research revision: `openspec/horizonao-math-revision-2025.md`
+
+Latest implementation fix: HorizonAO AO debug output feedback loop fixed in
+`HorizonAoDenoiseNode` by separating pass-output sampling from nested denoise sampling.
 
 Purpose:
 
@@ -16,6 +21,8 @@ Purpose:
 - add spatial depth/normal-aware denoise
 - render `denoised-ao` as real output, not metadata
 - keep temporal, XR/stereo, bitmask AO, bent normals, and N8AO integration out of this PR
+
+Post-merge visual review revised the verdict: the code path existed, but local screenshots showed HorizonAO `raw-ao` and `denoised-ao` displaying the colored scene instead of grayscale AO under the WebGL fallback path. Console logs reported a framebuffer/texture feedback loop. The fix is to keep raw AO exposed through `passTexture(...)` for graph output, but make the denoise pass sample the raw render target as a plain texture and explicitly update/setup the raw source when denoise owns the chain.
 
 ## 1. Current Product Shape
 
@@ -30,7 +37,7 @@ It is implemented enough to prove the integration contract:
 - capture repeatable metadata and screenshots in Playwright
 - expose rendered debug views for raw AO, denoised AO, linear depth, and normals
 
-It is not yet production-quality AO. The missing pieces are still the real ones: quality tuning, WebGPU-native validation, proper GPU timing capture, failure-case screenshots, and measured comparison against non-Three baselines.
+It is not yet production-quality AO. The missing pieces are still the real ones: correct scalar AO debug output, quality tuning, WebGPU-native validation, proper GPU timing capture, failure-case screenshots, and measured comparison against non-Three baselines.
 
 ## 2. Implemented Core API
 
@@ -323,7 +330,25 @@ This is the right comparison shape. Same scene, same camera, same route, same re
 
 ## 10. Roadmap
 
-Next PRs after `verify-horizonao-math-denoise`:
+Next PRs after `verify-horizonao-math-denoise` and the 2025+ math revision:
+
+### Completed PR-00: Fix AO Debug Output Feedback Loop
+
+Goal: make HorizonAO debug views prove actual scalar AO.
+
+Tasks:
+
+- fixed issue #9 locally
+- removed the framebuffer/texture feedback loop in local fallback
+- made `horizonao-raw/raw-ao` render grayscale AO
+- made `horizonao-raw/denoised-ao` render grayscale denoised AO
+- added an E2E assertion that rejects colored-scene output and flat debug output in AO debug views
+
+Exit criteria:
+
+- screenshots show grayscale AO for HorizonAO raw and denoised views
+- no feedback-loop warning in the scalar debug E2E path
+- debug metadata and pixels agree
 
 ### Next PR-01: Raw And Denoised Failure-Case Review
 
@@ -360,6 +385,39 @@ Tasks:
 - report AO target bytes from actual scaled targets
 - verify resize and DPR reset
 - add resolution-scale debug preview
+
+### Next PR-04: Signed Horizon Math v2
+
+Goal: revise raw AO math only after debug output is trustworthy.
+
+Tasks:
+
+- replace ambiguous cosine accumulator with signed horizon-angle terminology
+- create CPU scalar reference cases before TSL changes
+- validate no-occluder, symmetric occluder, far-background, and full-blocker cases
+- compare raw output against Three `GTAONode`
+
+Exit criteria:
+
+- CPU reference tests pass
+- TSL output matches reference cases within tolerance
+- screenshots show real AO, not scene color
+
+### Next PR-05: Sampling And Denoise Ablation
+
+Goal: choose sample rotation/noise based on post-denoise image quality.
+
+Candidates:
+
+- current magic-square rotation
+- blue-noise or void-and-cluster texture
+- filter-adapted pattern inspired by EA SEED 2024
+
+Exit criteria:
+
+- raw and denoised screenshots exist for each candidate
+- no fake performance claims
+- selected pattern is justified by visible artifact reduction
 
 Historical roadmap below remains useful context but is superseded by the next-PR list above.
 
