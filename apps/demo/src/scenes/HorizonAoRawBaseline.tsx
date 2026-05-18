@@ -40,7 +40,7 @@ export function HorizonAoRawBaseline({ debugView, onGpuTiming }: HorizonAoRawBas
     const sceneNormal = scenePass.getTextureNode('normal')
     const aoNode = horizonAO(sceneDepth, sceneNormal, camera)
     const aoValue = aoNode.getTextureNode().r
-    const denoiseNode = horizonAODenoise(aoNode.getTextureNode(), sceneDepth, sceneNormal, camera)
+    const denoiseNode = horizonAODenoise(aoNode, sceneDepth, sceneNormal, camera)
     const denoisedAoValue = denoiseNode.getTextureNode().r
 
     renderPipeline.outputNode = createAoDebugOutput({

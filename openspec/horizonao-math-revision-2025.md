@@ -3,7 +3,7 @@
 Status: research revision  
 Date: 2026-05-18  
 Branch: `codex/revise-horizonao-math-2025`  
-Decision: revise the math roadmap, do not implement new shader math until debug output is proven
+Decision: revise the math roadmap, fix scalar debug output first, then implement signed horizon math
 
 ## 1. Current Reality
 
@@ -13,7 +13,7 @@ The merged HorizonAO path is not visually validated yet. Review screenshots afte
 - HorizonAO `raw-ao` and `denoised-ao` currently show the colored scene.
 - Local fallback logs report a framebuffer/texture feedback loop.
 
-This means the next implementation PR must fix issue #9 before any estimator rewrite. Do not tune or replace AO math while the debug view cannot prove scalar AO.
+The first implementation step fixed issue #9 locally: raw AO remains exposed through `passTexture(...)`, while the denoise pass samples the raw render target as a plain texture and explicitly updates/setups the raw source before filtering. Do not tune or replace AO math unless the scalar debug E2E guard stays green.
 
 ## 2. Literature Sweep
 
@@ -177,6 +177,8 @@ Still cut:
 
 Issue: #9
 
+Status: implemented locally.
+
 Goal: make `raw-ao` and `denoised-ao` prove scalar AO visually.
 
 Exit criteria:
@@ -184,7 +186,7 @@ Exit criteria:
 - no feedback-loop warning
 - HorizonAO raw debug is grayscale
 - HorizonAO denoised debug is grayscale
-- E2E rejects colored debug output
+- E2E rejects colored debug output and flat debug output
 
 ### PR-B: Signed Horizon Math v2
 

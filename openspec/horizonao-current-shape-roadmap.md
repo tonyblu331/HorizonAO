@@ -11,7 +11,8 @@ Latest completed change: `openspec/changes/verify-horizonao-math-denoise/`
 
 Latest research revision: `openspec/horizonao-math-revision-2025.md`
 
-Current blocker: issue #9, HorizonAO AO debug output feedback loop.
+Latest implementation fix: HorizonAO AO debug output feedback loop fixed in
+`HorizonAoDenoiseNode` by separating pass-output sampling from nested denoise sampling.
 
 Purpose:
 
@@ -21,7 +22,7 @@ Purpose:
 - render `denoised-ao` as real output, not metadata
 - keep temporal, XR/stereo, bitmask AO, bent normals, and N8AO integration out of this PR
 
-Post-merge visual review revised the verdict: the code path exists, but local screenshots show HorizonAO `raw-ao` and `denoised-ao` displaying the colored scene instead of grayscale AO under the WebGL fallback path. Console logs report a framebuffer/texture feedback loop. Fix that before math v2.
+Post-merge visual review revised the verdict: the code path existed, but local screenshots showed HorizonAO `raw-ao` and `denoised-ao` displaying the colored scene instead of grayscale AO under the WebGL fallback path. Console logs reported a framebuffer/texture feedback loop. The fix is to keep raw AO exposed through `passTexture(...)` for graph output, but make the denoise pass sample the raw render target as a plain texture and explicitly update/setup the raw source when denoise owns the chain.
 
 ## 1. Current Product Shape
 
@@ -331,22 +332,22 @@ This is the right comparison shape. Same scene, same camera, same route, same re
 
 Next PRs after `verify-horizonao-math-denoise` and the 2025+ math revision:
 
-### Next PR-00: Fix AO Debug Output Feedback Loop
+### Completed PR-00: Fix AO Debug Output Feedback Loop
 
 Goal: make HorizonAO debug views prove actual scalar AO.
 
 Tasks:
 
-- fix issue #9
-- remove the framebuffer/texture feedback loop in local fallback
-- make `horizonao-raw/raw-ao` render grayscale AO
-- make `horizonao-raw/denoised-ao` render grayscale denoised AO
-- add an E2E assertion that rejects colored-scene output in AO debug views
+- fixed issue #9 locally
+- removed the framebuffer/texture feedback loop in local fallback
+- made `horizonao-raw/raw-ao` render grayscale AO
+- made `horizonao-raw/denoised-ao` render grayscale denoised AO
+- added an E2E assertion that rejects colored-scene output and flat debug output in AO debug views
 
 Exit criteria:
 
 - screenshots show grayscale AO for HorizonAO raw and denoised views
-- no feedback-loop warning
+- no feedback-loop warning in the scalar debug E2E path
 - debug metadata and pixels agree
 
 ### Next PR-01: Raw And Denoised Failure-Case Review

@@ -59,7 +59,6 @@ import {
   vec4,
   viewZToPerspectiveDepth,
 } from 'three/tsl'
-import { denoise as threeDenoise } from 'three/addons/tsl/display/DenoiseNode.js'
 import {
   DEFAULT_HORIZON_AO_KERNEL_OPTIONS,
   HORIZON_AO_CENTER_BIAS_EXPONENT,
@@ -114,6 +113,7 @@ export class HorizonAoNode extends TempNode<'float'> {
   })
   private readonly material = new NodeMaterial()
   private readonly textureNode
+  private readonly sampleTextureNode
   private readonly noiseNode
   private readonly cameraProjectionMatrix
   private readonly cameraProjectionMatrixInverse
@@ -134,6 +134,7 @@ export class HorizonAoNode extends TempNode<'float'> {
     this.renderTarget.texture.name = 'HorizonAO.Raw'
     this.material.name = 'HorizonAO Raw'
     this.textureNode = passTexture(this as never, this.renderTarget.texture)
+    this.sampleTextureNode = texture(this.renderTarget.texture)
     this.noiseNode = texture(generateMagicSquareNoise())
     this.cameraProjectionMatrix = uniform(camera.projectionMatrix)
     this.cameraProjectionMatrixInverse = uniform(camera.projectionMatrixInverse)
@@ -166,6 +167,10 @@ export class HorizonAoNode extends TempNode<'float'> {
 
   getTextureNode(): TextureNode {
     return this.textureNode
+  }
+
+  getSampleTextureNode(): TextureNode {
+    return this.sampleTextureNode
   }
 
   setSize(width: number, height: number): void {
@@ -436,6 +441,7 @@ export class HorizonAoDenoiseNode extends TempNode<'float'> {
   readonly lumaPhi = uniform(DEFAULT_HORIZON_AO_DENOISE_OPTIONS.lumaPhi)
   readonly depthPhi = uniform(DEFAULT_HORIZON_AO_DENOISE_OPTIONS.depthPhi)
   readonly normalPhi = uniform(DEFAULT_HORIZON_AO_DENOISE_OPTIONS.normalPhi)
+  readonly resolution = uniform(new Vector2())
   updateBeforeType = NodeUpdateType.FRAME
 
   private readonly renderTarget = new RenderTarget(1, 1, {
@@ -444,10 +450,11 @@ export class HorizonAoDenoiseNode extends TempNode<'float'> {
   })
   private readonly material = new NodeMaterial()
   private readonly textureNode
-  private readonly denoiseNode
+  private readonly sourceAoNode: HorizonAoNode | null
+  private readonly cameraProjectionMatrixInverse
 
   constructor(
-    aoNode: Node,
+    aoNode: Node | HorizonAoNode,
     depthNode: Node,
     normalNode: Node | null,
     camera: Camera,
@@ -455,19 +462,18 @@ export class HorizonAoDenoiseNode extends TempNode<'float'> {
   ) {
     super('float')
 
-    this.aoNode = aoNode as SampleableNode
+    this.sourceAoNode = aoNode instanceof HorizonAoNode ? aoNode : null
+    this.aoNode =
+      this.sourceAoNode === null
+        ? (aoNode as SampleableNode)
+        : (this.sourceAoNode.getSampleTextureNode() as SampleableNode)
     this.depthNode = depthNode as SampleableNode
     this.normalNode = normalNode as SampleableNode | null
     this.camera = camera
     this.renderTarget.texture.name = 'HorizonAO.Denoised'
     this.material.name = 'HorizonAO Denoise'
     this.textureNode = passTexture(this as never, this.renderTarget.texture)
-    this.denoiseNode = threeDenoise(
-      nodeObject(this.aoNode),
-      nodeObject(this.depthNode),
-      this.normalNode === null ? null : nodeObject(this.normalNode),
-      camera,
-    )
+    this.cameraProjectionMatrixInverse = uniform(camera.projectionMatrixInverse)
 
     this.configure(options)
   }
@@ -484,10 +490,6 @@ export class HorizonAoDenoiseNode extends TempNode<'float'> {
     this.lumaPhi.value = next.lumaPhi
     this.depthPhi.value = next.depthPhi
     this.normalPhi.value = next.normalPhi
-    this.denoiseNode.radius.value = next.radius
-    this.denoiseNode.lumaPhi.value = next.lumaPhi
-    this.denoiseNode.depthPhi.value = next.depthPhi
-    this.denoiseNode.normalPhi.value = next.normalPhi
   }
 
   getTextureNode(): TextureNode {
@@ -495,14 +497,18 @@ export class HorizonAoDenoiseNode extends TempNode<'float'> {
   }
 
   setSize(width: number, height: number): void {
-    this.renderTarget.setSize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)))
+    const targetWidth = Math.max(1, Math.round(width))
+    const targetHeight = Math.max(1, Math.round(height))
+
+    this.resolution.value.set(targetWidth, targetHeight)
+    this.renderTarget.setSize(targetWidth, targetHeight)
   }
 
   updateBefore(frame: NodeFrame): void {
     const renderer = frame.renderer
     if (renderer === null) return
 
-    this.denoiseNode.updateBefore?.(frame)
+    this.sourceAoNode?.updateBefore(frame)
     rendererState = RendererUtils.resetRendererState(renderer, rendererState)
 
     const image = this.aoNode.value?.image
@@ -525,8 +531,117 @@ export class HorizonAoDenoiseNode extends TempNode<'float'> {
 
   setup(builder: NodeBuilder): Node | null {
     const sharedBuilder = builder as SharedContextBuilder
+    const uvNode = uv()
 
-    this.material.fragmentNode = this.denoiseNode.r.context(sharedBuilder.getSharedContext())
+    this.sourceAoNode?.setup(builder)
+
+    const sampleAo = (sampleUv: Node) => this.aoNode.sample(sampleUv).r
+    const sampleDepth = (sampleUv: Node) => this.depthNode.sample(sampleUv).r
+    const sampleNormal = (sampleUv: Node) =>
+      this.normalNode !== null
+        ? this.normalNode.sample(sampleUv).rgb.normalize()
+        : getNormalFromDepth(
+            sampleUv,
+            this.depthNode.value as never,
+            this.cameraProjectionMatrixInverse,
+          )
+
+    const accumulate = (
+      filteredAo: Node,
+      totalWeight: Node,
+      centerAo: Node,
+      centerNormal: Node,
+      centerViewPosition: Node,
+      sampleUv: Node,
+    ) => {
+      const neighborAo = sampleAo(sampleUv).toVar()
+      const neighborDepth = sampleDepth(sampleUv).toVar()
+      const neighborNormal = sampleNormal(sampleUv).toVar()
+      const neighborViewPosition = getViewPosition(
+        sampleUv,
+        neighborDepth,
+        this.cameraProjectionMatrixInverse,
+      ).toVar()
+      const lumaSimilarity = float(1).div(max(1, abs(neighborAo.sub(centerAo)).div(this.lumaPhi)))
+      const depthDelta = abs(dot(centerViewPosition.sub(neighborViewPosition), centerNormal))
+      const depthSimilarity = float(1).div(max(1, depthDelta.div(this.depthPhi)))
+      const normalSimilarity = pow(max(dot(centerNormal, neighborNormal), 0), this.normalPhi)
+      const weight = lumaSimilarity.mul(depthSimilarity).mul(normalSimilarity).toVar()
+
+      filteredAo.addAssign(neighborAo.mul(weight))
+      totalWeight.addAssign(weight)
+    }
+
+    const denoiseAo = Fn(() => {
+      const centerDepth = sampleDepth(uvNode).toVar()
+      const centerAo = sampleAo(uvNode).toVar()
+      const centerNormal = sampleNormal(uvNode).toVar()
+      const centerViewPosition = getViewPosition(
+        uvNode,
+        centerDepth,
+        this.cameraProjectionMatrixInverse,
+      ).toVar()
+      const radiusUv = vec2(
+        this.radius.div(this.resolution.x),
+        this.radius.div(this.resolution.y),
+      ).toVar()
+      const halfRadiusUv = radiusUv.mul(0.5).toVar()
+      const filteredAo = centerAo.toVar()
+      const totalWeight = float(1).toVar()
+
+      accumulate(
+        filteredAo,
+        totalWeight,
+        centerAo,
+        centerNormal,
+        centerViewPosition,
+        uvNode.add(vec2(radiusUv.x, 0)),
+      )
+      accumulate(
+        filteredAo,
+        totalWeight,
+        centerAo,
+        centerNormal,
+        centerViewPosition,
+        uvNode.sub(vec2(radiusUv.x, 0)),
+      )
+      accumulate(
+        filteredAo,
+        totalWeight,
+        centerAo,
+        centerNormal,
+        centerViewPosition,
+        uvNode.add(vec2(0, radiusUv.y)),
+      )
+      accumulate(
+        filteredAo,
+        totalWeight,
+        centerAo,
+        centerNormal,
+        centerViewPosition,
+        uvNode.sub(vec2(0, radiusUv.y)),
+      )
+      accumulate(
+        filteredAo,
+        totalWeight,
+        centerAo,
+        centerNormal,
+        centerViewPosition,
+        uvNode.add(halfRadiusUv),
+      )
+      accumulate(
+        filteredAo,
+        totalWeight,
+        centerAo,
+        centerNormal,
+        centerViewPosition,
+        uvNode.sub(halfRadiusUv),
+      )
+
+      return clamp(filteredAo.div(totalWeight), 0, 1)
+    })
+
+    this.material.fragmentNode = denoiseAo().context(sharedBuilder.getSharedContext())
     this.material.needsUpdate = true
 
     return this.textureNode
@@ -539,14 +654,14 @@ export class HorizonAoDenoiseNode extends TempNode<'float'> {
 }
 
 export function horizonAODenoise(
-  aoNode: Node,
+  aoNode: Node | HorizonAoNode,
   depthNode: Node,
   normalNode: Node | null,
   camera: Camera,
   options?: HorizonAoDenoiseOptions,
 ): HorizonAoDenoiseNode {
   return new HorizonAoDenoiseNode(
-    nodeObject(aoNode),
+    aoNode instanceof HorizonAoNode ? aoNode : nodeObject(aoNode),
     nodeObject(depthNode),
     normalNode === null ? null : nodeObject(normalNode),
     camera,

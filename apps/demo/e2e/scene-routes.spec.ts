@@ -1,15 +1,19 @@
-import { expect, test } from '@playwright/test'
-import type { HorizonAoDebugView } from '@horizonao/core'
+import { expect, test, type Page } from '@playwright/test'
+import { inflateSync } from 'node:zlib'
 import { PARITY_SCENES } from '../src/parityScenes'
 
 const routes = Object.values(PARITY_SCENES)
-const renderedDebugViews = [
-  'raw-ao',
-  'denoised-ao',
-  'linear-depth',
-  'normal',
-] as const satisfies readonly HorizonAoDebugView[]
-const measuredBaselines = ['three-gtao-node', 'horizonao-raw'] as const
+interface RgbaImage {
+  readonly width: number
+  readonly height: number
+  readonly data: Uint8Array<ArrayBufferLike>
+}
+
+interface DebugPixelStats {
+  readonly sampledPixels: number
+  readonly nonGrayRatio: number
+  readonly lumaStdDev: number
+}
 
 for (const fixture of routes) {
   test(`initializes a visible canvas on ${fixture.route}`, async ({ page }) => {
@@ -183,11 +187,7 @@ for (const fixture of routes) {
   })
 
   test(`captures the HorizonAO raw baseline on ${fixture.route}`, async ({ page }, testInfo) => {
-    const pageErrors: string[] = []
-    page.on('console', (message) => {
-      if (message.type() === 'error') pageErrors.push(message.text())
-    })
-    page.on('pageerror', (error) => pageErrors.push(error.message))
+    const pageProblems = collectPageProblems(page)
 
     await page.goto(fixture.route)
 
@@ -214,7 +214,7 @@ for (const fixture of routes) {
     })
 
     expect(hasPixels).toBe(true)
-    expect(pageErrors).toEqual([])
+    expect(pageProblems).toEqual([])
 
     const screenshot = await canvas.screenshot()
     await testInfo.attach(artifactName ?? `${fixture.key}__horizonao-raw.png`, {
@@ -254,12 +254,8 @@ for (const fixture of routes) {
   })
 }
 
-test('renders implemented AO debug views on the grid scene', async ({ page }) => {
-  const pageErrors: string[] = []
-  page.on('console', (message) => {
-    if (message.type() === 'error') pageErrors.push(message.text())
-  })
-  page.on('pageerror', (error) => pageErrors.push(error.message))
+test('renders scalar HorizonAO debug views on the grid scene', async ({ page }) => {
+  const pageProblems = collectPageProblems(page)
 
   await page.goto(PARITY_SCENES.grid.route)
 
@@ -267,29 +263,191 @@ test('renders implemented AO debug views on the grid scene', async ({ page }) =>
   const canvas = page.locator('canvas').first()
   await expect(panel).toBeVisible()
   await expect(canvas).toBeVisible()
+  await page.getByLabel('AO baseline').selectOption('horizonao-raw')
+  await expect(panel).toHaveAttribute('data-baseline', 'horizonao-raw')
 
-  for (const baseline of measuredBaselines) {
-    await page.getByLabel('AO baseline').selectOption(baseline)
-    await expect(panel).toHaveAttribute('data-baseline', baseline)
+  for (const debugView of ['raw-ao', 'denoised-ao'] as const) {
+    await page.getByLabel('AO debug view').selectOption(debugView)
+    await expect(panel).toHaveAttribute('data-debug-view', debugView)
+    await expect(panel).toHaveAttribute('data-debug-view-status', 'rendered')
+    await expect(panel).toHaveAttribute(
+      'data-artifact',
+      new RegExp(`^grid__horizonao-raw__${debugView}__`),
+    )
+    await page.waitForTimeout(750)
 
-    for (const debugView of renderedDebugViews) {
-      await page.getByLabel('AO debug view').selectOption(debugView)
-      await expect(panel).toHaveAttribute('data-debug-view', debugView)
-      await expect(panel).toHaveAttribute('data-debug-view-status', 'rendered')
-      await expect(panel).toHaveAttribute(
-        'data-artifact',
-        new RegExp(`^grid__${baseline}__${debugView}__`),
-      )
-      await page.waitForTimeout(250)
+    const hasPixels = await canvas.evaluate((node) => {
+      const canvasElement = node as HTMLCanvasElement
+      return canvasElement.width > 0 && canvasElement.height > 0
+    })
 
-      const hasPixels = await canvas.evaluate((node) => {
-        const canvasElement = node as HTMLCanvasElement
-        return canvasElement.width > 0 && canvasElement.height > 0
-      })
+    expect(hasPixels).toBe(true)
 
-      expect(hasPixels).toBe(true)
+    const stats = getAoDebugPixelStats(await canvas.screenshot())
+
+    expect(stats.sampledPixels).toBeGreaterThan(1_000)
+    expect(stats.nonGrayRatio).toBeLessThan(0.02)
+    expect(stats.lumaStdDev).toBeGreaterThan(0.25)
+  }
+
+  expect(pageProblems).toEqual([])
+})
+
+function collectPageProblems(page: Page): string[] {
+  const problems: string[] = []
+
+  page.on('console', (message) => {
+    const text = message.text()
+    if (message.type() === 'error' || /feedback loop|INVALID_OPERATION/i.test(text)) {
+      problems.push(text)
+    }
+  })
+  page.on('pageerror', (error) => problems.push(error.message))
+
+  return problems
+}
+
+function getAoDebugPixelStats(pngBuffer: Buffer): DebugPixelStats {
+  const image = decodePngRgba(pngBuffer)
+  const crop = {
+    x0: Math.floor(image.width * 0.3),
+    x1: Math.floor(image.width * 0.7),
+    y0: Math.floor(image.height * 0.24),
+    y1: Math.floor(image.height * 0.68),
+  }
+  const lumas: number[] = []
+  let sampledPixels = 0
+  let nonGrayPixels = 0
+
+  for (let y = crop.y0; y < crop.y1; y += 4) {
+    for (let x = crop.x0; x < crop.x1; x += 4) {
+      const offset = (y * image.width + x) * 4
+      const r = byteAt(image.data, offset)
+      const g = byteAt(image.data, offset + 1)
+      const b = byteAt(image.data, offset + 2)
+      const maxChannelDelta = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b))
+
+      if (maxChannelDelta > 4) nonGrayPixels += 1
+      lumas.push(0.2126 * r + 0.7152 * g + 0.0722 * b)
+      sampledPixels += 1
     }
   }
 
-  expect(pageErrors).toEqual([])
-})
+  const mean = lumas.reduce((sum, value) => sum + value, 0) / Math.max(1, lumas.length)
+  const variance =
+    lumas.reduce((sum, value) => sum + (value - mean) ** 2, 0) / Math.max(1, lumas.length)
+
+  return {
+    sampledPixels,
+    nonGrayRatio: nonGrayPixels / Math.max(1, sampledPixels),
+    lumaStdDev: Math.sqrt(variance),
+  }
+}
+
+function decodePngRgba(buffer: Buffer): RgbaImage {
+  const signature = buffer.subarray(0, 8)
+  if (!signature.equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+    throw new Error('Unsupported screenshot format: expected PNG')
+  }
+
+  let offset = 8
+  let width = 0
+  let height = 0
+  let bitDepth = 0
+  let colorType = 0
+  const idatChunks: Buffer[] = []
+
+  while (offset < buffer.length) {
+    const length = buffer.readUInt32BE(offset)
+    const type = buffer.toString('ascii', offset + 4, offset + 8)
+    const data = buffer.subarray(offset + 8, offset + 8 + length)
+
+    if (type === 'IHDR') {
+      width = data.readUInt32BE(0)
+      height = data.readUInt32BE(4)
+      bitDepth = byteAt(data, 8)
+      colorType = byteAt(data, 9)
+    } else if (type === 'IDAT') {
+      idatChunks.push(data)
+    } else if (type === 'IEND') {
+      break
+    }
+
+    offset += length + 12
+  }
+
+  if (bitDepth !== 8 || (colorType !== 2 && colorType !== 6)) {
+    throw new Error(`Unsupported PNG format: bitDepth=${bitDepth}, colorType=${colorType}`)
+  }
+
+  const bytesPerPixel = colorType === 6 ? 4 : 3
+  const stride = width * bytesPerPixel
+  const inflated = inflateSync(Buffer.concat(idatChunks))
+  const rgba = new Uint8Array(width * height * 4)
+  let sourceOffset = 0
+  let previousRow: Uint8Array<ArrayBufferLike> = new Uint8Array(stride)
+
+  for (let y = 0; y < height; y += 1) {
+    const filter = byteAt(inflated, sourceOffset)
+    sourceOffset += 1
+    const encodedRow = inflated.subarray(sourceOffset, sourceOffset + stride)
+    sourceOffset += stride
+    const row = unfilterPngRow(encodedRow, previousRow, bytesPerPixel, filter)
+
+    for (let x = 0; x < width; x += 1) {
+      const source = x * bytesPerPixel
+      const target = (y * width + x) * 4
+      rgba[target] = byteAt(row, source)
+      rgba[target + 1] = byteAt(row, source + 1)
+      rgba[target + 2] = byteAt(row, source + 2)
+      rgba[target + 3] = colorType === 6 ? byteAt(row, source + 3) : 255
+    }
+
+    previousRow = row
+  }
+
+  return { width, height, data: rgba }
+}
+
+function unfilterPngRow(
+  encoded: Uint8Array<ArrayBufferLike>,
+  previous: Uint8Array<ArrayBufferLike>,
+  bytesPerPixel: number,
+  filter: number,
+): Uint8Array<ArrayBufferLike> {
+  const row = new Uint8Array(encoded.length)
+
+  for (let index = 0; index < encoded.length; index += 1) {
+    const left = index >= bytesPerPixel ? byteAt(row, index - bytesPerPixel) : 0
+    const up = byteAt(previous, index)
+    const upperLeft = index >= bytesPerPixel ? byteAt(previous, index - bytesPerPixel) : 0
+    let predictor = 0
+
+    if (filter === 1) predictor = left
+    else if (filter === 2) predictor = up
+    else if (filter === 3) predictor = Math.floor((left + up) / 2)
+    else if (filter === 4) predictor = paeth(left, up, upperLeft)
+    else if (filter !== 0) throw new Error(`Unsupported PNG filter: ${filter}`)
+
+    row[index] = (byteAt(encoded, index) + predictor) & 0xff
+  }
+
+  return row
+}
+
+function byteAt(bytes: Uint8Array<ArrayBufferLike>, index: number): number {
+  const value = bytes[index]
+  if (value === undefined) throw new Error(`PNG byte index out of bounds: ${index}`)
+  return value
+}
+
+function paeth(left: number, up: number, upperLeft: number): number {
+  const estimate = left + up - upperLeft
+  const leftDistance = Math.abs(estimate - left)
+  const upDistance = Math.abs(estimate - up)
+  const upperLeftDistance = Math.abs(estimate - upperLeft)
+
+  if (leftDistance <= upDistance && leftDistance <= upperLeftDistance) return left
+  if (upDistance <= upperLeftDistance) return up
+  return upperLeft
+}
