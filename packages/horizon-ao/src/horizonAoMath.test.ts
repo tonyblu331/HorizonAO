@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_HORIZON_AO_KERNEL_OPTIONS,
+  HORIZON_AO_FULL_HEMISPHERE_COSINE_INTEGRAL,
   clampHorizonAoKernelOptions,
   computeCenterBiasedSampleDistance,
   computeFalloffWeight,
   computeSampleStepsPerSlice,
   generateMagicSquareIndices,
   resolveAccessibility,
+  resolveSignedHorizonAccessibility,
+  resolveSignedHorizonSliceAccessibility,
 } from './horizonAoMath'
 
 describe('HorizonAO scalar math policy', () => {
@@ -79,5 +82,69 @@ describe('HorizonAO scalar math policy', () => {
     expect(indices).toHaveLength(25)
     expect(new Set(indices).size).toBe(25)
     expect(indices.every((value) => value >= 1 && value <= 25)).toBe(true)
+  })
+
+  it('documents the full signed-horizon cosine normalization constant', () => {
+    expect(HORIZON_AO_FULL_HEMISPHERE_COSINE_INTEGRAL).toBe(2)
+  })
+
+  it('resolves a no-occluder signed-horizon slice as fully accessible', () => {
+    expect(
+      resolveSignedHorizonSliceAccessibility({
+        normalAngleRad: 0,
+        negativeHorizonAngleRad: -Math.PI / 2,
+        positiveHorizonAngleRad: Math.PI / 2,
+      }),
+    ).toBeCloseTo(1)
+  })
+
+  it('resolves a fully blocked signed-horizon slice as inaccessible', () => {
+    expect(
+      resolveSignedHorizonSliceAccessibility({
+        normalAngleRad: 0,
+        negativeHorizonAngleRad: 0,
+        positiveHorizonAngleRad: 0,
+      }),
+    ).toBe(0)
+  })
+
+  it('integrates a symmetric two-wall signed-horizon slice predictably', () => {
+    expect(
+      resolveSignedHorizonSliceAccessibility({
+        normalAngleRad: 0,
+        negativeHorizonAngleRad: -Math.PI / 4,
+        positiveHorizonAngleRad: Math.PI / 4,
+      }),
+    ).toBeCloseTo(Math.SQRT1_2)
+  })
+
+  it('clips a far-background horizon back to the visible cosine hemisphere', () => {
+    expect(
+      resolveSignedHorizonSliceAccessibility({
+        normalAngleRad: 0,
+        negativeHorizonAngleRad: -Math.PI,
+        positiveHorizonAngleRad: Math.PI,
+      }),
+    ).toBeCloseTo(1)
+  })
+
+  it('averages signed-horizon slices before intensity mapping', () => {
+    expect(
+      resolveSignedHorizonAccessibility({
+        slices: [
+          {
+            normalAngleRad: 0,
+            negativeHorizonAngleRad: -Math.PI / 2,
+            positiveHorizonAngleRad: Math.PI / 2,
+          },
+          {
+            normalAngleRad: 0,
+            negativeHorizonAngleRad: 0,
+            positiveHorizonAngleRad: 0,
+          },
+        ],
+        intensity: 2,
+      }),
+    ).toBeCloseTo(0.25)
   })
 })

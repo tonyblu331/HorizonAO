@@ -190,12 +190,15 @@ Exit criteria:
 
 ### PR-B: Signed Horizon Math v2
 
+Status: first CPU-reference slice in progress.
+
 Goal: replace ambiguous cosine accumulator with explicitly documented signed horizon-angle integration.
 
 Tasks:
 
-- write CPU scalar reference for synthetic cases
+- write CPU scalar reference for synthetic cases before shader changes
 - match no-occluder, full-blocker, symmetric two-wall, and far-background cases
+- define the slice convention as an integral of `max(0, cos(theta - normalAngle))` over the visible signed horizon arc, normalized by the full cosine hemisphere integral of `2`
 - port formula to TSL only after CPU tests pass
 - compare against Three `GTAONode` raw AO
 
