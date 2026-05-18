@@ -185,6 +185,101 @@ export class HorizonAoNode extends TempNode<'float'> {
         ? this.normalNode.sample(sampleUv).rgb.normalize()
         : getNormalFromDepth(sampleUv, this.depthNode.value as never, this.cameraProjectionMatrixInverse)
 
+    const buildSliceFrame = (viewNormal: Node, viewDir: Node, sliceIndex: Node, sliceCount: Node) => {
+      const angle = float(sliceIndex).div(sliceCount).mul(PI).toVar()
+      const tangent = normalize(vec3(viewNormal.y.negate(), viewNormal.x, 0.0)).toVar()
+      const bitangent = normalize(cross(viewNormal, tangent)).toVar()
+      const kernelMatrix = mat3(tangent, bitangent, viewNormal)
+      const sampleDir = normalize(kernelMatrix.mul(vec3(cos(angle), sin(angle), 0))).toVar()
+      const sliceBitangent = normalize(cross(sampleDir, viewDir)).toVar()
+      const sliceTangent = cross(sliceBitangent, viewDir)
+      const normalInSlice = normalize(viewNormal.sub(sliceBitangent.mul(dot(viewNormal, sliceBitangent)))).toVar()
+      const tangentToNormalInSlice = cross(normalInSlice, sliceBitangent).toVar()
+
+      return {
+        normalInSlice,
+        sampleDir,
+        sliceTangent,
+        tangentToNormalInSlice,
+      }
+    }
+
+    const computeSampleOffset = (sampleDir: Node, stepIndex: Node, stepCount: Node) => {
+      const centerBias = pow(div(float(stepIndex).add(1), stepCount), 1.35)
+      return sampleDir.mul(this.radius).mul(centerBias)
+    }
+
+    const updateHorizon = (
+      horizonValue: Node,
+      sampleViewPosition: Node,
+      viewPosition: Node,
+      viewDir: Node,
+      stepIndex: Node,
+    ) => {
+      const viewDelta = sampleViewPosition.sub(viewPosition).toVar()
+
+      If(abs(viewDelta.z).lessThan(this.thickness), () => {
+        const sampleCosHorizon = dot(viewDir, normalize(viewDelta))
+        const sampleFalloff = mix(1, float(2).div(float(stepIndex).add(2)), this.falloff)
+        horizonValue.addAssign(max(0, mul(sampleCosHorizon.sub(horizonValue), sampleFalloff)))
+      })
+    }
+
+    const marchHorizonPair = (
+      cosHorizons: Node,
+      viewPosition: Node,
+      viewDir: Node,
+      sampleDir: Node,
+      stepIndex: Node,
+      stepCount: Node,
+    ) => {
+      const sampleOffset = computeSampleOffset(sampleDir, stepIndex, stepCount)
+
+      const positiveScreenPosition = getScreenPosition(
+        viewPosition.add(sampleOffset),
+        this.cameraProjectionMatrix,
+      ).toVar()
+      const positiveDepth = sampleDepth(positiveScreenPosition).toVar()
+      const positiveViewPosition = getViewPosition(
+        positiveScreenPosition,
+        positiveDepth,
+        this.cameraProjectionMatrixInverse,
+      ).toVar()
+      updateHorizon(cosHorizons.x, positiveViewPosition, viewPosition, viewDir, stepIndex)
+
+      const negativeScreenPosition = getScreenPosition(
+        viewPosition.sub(sampleOffset),
+        this.cameraProjectionMatrix,
+      ).toVar()
+      const negativeDepth = sampleDepth(negativeScreenPosition).toVar()
+      const negativeViewPosition = getViewPosition(
+        negativeScreenPosition,
+        negativeDepth,
+        this.cameraProjectionMatrixInverse,
+      ).toVar()
+      updateHorizon(cosHorizons.y, negativeViewPosition, viewPosition, viewDir, stepIndex)
+    }
+
+    const resolveSliceOcclusion = (
+      cosHorizons: Node,
+      normalInSlice: Node,
+      sliceTangent: Node,
+      viewDir: Node,
+    ) => {
+      const sinHorizons = sqrt(sub(1, cosHorizons.mul(cosHorizons))).toVar()
+      const nx = dot(normalInSlice, sliceTangent)
+      const ny = dot(normalInSlice, viewDir)
+      const horizonX = acos(cosHorizons.x)
+      const horizonY = acos(cosHorizons.y)
+      const tangentContribution = mul(
+        0.5,
+        horizonY.sub(horizonX).add(sinHorizons.x.mul(cosHorizons.x).sub(sinHorizons.y.mul(cosHorizons.y))),
+      )
+      const normalContribution = mul(0.5, sub(2, cosHorizons.x.mul(cosHorizons.x)).sub(cosHorizons.y.mul(cosHorizons.y)))
+
+      return nx.mul(tangentContribution).add(ny.mul(normalContribution))
+    }
+
     const rawAo = Fn(() => {
       const depth = sampleDepth(uvNode).toVar()
       depth.greaterThanEqual(1.0).discard()
@@ -192,78 +287,27 @@ export class HorizonAoNode extends TempNode<'float'> {
       const viewPosition = getViewPosition(uvNode, depth, this.cameraProjectionMatrixInverse).toVar()
       const viewNormal = sampleNormal(uvNode).toVar()
       const viewDir = normalize(viewPosition.xyz.negate()).toVar()
-      const tangent = normalize(vec3(viewNormal.y.negate(), viewNormal.x, 0.0)).toVar()
-      const bitangent = normalize(cross(viewNormal, tangent)).toVar()
-      const kernelMatrix = mat3(tangent, bitangent, viewNormal)
       const directions = this.slices.toVar()
       const steps = add(this.samples, directions.sub(1)).div(directions).toVar()
       const occlusion = float(0).toVar()
 
       Loop({ start: int(0), end: directions, type: 'int', condition: '<' }, ({ i }: { readonly i: Node<'int'> }) => {
-        const angle = float(i).div(directions).mul(PI).toVar()
-        const sampleDir = normalize(kernelMatrix.mul(vec3(cos(angle), sin(angle), 0))).toVar()
-        const sliceBitangent = normalize(cross(sampleDir, viewDir)).toVar()
-        const sliceTangent = cross(sliceBitangent, viewDir)
-        const normalInSlice = normalize(viewNormal.sub(sliceBitangent.mul(dot(viewNormal, sliceBitangent)))).toVar()
-        const tangentToNormalInSlice = cross(normalInSlice, sliceBitangent).toVar()
+        const { normalInSlice, sampleDir, sliceTangent, tangentToNormalInSlice } = buildSliceFrame(
+          viewNormal,
+          viewDir,
+          i,
+          directions,
+        )
         const cosHorizons = vec2(
           dot(viewDir, tangentToNormalInSlice),
           dot(viewDir, tangentToNormalInSlice.negate()),
         ).toVar()
 
         Loop({ end: steps, type: 'int', condition: '<' }, ({ i: j }: { readonly i: Node<'int'> }) => {
-          const centerBias = pow(div(float(j).add(1), steps), 1.35)
-          const sampleViewOffset = sampleDir.mul(this.radius).mul(centerBias)
-
-          const sampleScreenPositionX = getScreenPosition(
-            viewPosition.add(sampleViewOffset),
-            this.cameraProjectionMatrix,
-          ).toVar()
-          const sampleDepthX = sampleDepth(sampleScreenPositionX).toVar()
-          const sampleSceneViewPositionX = getViewPosition(
-            sampleScreenPositionX,
-            sampleDepthX,
-            this.cameraProjectionMatrixInverse,
-          ).toVar()
-          const viewDeltaX = sampleSceneViewPositionX.sub(viewPosition).toVar()
-
-          If(abs(viewDeltaX.z).lessThan(this.thickness), () => {
-            const sampleCosHorizon = dot(viewDir, normalize(viewDeltaX))
-            const sampleFalloff = mix(1, float(2).div(float(j).add(2)), this.falloff)
-            cosHorizons.x.addAssign(max(0, mul(sampleCosHorizon.sub(cosHorizons.x), sampleFalloff)))
-          })
-
-          const sampleScreenPositionY = getScreenPosition(
-            viewPosition.sub(sampleViewOffset),
-            this.cameraProjectionMatrix,
-          ).toVar()
-          const sampleDepthY = sampleDepth(sampleScreenPositionY).toVar()
-          const sampleSceneViewPositionY = getViewPosition(
-            sampleScreenPositionY,
-            sampleDepthY,
-            this.cameraProjectionMatrixInverse,
-          ).toVar()
-          const viewDeltaY = sampleSceneViewPositionY.sub(viewPosition).toVar()
-
-          If(abs(viewDeltaY.z).lessThan(this.thickness), () => {
-            const sampleCosHorizon = dot(viewDir, normalize(viewDeltaY))
-            const sampleFalloff = mix(1, float(2).div(float(j).add(2)), this.falloff)
-            cosHorizons.y.addAssign(max(0, mul(sampleCosHorizon.sub(cosHorizons.y), sampleFalloff)))
-          })
+          marchHorizonPair(cosHorizons, viewPosition, viewDir, sampleDir, j, steps)
         })
 
-        const sinHorizons = sqrt(sub(1, cosHorizons.mul(cosHorizons))).toVar()
-        const nx = dot(normalInSlice, sliceTangent)
-        const ny = dot(normalInSlice, viewDir)
-        const horizonX = acos(cosHorizons.x)
-        const horizonY = acos(cosHorizons.y)
-        const tangentContribution = mul(
-          0.5,
-          horizonY.sub(horizonX).add(sinHorizons.x.mul(cosHorizons.x).sub(sinHorizons.y.mul(cosHorizons.y))),
-        )
-        const normalContribution = mul(0.5, sub(2, cosHorizons.x.mul(cosHorizons.x)).sub(cosHorizons.y.mul(cosHorizons.y)))
-
-        occlusion.addAssign(nx.mul(tangentContribution).add(ny.mul(normalContribution)))
+        occlusion.addAssign(resolveSliceOcclusion(cosHorizons, normalInSlice, sliceTangent, viewDir))
       })
 
       const accessibility = clamp(occlusion.div(directions), 0, 1)
