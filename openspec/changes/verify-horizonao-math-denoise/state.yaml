@@ -1,0 +1,13 @@
+change: verify-horizonao-math-denoise
+status: active
+artifact_store: openspec
+phases:
+  explore: complete
+  spec: complete
+  design: complete
+  tasks: in_progress
+  apply: complete
+  verify: complete
+notes:
+  - Engram tools were unavailable in this session, so artifacts are persisted in openspec only.
+  - User explicitly requested build verification for this change.

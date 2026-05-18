@@ -14,6 +14,7 @@ interface AoDebugOutputOptions {
   readonly sceneLinearDepth: unknown
   readonly sceneNormal: unknown
   readonly aoValue: unknown
+  readonly denoisedAoValue?: unknown
   readonly debugView: HorizonAoDebugView
 }
 
@@ -22,6 +23,7 @@ export function createAoDebugOutput({
   sceneLinearDepth,
   sceneNormal,
   aoValue,
+  denoisedAoValue,
   debugView,
 }: AoDebugOutputOptions): Node {
   // Three's TSL runtime exposes chainable node operators on pass texture nodes,
@@ -29,11 +31,14 @@ export function createAoDebugOutput({
   const colorNode = sceneColor as TslChainNode
   const normalNode = sceneNormal as TslChainNode
   const aoNode = aoValue as never
+  const denoisedAoNode = (denoisedAoValue ?? aoValue) as never
   const linearDepthNode = sceneLinearDepth as never
 
   if (debugView === 'raw-ao') return vec4(vec3(aoNode), 1) as Node
+  if (debugView === 'denoised-ao') return vec4(vec3(denoisedAoNode), 1) as Node
   if (debugView === 'linear-depth') return vec4(vec3(linearDepthNode), 1) as Node
-  if (debugView === 'normal') return vec4(normalNode.rgb.normalize().mul(0.5).add(0.5) as never, 1) as Node
+  if (debugView === 'normal')
+    return vec4(normalNode.rgb.normalize().mul(0.5).add(0.5) as never, 1) as Node
 
-  return colorNode.mul(vec4(vec3(aoNode), 1)) as unknown as Node
+  return colorNode.mul(vec4(vec3(denoisedAoNode), 1)) as unknown as Node
 }
