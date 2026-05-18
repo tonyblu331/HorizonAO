@@ -48,8 +48,15 @@ describe('createParityCaptureDescriptor', () => {
     expect(HORIZON_AO_BASELINES['n8ao-webgpu'].status).toBe('unverified')
     expect(HORIZON_AO_BASELINES['horizonao-raw'].status).toBe('available')
     expect(HORIZON_AO_DEBUG_VIEWS).toContain('edge-confidence')
-    expect(HORIZON_AO_RENDERED_DEBUG_VIEWS).toEqual(['none', 'raw-ao', 'linear-depth', 'normal'])
+    expect(HORIZON_AO_RENDERED_DEBUG_VIEWS).toEqual([
+      'none',
+      'raw-ao',
+      'denoised-ao',
+      'linear-depth',
+      'normal',
+    ])
     expect(getHorizonAoDebugViewStatus('normal')).toBe('rendered')
+    expect(getHorizonAoDebugViewStatus('denoised-ao')).toBe('rendered')
     expect(getHorizonAoDebugViewStatus('edge-confidence')).toBe('metadata-only')
   })
 
@@ -62,7 +69,9 @@ describe('createParityCaptureDescriptor', () => {
       debugView: 'none',
     })
 
-    expect(createParityArtifactName(descriptor, 'png')).toBe('grid__scene-only__none__1280x720__dpr1.00.png')
+    expect(createParityArtifactName(descriptor, 'png')).toBe(
+      'grid__scene-only__none__1280x720__dpr1.00.png',
+    )
   })
 })
 

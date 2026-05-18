@@ -1,13 +1,16 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 // @ts-nocheck
 import {
+  DataTexture,
   NodeMaterial,
   QuadMesh,
   RedFormat,
   RenderTarget,
   RendererUtils,
+  RepeatWrapping,
   TempNode,
   Vector2,
+  Vector3,
   type Camera,
   type Node,
   type NodeBuilder,
@@ -47,12 +50,23 @@ import {
   sin,
   sqrt,
   sub,
+  texture,
+  textureSize,
   uniform,
   uv,
   vec2,
   vec3,
+  vec4,
   viewZToPerspectiveDepth,
 } from 'three/tsl'
+import { denoise as threeDenoise } from 'three/addons/tsl/display/DenoiseNode.js'
+import {
+  DEFAULT_HORIZON_AO_KERNEL_OPTIONS,
+  HORIZON_AO_CENTER_BIAS_EXPONENT,
+  clampHorizonAoKernelOptions,
+  generateMagicSquareIndices,
+  type HorizonAoKernelOptions,
+} from './horizonAoMath'
 
 const quadMesh = new QuadMesh()
 const size = new Vector2()
@@ -61,25 +75,23 @@ let rendererState
 type SampleableNode = TextureNode & { readonly value?: unknown }
 type SharedContextBuilder = NodeBuilder & { getSharedContext: () => NodeBuilderContext }
 
-export interface HorizonAoNodeOptions {
+export type HorizonAoNodeOptions = HorizonAoKernelOptions
+
+export const DEFAULT_HORIZON_AO_NODE_OPTIONS = DEFAULT_HORIZON_AO_KERNEL_OPTIONS
+
+export interface HorizonAoDenoiseOptions {
   readonly radius?: number
-  readonly intensity?: number
-  readonly falloff?: number
-  readonly thickness?: number
-  readonly slices?: number
-  readonly samples?: number
-  readonly resolutionScale?: number
+  readonly lumaPhi?: number
+  readonly depthPhi?: number
+  readonly normalPhi?: number
 }
 
-export const DEFAULT_HORIZON_AO_NODE_OPTIONS = {
-  radius: 1.25,
-  intensity: 1,
-  falloff: 0.85,
-  thickness: 0.5,
-  slices: 3,
-  samples: 12,
-  resolutionScale: 0.5,
-} as const satisfies Required<HorizonAoNodeOptions>
+export const DEFAULT_HORIZON_AO_DENOISE_OPTIONS = {
+  radius: 3,
+  lumaPhi: 5,
+  depthPhi: 5,
+  normalPhi: 8,
+} as const satisfies Required<HorizonAoDenoiseOptions>
 
 export class HorizonAoNode extends TempNode<'float'> {
   readonly depthNode: SampleableNode
@@ -102,12 +114,18 @@ export class HorizonAoNode extends TempNode<'float'> {
   })
   private readonly material = new NodeMaterial()
   private readonly textureNode
+  private readonly noiseNode
   private readonly cameraProjectionMatrix
   private readonly cameraProjectionMatrixInverse
   private readonly cameraNear
   private readonly cameraFar
 
-  constructor(depthNode: Node, normalNode: Node | null, camera: Camera, options: HorizonAoNodeOptions = {}) {
+  constructor(
+    depthNode: Node,
+    normalNode: Node | null,
+    camera: Camera,
+    options: HorizonAoNodeOptions = {},
+  ) {
     super('float')
 
     this.depthNode = depthNode as SampleableNode
@@ -116,6 +134,7 @@ export class HorizonAoNode extends TempNode<'float'> {
     this.renderTarget.texture.name = 'HorizonAO.Raw'
     this.material.name = 'HorizonAO Raw'
     this.textureNode = passTexture(this as never, this.renderTarget.texture)
+    this.noiseNode = texture(generateMagicSquareNoise())
     this.cameraProjectionMatrix = uniform(camera.projectionMatrix)
     this.cameraProjectionMatrixInverse = uniform(camera.projectionMatrixInverse)
     this.cameraNear = reference('near', 'float', camera)
@@ -125,13 +144,24 @@ export class HorizonAoNode extends TempNode<'float'> {
   }
 
   configure(options: HorizonAoNodeOptions): void {
-    if (options.radius !== undefined) this.radius.value = clampNumber(options.radius, 0.05, 8)
-    if (options.intensity !== undefined) this.intensity.value = clampNumber(options.intensity, 0, 4)
-    if (options.falloff !== undefined) this.falloff.value = clampNumber(options.falloff, 0, 1)
-    if (options.thickness !== undefined) this.thickness.value = clampNumber(options.thickness, 0, 4)
-    if (options.slices !== undefined) this.slices.value = Math.round(clampNumber(options.slices, 1, 8))
-    if (options.samples !== undefined) this.samples.value = Math.round(clampNumber(options.samples, 2, 32))
-    if (options.resolutionScale !== undefined) this.resolutionScale = clampNumber(options.resolutionScale, 0.25, 1)
+    const next = clampHorizonAoKernelOptions({
+      radius: this.radius.value,
+      intensity: this.intensity.value,
+      falloff: this.falloff.value,
+      thickness: this.thickness.value,
+      slices: this.slices.value,
+      samples: this.samples.value,
+      resolutionScale: this.resolutionScale,
+      ...options,
+    })
+
+    this.radius.value = next.radius
+    this.intensity.value = next.intensity
+    this.falloff.value = next.falloff
+    this.thickness.value = next.thickness
+    this.slices.value = next.slices
+    this.samples.value = next.samples
+    this.resolutionScale = next.resolutionScale
   }
 
   getTextureNode(): TextureNode {
@@ -183,30 +213,52 @@ export class HorizonAoNode extends TempNode<'float'> {
     const sampleNormal = (sampleUv: Node) =>
       this.normalNode !== null
         ? this.normalNode.sample(sampleUv).rgb.normalize()
-        : getNormalFromDepth(sampleUv, this.depthNode.value as never, this.cameraProjectionMatrixInverse)
+        : getNormalFromDepth(
+            sampleUv,
+            this.depthNode.value as never,
+            this.cameraProjectionMatrixInverse,
+          )
 
-    const buildSliceFrame = (viewNormal: Node, viewDir: Node, sliceIndex: Node, sliceCount: Node) => {
+    const sampleNoise = (sampleUv: Node) => this.noiseNode.sample(sampleUv)
+
+    const buildSliceFrame = (
+      viewNormal: Node,
+      viewDir: Node,
+      sliceIndex: Node,
+      sliceCount: Node,
+      kernelMatrix: Node,
+      noiseTexel: Node,
+    ) => {
       const angle = float(sliceIndex).div(sliceCount).mul(PI).toVar()
-      const tangent = normalize(vec3(viewNormal.y.negate(), viewNormal.x, 0.0)).toVar()
-      const bitangent = normalize(cross(viewNormal, tangent)).toVar()
-      const kernelMatrix = mat3(tangent, bitangent, viewNormal)
-      const sampleDir = normalize(kernelMatrix.mul(vec3(cos(angle), sin(angle), 0))).toVar()
-      const sliceBitangent = normalize(cross(sampleDir, viewDir)).toVar()
+      const sampleDir = vec4(cos(angle), sin(angle), 0, add(0.5, mul(0.5, noiseTexel.w)))
+      sampleDir.xyz = normalize(kernelMatrix.mul(sampleDir.xyz))
+      const sliceBitangent = normalize(cross(sampleDir.xyz, viewDir)).toVar()
       const sliceTangent = cross(sliceBitangent, viewDir)
-      const normalInSlice = normalize(viewNormal.sub(sliceBitangent.mul(dot(viewNormal, sliceBitangent)))).toVar()
+      const normalInSlice = normalize(
+        viewNormal.sub(sliceBitangent.mul(dot(viewNormal, sliceBitangent))),
+      ).toVar()
       const tangentToNormalInSlice = cross(normalInSlice, sliceBitangent).toVar()
 
       return {
         normalInSlice,
-        sampleDir,
+        sampleDir: sampleDir.xyz,
+        sampleRadiusScale: sampleDir.w,
         sliceTangent,
         tangentToNormalInSlice,
       }
     }
 
-    const computeSampleOffset = (sampleDir: Node, stepIndex: Node, stepCount: Node) => {
-      const centerBias = pow(div(float(stepIndex).add(1), stepCount), 1.35)
-      return sampleDir.mul(this.radius).mul(centerBias)
+    const computeSampleOffset = (
+      sampleDir: Node,
+      sampleRadiusScale: Node,
+      stepIndex: Node,
+      stepCount: Node,
+    ) => {
+      const centerBias = pow(
+        div(float(stepIndex).add(1), stepCount),
+        HORIZON_AO_CENTER_BIAS_EXPONENT,
+      )
+      return sampleDir.mul(this.radius).mul(sampleRadiusScale).mul(centerBias)
     }
 
     const updateHorizon = (
@@ -230,10 +282,11 @@ export class HorizonAoNode extends TempNode<'float'> {
       viewPosition: Node,
       viewDir: Node,
       sampleDir: Node,
+      sampleRadiusScale: Node,
       stepIndex: Node,
       stepCount: Node,
     ) => {
-      const sampleOffset = computeSampleOffset(sampleDir, stepIndex, stepCount)
+      const sampleOffset = computeSampleOffset(sampleDir, sampleRadiusScale, stepIndex, stepCount)
 
       const positiveScreenPosition = getScreenPosition(
         viewPosition.add(sampleOffset),
@@ -273,9 +326,14 @@ export class HorizonAoNode extends TempNode<'float'> {
       const horizonY = acos(cosHorizons.y)
       const tangentContribution = mul(
         0.5,
-        horizonY.sub(horizonX).add(sinHorizons.x.mul(cosHorizons.x).sub(sinHorizons.y.mul(cosHorizons.y))),
+        horizonY
+          .sub(horizonX)
+          .add(sinHorizons.x.mul(cosHorizons.x).sub(sinHorizons.y.mul(cosHorizons.y))),
       )
-      const normalContribution = mul(0.5, sub(2, cosHorizons.x.mul(cosHorizons.x)).sub(cosHorizons.y.mul(cosHorizons.y)))
+      const normalContribution = mul(
+        0.5,
+        sub(2, cosHorizons.x.mul(cosHorizons.x)).sub(cosHorizons.y.mul(cosHorizons.y)),
+      )
 
       return nx.mul(tangentContribution).add(ny.mul(normalContribution))
     }
@@ -284,31 +342,60 @@ export class HorizonAoNode extends TempNode<'float'> {
       const depth = sampleDepth(uvNode).toVar()
       depth.greaterThanEqual(1.0).discard()
 
-      const viewPosition = getViewPosition(uvNode, depth, this.cameraProjectionMatrixInverse).toVar()
+      const viewPosition = getViewPosition(
+        uvNode,
+        depth,
+        this.cameraProjectionMatrixInverse,
+      ).toVar()
       const viewNormal = sampleNormal(uvNode).toVar()
       const viewDir = normalize(viewPosition.xyz.negate()).toVar()
+      const noiseResolution = textureSize(this.noiseNode, 0)
+      let noiseUv = vec2(uvNode.x, uvNode.y.oneMinus())
+      noiseUv = noiseUv.mul(this.resolution.div(noiseResolution))
+      const noiseTexel = sampleNoise(noiseUv).toVar()
+      const randomVec = noiseTexel.xyz.mul(2.0).sub(1.0)
+      const tangent = vec3(randomVec.xy, 0.0).normalize()
+      const bitangent = vec3(tangent.y.mul(-1.0), tangent.x, 0.0)
+      const kernelMatrix = mat3(tangent, bitangent, vec3(0.0, 0.0, 1.0))
       const directions = this.slices.toVar()
       const steps = add(this.samples, directions.sub(1)).div(directions).toVar()
       const occlusion = float(0).toVar()
 
-      Loop({ start: int(0), end: directions, type: 'int', condition: '<' }, ({ i }: { readonly i: Node<'int'> }) => {
-        const { normalInSlice, sampleDir, sliceTangent, tangentToNormalInSlice } = buildSliceFrame(
-          viewNormal,
-          viewDir,
-          i,
-          directions,
-        )
-        const cosHorizons = vec2(
-          dot(viewDir, tangentToNormalInSlice),
-          dot(viewDir, tangentToNormalInSlice.negate()),
-        ).toVar()
+      Loop(
+        { start: int(0), end: directions, type: 'int', condition: '<' },
+        ({ i }: { readonly i: Node<'int'> }) => {
+          const {
+            normalInSlice,
+            sampleDir,
+            sampleRadiusScale,
+            sliceTangent,
+            tangentToNormalInSlice,
+          } = buildSliceFrame(viewNormal, viewDir, i, directions, kernelMatrix, noiseTexel)
+          const cosHorizons = vec2(
+            dot(viewDir, tangentToNormalInSlice),
+            dot(viewDir, tangentToNormalInSlice.negate()),
+          ).toVar()
 
-        Loop({ end: steps, type: 'int', condition: '<' }, ({ i: j }: { readonly i: Node<'int'> }) => {
-          marchHorizonPair(cosHorizons, viewPosition, viewDir, sampleDir, j, steps)
-        })
+          Loop(
+            { end: steps, type: 'int', condition: '<' },
+            ({ i: j }: { readonly i: Node<'int'> }) => {
+              marchHorizonPair(
+                cosHorizons,
+                viewPosition,
+                viewDir,
+                sampleDir,
+                sampleRadiusScale,
+                j,
+                steps,
+              )
+            },
+          )
 
-        occlusion.addAssign(resolveSliceOcclusion(cosHorizons, normalInSlice, sliceTangent, viewDir))
-      })
+          occlusion.addAssign(
+            resolveSliceOcclusion(cosHorizons, normalInSlice, sliceTangent, viewDir),
+          )
+        },
+      )
 
       const accessibility = clamp(occlusion.div(directions), 0, 1)
       return pow(accessibility, this.intensity)
@@ -332,10 +419,165 @@ export function horizonAO(
   camera: Camera,
   options?: HorizonAoNodeOptions,
 ): HorizonAoNode {
-  return new HorizonAoNode(nodeObject(depthNode), normalNode === null ? null : nodeObject(normalNode), camera, options)
+  return new HorizonAoNode(
+    nodeObject(depthNode),
+    normalNode === null ? null : nodeObject(normalNode),
+    camera,
+    options,
+  )
 }
 
-function clampNumber(value: number, min: number, max: number): number {
+export class HorizonAoDenoiseNode extends TempNode<'float'> {
+  readonly aoNode: SampleableNode
+  readonly depthNode: SampleableNode
+  readonly normalNode: SampleableNode | null
+  readonly camera: Camera
+  readonly radius = uniform(DEFAULT_HORIZON_AO_DENOISE_OPTIONS.radius)
+  readonly lumaPhi = uniform(DEFAULT_HORIZON_AO_DENOISE_OPTIONS.lumaPhi)
+  readonly depthPhi = uniform(DEFAULT_HORIZON_AO_DENOISE_OPTIONS.depthPhi)
+  readonly normalPhi = uniform(DEFAULT_HORIZON_AO_DENOISE_OPTIONS.normalPhi)
+  updateBeforeType = NodeUpdateType.FRAME
+
+  private readonly renderTarget = new RenderTarget(1, 1, {
+    depthBuffer: false,
+    format: RedFormat,
+  })
+  private readonly material = new NodeMaterial()
+  private readonly textureNode
+  private readonly denoiseNode
+
+  constructor(
+    aoNode: Node,
+    depthNode: Node,
+    normalNode: Node | null,
+    camera: Camera,
+    options: HorizonAoDenoiseOptions = {},
+  ) {
+    super('float')
+
+    this.aoNode = aoNode as SampleableNode
+    this.depthNode = depthNode as SampleableNode
+    this.normalNode = normalNode as SampleableNode | null
+    this.camera = camera
+    this.renderTarget.texture.name = 'HorizonAO.Denoised'
+    this.material.name = 'HorizonAO Denoise'
+    this.textureNode = passTexture(this as never, this.renderTarget.texture)
+    this.denoiseNode = threeDenoise(
+      nodeObject(this.aoNode),
+      nodeObject(this.depthNode),
+      this.normalNode === null ? null : nodeObject(this.normalNode),
+      camera,
+    )
+
+    this.configure(options)
+  }
+
+  configure(options: HorizonAoDenoiseOptions): void {
+    const next = {
+      radius: clampDenoiseNumber(options.radius ?? this.radius.value, 1, 12),
+      lumaPhi: clampDenoiseNumber(options.lumaPhi ?? this.lumaPhi.value, 0.1, 32),
+      depthPhi: clampDenoiseNumber(options.depthPhi ?? this.depthPhi.value, 0.1, 32),
+      normalPhi: clampDenoiseNumber(options.normalPhi ?? this.normalPhi.value, 0.1, 32),
+    }
+
+    this.radius.value = next.radius
+    this.lumaPhi.value = next.lumaPhi
+    this.depthPhi.value = next.depthPhi
+    this.normalPhi.value = next.normalPhi
+    this.denoiseNode.radius.value = next.radius
+    this.denoiseNode.lumaPhi.value = next.lumaPhi
+    this.denoiseNode.depthPhi.value = next.depthPhi
+    this.denoiseNode.normalPhi.value = next.normalPhi
+  }
+
+  getTextureNode(): TextureNode {
+    return this.textureNode
+  }
+
+  setSize(width: number, height: number): void {
+    this.renderTarget.setSize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)))
+  }
+
+  updateBefore(frame: NodeFrame): void {
+    const renderer = frame.renderer
+    if (renderer === null) return
+
+    this.denoiseNode.updateBefore?.(frame)
+    rendererState = RendererUtils.resetRendererState(renderer, rendererState)
+
+    const image = this.aoNode.value?.image
+    if (image?.width !== undefined && image?.height !== undefined) {
+      this.setSize(image.width, image.height)
+    } else {
+      const drawingBufferSize = renderer.getDrawingBufferSize(size)
+      this.setSize(drawingBufferSize.width, drawingBufferSize.height)
+    }
+
+    quadMesh.material = this.material
+    quadMesh.name = 'HorizonAO Denoise'
+
+    renderer.setClearColor(0xffffff, 1)
+    renderer.setRenderTarget(this.renderTarget)
+    quadMesh.render(renderer)
+
+    RendererUtils.restoreRendererState(renderer, rendererState)
+  }
+
+  setup(builder: NodeBuilder): Node | null {
+    const sharedBuilder = builder as SharedContextBuilder
+
+    this.material.fragmentNode = this.denoiseNode.r.context(sharedBuilder.getSharedContext())
+    this.material.needsUpdate = true
+
+    return this.textureNode
+  }
+
+  dispose(): void {
+    this.renderTarget.dispose()
+    this.material.dispose()
+  }
+}
+
+export function horizonAODenoise(
+  aoNode: Node,
+  depthNode: Node,
+  normalNode: Node | null,
+  camera: Camera,
+  options?: HorizonAoDenoiseOptions,
+): HorizonAoDenoiseNode {
+  return new HorizonAoDenoiseNode(
+    nodeObject(aoNode),
+    nodeObject(depthNode),
+    normalNode === null ? null : nodeObject(normalNode),
+    camera,
+    options,
+  )
+}
+
+function generateMagicSquareNoise(size = 5): DataTexture {
+  const magicSquare = generateMagicSquareIndices(size)
+  const noiseSize = Math.sqrt(magicSquare.length)
+  const data = new Uint8Array(magicSquare.length * 4)
+
+  for (let index = 0; index < magicSquare.length; index += 1) {
+    const angle = (2 * Math.PI * magicSquare[index]) / magicSquare.length
+    const randomVec = new Vector3(Math.cos(angle), Math.sin(angle), 0).normalize()
+
+    data[index * 4] = (randomVec.x * 0.5 + 0.5) * 255
+    data[index * 4 + 1] = (randomVec.y * 0.5 + 0.5) * 255
+    data[index * 4 + 2] = 127
+    data[index * 4 + 3] = 255
+  }
+
+  const noiseTexture = new DataTexture(data, noiseSize, noiseSize)
+  noiseTexture.wrapS = RepeatWrapping
+  noiseTexture.wrapT = RepeatWrapping
+  noiseTexture.needsUpdate = true
+
+  return noiseTexture
+}
+
+function clampDenoiseNumber(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) return min
   return Math.min(max, Math.max(min, value))
 }

@@ -11,7 +11,13 @@ export const HORIZON_AO_DEBUG_VIEWS = [
 
 export type HorizonAoDebugView = (typeof HORIZON_AO_DEBUG_VIEWS)[number]
 
-export const HORIZON_AO_RENDERED_DEBUG_VIEWS = ['none', 'raw-ao', 'linear-depth', 'normal'] as const satisfies readonly HorizonAoDebugView[]
+export const HORIZON_AO_RENDERED_DEBUG_VIEWS = [
+  'none',
+  'raw-ao',
+  'denoised-ao',
+  'linear-depth',
+  'normal',
+] as const satisfies readonly HorizonAoDebugView[]
 
 export type HorizonAoDebugViewStatus = 'rendered' | 'metadata-only'
 
@@ -146,16 +152,20 @@ export function createParityArtifactName(
   descriptor: ParityCaptureDescriptor,
   extension: 'json' | 'png' | 'webp',
 ): string {
-  return [
-    descriptor.sceneKey,
-    descriptor.baseline,
-    descriptor.debugView,
-    `${descriptor.viewport.pixelWidth}x${descriptor.viewport.pixelHeight}`,
-    `dpr${descriptor.viewport.dpr.toFixed(2)}`,
-  ].join('__') + `.${extension}`
+  return (
+    [
+      descriptor.sceneKey,
+      descriptor.baseline,
+      descriptor.debugView,
+      `${descriptor.viewport.pixelWidth}x${descriptor.viewport.pixelHeight}`,
+      `dpr${descriptor.viewport.dpr.toFixed(2)}`,
+    ].join('__') + `.${extension}`
+  )
 }
 
-export function getHorizonAoDebugViewStatus(debugView: HorizonAoDebugView): HorizonAoDebugViewStatus {
+export function getHorizonAoDebugViewStatus(
+  debugView: HorizonAoDebugView,
+): HorizonAoDebugViewStatus {
   return HORIZON_AO_RENDERED_DEBUG_VIEWS.some((renderedView) => renderedView === debugView)
     ? 'rendered'
     : 'metadata-only'

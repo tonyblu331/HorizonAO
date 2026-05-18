@@ -1,4 +1,4 @@
-import { Suspense, useLayoutEffect, useState, type ReactNode } from 'react'
+import { Suspense, useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { OrbitControls, type OrbitControlsProps } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import {
@@ -35,13 +35,20 @@ interface ScenePageProps {
   readonly children: ReactNode
 }
 
-export function ScenePage({ title, subtitle, fixture, camera, controls, children }: ScenePageProps) {
+export function ScenePage({
+  title,
+  subtitle,
+  fixture,
+  camera,
+  controls,
+  children,
+}: ScenePageProps) {
   const [baseline, setBaseline] = useState<HorizonAoBaseline>('scene-only')
   const [debugView, setDebugView] = useState<HorizonAoDebugView>('none')
   const [gpuTiming, setGpuTiming] = useState<GpuTimingRecord>(() =>
     createGpuTimingRecord('render', undefined, 'select a measured baseline'),
   )
-  const [renderBackend, setRenderBackend] = useState<RenderBackend>('pending')
+  const [renderBackend, setRenderBackend] = useState<RenderBackend>('unknown')
   const orbitProps: OrbitControlsProps = {
     makeDefault: true,
     enableDamping: true,
@@ -60,7 +67,10 @@ export function ScenePage({ title, subtitle, fixture, camera, controls, children
 
   return (
     <section className="scene-page">
-      <WebGpuCanvas camera={camera} fallback={<div className="scene-fallback">WebGPU unavailable</div>}>
+      <WebGpuCanvas
+        camera={camera}
+        fallback={<div className="scene-fallback">WebGPU unavailable</div>}
+      >
         <RenderBackendProbe onBackendChange={setRenderBackend} />
         {baseline === 'three-gtao-node' ? (
           <ThreeGtaoNodeBaseline debugView={debugView} onGpuTiming={setGpuTiming} />
@@ -89,25 +99,40 @@ export function ScenePage({ title, subtitle, fixture, camera, controls, children
   )
 }
 
-function RenderBackendProbe({ onBackendChange }: { readonly onBackendChange: (backend: RenderBackend) => void }) {
+function RenderBackendProbe({
+  onBackendChange,
+}: {
+  readonly onBackendChange: (backend: RenderBackend) => void
+}) {
   const gl = useThree((state) => state.gl)
+  const lastBackendRef = useRef<RenderBackend>('pending')
 
-  useLayoutEffect(() => {
-    const backend = (gl as { readonly backend?: { readonly isWebGPUBackend?: boolean; readonly isWebGLBackend?: boolean } })
-      .backend
+  const reportBackend = useCallback(() => {
+    const backend = (
+      gl as {
+        readonly backend?: { readonly isWebGPUBackend?: boolean; readonly isWebGLBackend?: boolean }
+      }
+    ).backend
+    let nextBackend: RenderBackend = 'unknown'
 
     if (backend?.isWebGPUBackend === true) {
-      onBackendChange('webgpu')
-      return
+      nextBackend = 'webgpu'
+    } else if (backend?.isWebGLBackend === true) {
+      nextBackend = 'webgl-fallback'
     }
 
-    if (backend?.isWebGLBackend === true) {
-      onBackendChange('webgl-fallback')
-      return
+    if (nextBackend !== lastBackendRef.current) {
+      lastBackendRef.current = nextBackend
+      onBackendChange(nextBackend)
     }
-
-    onBackendChange('unknown')
   }, [gl, onBackendChange])
+
+  useLayoutEffect(() => {
+    reportBackend()
+    const intervalId = window.setInterval(reportBackend, 250)
+
+    return () => window.clearInterval(intervalId)
+  }, [reportBackend])
 
   return null
 }

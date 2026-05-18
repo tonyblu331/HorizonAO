@@ -6,11 +6,26 @@ export {
   type HorizonAoSettings,
 } from './settings'
 export {
+  DEFAULT_HORIZON_AO_DENOISE_OPTIONS,
   DEFAULT_HORIZON_AO_NODE_OPTIONS,
+  HorizonAoDenoiseNode,
   HorizonAoNode,
   horizonAO,
+  horizonAODenoise,
+  type HorizonAoDenoiseOptions,
   type HorizonAoNodeOptions,
 } from './horizonAoNode'
+export {
+  DEFAULT_HORIZON_AO_KERNEL_OPTIONS,
+  HORIZON_AO_CENTER_BIAS_EXPONENT,
+  clampHorizonAoKernelOptions,
+  computeCenterBiasedSampleDistance,
+  computeFalloffWeight,
+  computeSampleStepsPerSlice,
+  generateMagicSquareIndices,
+  resolveAccessibility,
+  type HorizonAoKernelOptions,
+} from './horizonAoMath'
 export {
   createParityCaptureDescriptor,
   createGpuTimingRecord,

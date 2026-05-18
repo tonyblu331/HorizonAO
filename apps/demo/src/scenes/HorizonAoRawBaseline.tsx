@@ -6,6 +6,7 @@ import {
   createGpuTimingRecord,
   createUnsupportedGpuTimingRecord,
   horizonAO,
+  horizonAODenoise,
   type GpuTimingRecord,
   type HorizonAoDebugView,
 } from '@horizonao/core'
@@ -39,12 +40,15 @@ export function HorizonAoRawBaseline({ debugView, onGpuTiming }: HorizonAoRawBas
     const sceneNormal = scenePass.getTextureNode('normal')
     const aoNode = horizonAO(sceneDepth, sceneNormal, camera)
     const aoValue = aoNode.getTextureNode().r
+    const denoiseNode = horizonAODenoise(aoNode.getTextureNode(), sceneDepth, sceneNormal, camera)
+    const denoisedAoValue = denoiseNode.getTextureNode().r
 
     renderPipeline.outputNode = createAoDebugOutput({
       sceneColor,
       sceneLinearDepth,
       sceneNormal,
       aoValue,
+      denoisedAoValue,
       debugView,
     })
 
