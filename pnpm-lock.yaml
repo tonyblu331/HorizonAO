@@ -94,6 +94,9 @@ importers:
         specifier: '>=0.184.0'
         version: 0.184.0
     devDependencies:
+      '@types/three':
+        specifier: 0.184.1
+        version: 0.184.1
       tsdown:
         specifier: 0.22.0
         version: 0.22.0(@typescript/native-preview@7.0.0-dev.20260516.1)(typescript@6.0.3)
