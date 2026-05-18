@@ -105,6 +105,13 @@ export interface SignedHorizonSlice {
   readonly positiveHorizonAngleRad: number
 }
 
+export interface SignedHorizonCosineSliceOptions {
+  readonly positiveCosHorizon: number
+  readonly negativeCosHorizon: number
+  readonly projectedNormalOnTangent: number
+  readonly projectedNormalOnView: number
+}
+
 export function integrateSignedHorizonArcAccessibility({
   normalAngleRad,
   minHorizonAngleRad,
@@ -141,6 +148,38 @@ export function resolveSignedHorizonSliceAccessibility({
     minHorizonAngleRad: negativeHorizonAngleRad,
     maxHorizonAngleRad: positiveHorizonAngleRad,
   })
+}
+
+export function resolveSignedHorizonCosineSliceAccessibility({
+  positiveCosHorizon,
+  negativeCosHorizon,
+  projectedNormalOnTangent,
+  projectedNormalOnView,
+}: SignedHorizonCosineSliceOptions): number {
+  if (
+    !Number.isFinite(positiveCosHorizon) ||
+    !Number.isFinite(negativeCosHorizon) ||
+    !Number.isFinite(projectedNormalOnTangent) ||
+    !Number.isFinite(projectedNormalOnView)
+  ) {
+    return 0
+  }
+
+  const positiveCos = clampNumber(positiveCosHorizon, -1, 1)
+  const negativeCos = clampNumber(negativeCosHorizon, -1, 1)
+  const positiveSin = Math.sqrt(Math.max(0, 1 - positiveCos * positiveCos))
+  const negativeSin = Math.sqrt(Math.max(0, 1 - negativeCos * negativeCos))
+  const positiveAngle = Math.acos(positiveCos)
+  const negativeAngle = Math.acos(negativeCos)
+  const tangentContribution =
+    0.5 * (negativeAngle - positiveAngle + (positiveSin * positiveCos - negativeSin * negativeCos))
+  const normalContribution = 0.5 * (2 - positiveCos * positiveCos - negativeCos * negativeCos)
+
+  return clampNumber(
+    projectedNormalOnTangent * tangentContribution + projectedNormalOnView * normalContribution,
+    0,
+    1,
+  )
 }
 
 export function resolveSignedHorizonAccessibility({

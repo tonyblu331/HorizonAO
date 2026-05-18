@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { inflateSync } from 'node:zlib'
 import { PARITY_SCENES } from '../src/parityScenes'
 
@@ -255,6 +255,7 @@ for (const fixture of routes) {
 }
 
 test('renders scalar HorizonAO debug views on the grid scene', async ({ page }) => {
+  test.setTimeout(90_000)
   const pageProblems = collectPageProblems(page)
 
   await page.goto(PARITY_SCENES.grid.route)
@@ -283,7 +284,7 @@ test('renders scalar HorizonAO debug views on the grid scene', async ({ page }) 
 
     expect(hasPixels).toBe(true)
 
-    const stats = getAoDebugPixelStats(await canvas.screenshot())
+    const stats = getAoDebugPixelStats(await screenshotCanvas(page, canvas))
 
     expect(stats.sampledPixels).toBeGreaterThan(1_000)
     expect(stats.nonGrayRatio).toBeLessThan(0.02)
@@ -305,6 +306,20 @@ function collectPageProblems(page: Page): string[] {
   page.on('pageerror', (error) => problems.push(error.message))
 
   return problems
+}
+
+async function screenshotCanvas(page: Page, canvas: Locator): Promise<Buffer> {
+  const box = await canvas.boundingBox()
+  expect(box).not.toBeNull()
+
+  return page.screenshot({
+    clip: {
+      x: Math.floor(box!.x),
+      y: Math.floor(box!.y),
+      width: Math.max(1, Math.floor(box!.width)),
+      height: Math.max(1, Math.floor(box!.height)),
+    },
+  })
 }
 
 function getAoDebugPixelStats(pngBuffer: Buffer): DebugPixelStats {

@@ -25,10 +25,12 @@ export {
   computeSampleStepsPerSlice,
   generateMagicSquareIndices,
   resolveAccessibility,
+  resolveSignedHorizonCosineSliceAccessibility,
   resolveSignedHorizonAccessibility,
   resolveSignedHorizonSliceAccessibility,
   type HorizonAoKernelOptions,
   type SignedHorizonArcOptions,
+  type SignedHorizonCosineSliceOptions,
   type SignedHorizonSlice,
 } from './horizonAoMath'
 export {

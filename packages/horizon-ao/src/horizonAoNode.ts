@@ -266,8 +266,8 @@ export class HorizonAoNode extends TempNode<'float'> {
       return sampleDir.mul(this.radius).mul(sampleRadiusScale).mul(centerBias)
     }
 
-    const updateHorizon = (
-      horizonValue: Node,
+    const updateSignedHorizonCosine = (
+      signedHorizonCosine: Node,
       sampleViewPosition: Node,
       viewPosition: Node,
       viewDir: Node,
@@ -278,12 +278,14 @@ export class HorizonAoNode extends TempNode<'float'> {
       If(abs(viewDelta.z).lessThan(this.thickness), () => {
         const sampleCosHorizon = dot(viewDir, normalize(viewDelta))
         const sampleFalloff = mix(1, float(2).div(float(stepIndex).add(2)), this.falloff)
-        horizonValue.addAssign(max(0, mul(sampleCosHorizon.sub(horizonValue), sampleFalloff)))
+        signedHorizonCosine.addAssign(
+          max(0, mul(sampleCosHorizon.sub(signedHorizonCosine), sampleFalloff)),
+        )
       })
     }
 
-    const marchHorizonPair = (
-      cosHorizons: Node,
+    const marchSignedHorizonPair = (
+      signedHorizonCosines: Node,
       viewPosition: Node,
       viewDir: Node,
       sampleDir: Node,
@@ -303,7 +305,13 @@ export class HorizonAoNode extends TempNode<'float'> {
         positiveDepth,
         this.cameraProjectionMatrixInverse,
       ).toVar()
-      updateHorizon(cosHorizons.x, positiveViewPosition, viewPosition, viewDir, stepIndex)
+      updateSignedHorizonCosine(
+        signedHorizonCosines.x,
+        positiveViewPosition,
+        viewPosition,
+        viewDir,
+        stepIndex,
+      )
 
       const negativeScreenPosition = getScreenPosition(
         viewPosition.sub(sampleOffset),
@@ -315,32 +323,45 @@ export class HorizonAoNode extends TempNode<'float'> {
         negativeDepth,
         this.cameraProjectionMatrixInverse,
       ).toVar()
-      updateHorizon(cosHorizons.y, negativeViewPosition, viewPosition, viewDir, stepIndex)
+      updateSignedHorizonCosine(
+        signedHorizonCosines.y,
+        negativeViewPosition,
+        viewPosition,
+        viewDir,
+        stepIndex,
+      )
     }
 
-    const resolveSliceOcclusion = (
-      cosHorizons: Node,
+    const resolveSignedHorizonSliceAccessibility = (
+      signedHorizonCosines: Node,
       normalInSlice: Node,
       sliceTangent: Node,
       viewDir: Node,
     ) => {
-      const sinHorizons = sqrt(sub(1, cosHorizons.mul(cosHorizons))).toVar()
-      const nx = dot(normalInSlice, sliceTangent)
-      const ny = dot(normalInSlice, viewDir)
-      const horizonX = acos(cosHorizons.x)
-      const horizonY = acos(cosHorizons.y)
+      const safeHorizonCosines = clamp(signedHorizonCosines, -1, 1).toVar()
+      const sinHorizons = sqrt(max(0, sub(1, safeHorizonCosines.mul(safeHorizonCosines)))).toVar()
+      const projectedNormalOnTangent = dot(normalInSlice, sliceTangent)
+      const projectedNormalOnView = dot(normalInSlice, viewDir)
+      const positiveHorizonAngle = acos(safeHorizonCosines.x)
+      const negativeHorizonAngle = acos(safeHorizonCosines.y)
       const tangentContribution = mul(
         0.5,
-        horizonY
-          .sub(horizonX)
-          .add(sinHorizons.x.mul(cosHorizons.x).sub(sinHorizons.y.mul(cosHorizons.y))),
+        negativeHorizonAngle
+          .sub(positiveHorizonAngle)
+          .add(
+            sinHorizons.x.mul(safeHorizonCosines.x).sub(sinHorizons.y.mul(safeHorizonCosines.y)),
+          ),
       )
       const normalContribution = mul(
         0.5,
-        sub(2, cosHorizons.x.mul(cosHorizons.x)).sub(cosHorizons.y.mul(cosHorizons.y)),
+        sub(2, safeHorizonCosines.x.mul(safeHorizonCosines.x)).sub(
+          safeHorizonCosines.y.mul(safeHorizonCosines.y),
+        ),
       )
 
-      return nx.mul(tangentContribution).add(ny.mul(normalContribution))
+      return projectedNormalOnTangent
+        .mul(tangentContribution)
+        .add(projectedNormalOnView.mul(normalContribution))
     }
 
     const rawAo = Fn(() => {
@@ -364,7 +385,7 @@ export class HorizonAoNode extends TempNode<'float'> {
       const kernelMatrix = mat3(tangent, bitangent, vec3(0.0, 0.0, 1.0))
       const directions = this.slices.toVar()
       const steps = add(this.samples, directions.sub(1)).div(directions).toVar()
-      const occlusion = float(0).toVar()
+      const accumulatedAccessibility = float(0).toVar()
 
       Loop(
         { start: int(0), end: directions, type: 'int', condition: '<' },
@@ -376,7 +397,7 @@ export class HorizonAoNode extends TempNode<'float'> {
             sliceTangent,
             tangentToNormalInSlice,
           } = buildSliceFrame(viewNormal, viewDir, i, directions, kernelMatrix, noiseTexel)
-          const cosHorizons = vec2(
+          const signedHorizonCosines = vec2(
             dot(viewDir, tangentToNormalInSlice),
             dot(viewDir, tangentToNormalInSlice.negate()),
           ).toVar()
@@ -384,8 +405,8 @@ export class HorizonAoNode extends TempNode<'float'> {
           Loop(
             { end: steps, type: 'int', condition: '<' },
             ({ i: j }: { readonly i: Node<'int'> }) => {
-              marchHorizonPair(
-                cosHorizons,
+              marchSignedHorizonPair(
+                signedHorizonCosines,
                 viewPosition,
                 viewDir,
                 sampleDir,
@@ -396,13 +417,18 @@ export class HorizonAoNode extends TempNode<'float'> {
             },
           )
 
-          occlusion.addAssign(
-            resolveSliceOcclusion(cosHorizons, normalInSlice, sliceTangent, viewDir),
+          accumulatedAccessibility.addAssign(
+            resolveSignedHorizonSliceAccessibility(
+              signedHorizonCosines,
+              normalInSlice,
+              sliceTangent,
+              viewDir,
+            ),
           )
         },
       )
 
-      const accessibility = clamp(occlusion.div(directions), 0, 1)
+      const accessibility = clamp(accumulatedAccessibility.div(directions), 0, 1)
       return pow(accessibility, this.intensity)
     })
 
