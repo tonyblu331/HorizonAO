@@ -1,0 +1,19 @@
+change: vbao-pivot
+status: active
+artifact_store: openspec
+phases:
+  explore: complete
+  proposal: in_progress
+  spec: in_progress
+  design: in_progress
+  tasks: in_progress
+  apply: pending
+  verify: pending
+notes:
+  - PR-00 establishes paper plus source skeleton. Kernel and tests ship in PR-01/PR-02.
+  - R1 rename only — Git repo and npm scope unchanged.
+  - Cosine-weighted reduction is production; popcount-only is reference ablation.
+  - normalNode is a required positional; constructor throws on null.
+  - SECTOR_COUNT = 32 compile-time; `sectors` is not an accepted option in v1.
+  - Quality tiers: Fast 0.5/2/6/32, Balanced 0.5/3/8/32, Quality 1.0/4/10/32.
+  - Mirrored slice marching and count-clamped maskRange pinned in design.md and reference.

@@ -1,58 +1,20 @@
+/**
+ * `@horizonao/core` — VBAO (Visibility-Bitmask Ambient Occlusion) for TSL/WebGPU.
+ *
+ * The package name is historical (R1 rename scope; see ADR-007). The
+ * source-level public node is `VBAONode`. The legacy `HorizonAoNode` and
+ * its signed-horizon kernel have been removed from active source and
+ * archived under `packages/horizon-ao/archive/`.
+ */
+
+export { VBAONode, vbao } from './VBAONode'
 export {
-  createHorizonAoSettings,
-  estimateAoSampleBudget,
-  HORIZON_AO_PRESETS,
-  type HorizonAoPreset,
-  type HorizonAoSettings,
-} from './settings'
-export {
-  DEFAULT_HORIZON_AO_DENOISE_OPTIONS,
-  DEFAULT_HORIZON_AO_NODE_OPTIONS,
-  HorizonAoDenoiseNode,
-  HorizonAoNode,
-  horizonAO,
-  horizonAODenoise,
-  type HorizonAoDenoiseOptions,
-  type HorizonAoNodeOptions,
-} from './horizonAoNode'
-export {
-  DEFAULT_HORIZON_AO_KERNEL_OPTIONS,
-  HORIZON_AO_CENTER_BIAS_EXPONENT,
-  HORIZON_AO_FULL_HEMISPHERE_COSINE_INTEGRAL,
-  clampHorizonAoKernelOptions,
-  computeCenterBiasedSampleDistance,
-  computeFalloffWeight,
-  computeSampleStepsPerSlice,
-  generateMagicSquareIndices,
-  resolveAccessibility,
-  resolveSignedHorizonCosineSliceAccessibility,
-  resolveSignedHorizonAccessibility,
-  resolveSignedHorizonSliceAccessibility,
-  type HorizonAoKernelOptions,
-  type SignedHorizonArcOptions,
-  type SignedHorizonCosineSliceOptions,
-  type SignedHorizonSlice,
-} from './horizonAoMath'
-export {
-  createParityCaptureDescriptor,
-  createGpuTimingRecord,
-  createParityArtifactName,
-  createUnsupportedGpuTimingRecord,
-  estimateRenderTargetBytes,
-  getHorizonAoDebugViewStatus,
-  HORIZON_AO_BASELINES,
-  HORIZON_AO_DEBUG_VIEWS,
-  HORIZON_AO_RENDERED_DEBUG_VIEWS,
-  type GpuTimingRecord,
-  type GpuTimingStatus,
-  type HorizonAoBaseline,
-  type HorizonAoBaselineStatus,
-  type HorizonAoDebugView,
-  type HorizonAoDebugViewStatus,
-  type ParityCamera,
-  type ParityCaptureDescriptor,
-  type ParityCaptureOptions,
-  type ParitySceneFixture,
-  type ParityViewport,
-  type RenderTargetMemoryEstimate,
-} from './parityHarness'
+  SECTOR_COUNT,
+  VBAO_DEFAULTS,
+  VBAO_CLAMP_RANGES,
+  VBAO_QUALITY_TIERS,
+  VBAO_SECTOR_ANGLES,
+  clampVbaoNodeOptions,
+  type VBAONodeOptions,
+  type VBAOQualityPreset,
+} from './vbaoConstants'

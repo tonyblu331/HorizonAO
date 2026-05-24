@@ -1,5 +1,4 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import { createHorizonAoSettings, estimateAoSampleBudget } from '@horizonao/core'
 import { useFrame } from '@react-three/fiber'
 import { Color, InstancedMesh, Matrix4, Object3D } from 'three'
 import { GroundPlane } from './GroundPlane'
@@ -11,17 +10,14 @@ const temp = new Object3D()
 const color = new Color()
 
 export function GridScene() {
-  const settings = createHorizonAoSettings('compact')
-  const budget = estimateAoSampleBudget(settings)
-
   return (
     <ScenePage
       title={
         <>
-          Horizon<strong>AO</strong>
+          <strong>VBAO</strong>
         </>
       }
-      subtitle={`High Quality - Compact - Horizon Based Ambient Occlusion. Sample budget target: ${budget}.`}
+      subtitle="VBAO — Visibility Bitmask Ambient Occlusion for TSL/WebGPU. Primitive grid stress-test."
       fixture={PARITY_SCENES.grid}
       camera={PARITY_SCENES.grid.camera}
       controls={{ target: PARITY_SCENES.grid.camera.target }}
