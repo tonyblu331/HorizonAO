@@ -18,3 +18,14 @@ or temporal history options before evidence proves a Pareto win.
 - **When** `EVIDENCE.md` lacks screenshot paths, failure labels, and median/p95
   timing rows showing `scale-mismatch` or distant large-radius instability
 - **Then** the production shader path remains unchanged
+
+#### Scenario: Radius stress rows are labeled before promotion
+
+- **Given** the Museum benchmark collector runs with
+  `AO_BENCHMARK_VBAO_RADIUS_STRESS_MATRIX=1`
+- **When** a VBAO row is captured for the depth hierarchy gate
+- **Then** the row includes `vbaoRadiusStressPreset`
+- **And** the row includes `vbaoRadius`
+- **And** the row includes `vbaoExpectedDepthHierarchyLevel`
+- **And** the row may be promoted only when screenshot review assigns
+  `scale-mismatch` or distant large-radius instability labels

@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import depthHierarchySpec from '../../../../openspec/changes/vbao-depth-hierarchy-evidence/specs/vbao-node/spec.md?raw'
+import benchmarkCollectorSource from '../../../../apps/demo/scripts/collect-ao-benchmark.mjs?raw'
+import museumSource from '../../../../apps/demo/src/scenes/MuseumScene.tsx?raw'
 import indexSource from '../index.ts?raw'
 import optionsSource from '../vbaoConstants.ts?raw'
 import { chooseVbaoDepthHierarchyLevel } from '../vbaoDepthHierarchy'
@@ -25,5 +28,24 @@ describe('VBAO depth hierarchy evidence gate', () => {
     expect(chooseVbaoDepthHierarchyLevel({ maxLevel: 3, sampleFootprintPixels: -8 })).toBe(0)
     expect(chooseVbaoDepthHierarchyLevel({ maxLevel: 3, sampleFootprintPixels: Number.POSITIVE_INFINITY })).toBe(3)
     expect(chooseVbaoDepthHierarchyLevel({ maxLevel: -1, sampleFootprintPixels: 16 })).toBe(0)
+  })
+
+  it('defines radius stress benchmark labels before any production depth path exists', () => {
+    for (const required of [
+      'AO_BENCHMARK_VBAO_RADIUS_STRESS_MATRIX',
+      'vbaoRadiusStressPreset',
+      'vbaoRadius',
+      'vbaoExpectedDepthHierarchyLevel',
+    ]) {
+      expect(depthHierarchySpec).toContain(required)
+      expect(benchmarkCollectorSource).toContain(required)
+    }
+
+    expect(depthHierarchySpec).toContain('scale-mismatch')
+    expect(museumSource).toContain('setVbaoRadiusStressPreset')
+    expect(museumSource).toContain('vbaoRadiusStressPreset')
+    expect(museumSource).toContain('vbaoExpectedDepthHierarchyLevel')
+    expect(indexSource).not.toContain('vbaoDepthHierarchy')
+    expect(optionsSource).not.toContain('radiusStress')
   })
 })

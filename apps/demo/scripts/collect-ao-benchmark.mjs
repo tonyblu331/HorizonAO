@@ -24,6 +24,8 @@ const vbaoDenoiseFilterMatrixEnabled =
   process.env.AO_BENCHMARK_VBAO_DENOISE_FILTER_MATRIX === '1'
 const vbaoSampleMatrixEnabled = process.env.AO_BENCHMARK_VBAO_SAMPLE_MATRIX === '1'
 const vbaoScheduleMatrixEnabled = process.env.AO_BENCHMARK_VBAO_SCHEDULE_MATRIX === '1'
+const vbaoRadiusStressMatrixEnabled =
+  process.env.AO_BENCHMARK_VBAO_RADIUS_STRESS_MATRIX === '1'
 const screenshotDir = resolve(
   repoRoot,
   process.env.AO_BENCHMARK_SCREENSHOT_DIR ?? 'artifacts/benchmarks/screenshots',
@@ -52,6 +54,8 @@ const baselineVbaoSamplePreset = 'baseline'
 const highVbaoSamplePreset = 'high-sample'
 const baselineVbaoSamplingSchedule = 'magic-square'
 const baselineVbaoDenoiseFilter = 'generic'
+const baselineVbaoRadiusStressPreset = 'baseline'
+const largeRadiusVbaoStressPreset = 'large-radius'
 const vbaoSamplingSchedules = ['magic-square', 'r2', 'hilbert', 'blue-noise']
 const vbaoDenoiseFilters = ['generic', 'custom-bilateral']
 
@@ -63,10 +67,23 @@ function vbaoSchedulesFor(mode, denoiseEnabled) {
 
 function vbaoSamplePresetsFor(mode, denoiseEnabled) {
   if (mode !== 'vbao') return [baselineVbaoSamplePreset]
-  if (!vbaoSampleMatrixEnabled || denoiseEnabled || vbaoScheduleMatrixEnabled) {
+  if (
+    !vbaoSampleMatrixEnabled ||
+    denoiseEnabled ||
+    vbaoScheduleMatrixEnabled ||
+    vbaoRadiusStressMatrixEnabled
+  ) {
     return [baselineVbaoSamplePreset]
   }
   return [baselineVbaoSamplePreset, highVbaoSamplePreset]
+}
+
+function vbaoRadiusStressPresetsFor(mode, denoiseEnabled) {
+  if (mode !== 'vbao') return [baselineVbaoRadiusStressPreset]
+  if (!vbaoRadiusStressMatrixEnabled || denoiseEnabled || vbaoScheduleMatrixEnabled) {
+    return [baselineVbaoRadiusStressPreset]
+  }
+  return [baselineVbaoRadiusStressPreset, largeRadiusVbaoStressPreset]
 }
 
 function vbaoDenoiseFiltersFor(mode, denoiseEnabled) {
@@ -91,6 +108,12 @@ async function setVbaoSamplingSchedule(page, schedule) {
   await page.evaluate((nextSchedule) => {
     window.__aoBenchmark?.setVbaoSamplingSchedule(nextSchedule)
   }, schedule)
+}
+
+async function setVbaoRadiusStressPreset(page, preset) {
+  await page.evaluate((nextPreset) => {
+    window.__aoBenchmark?.setVbaoRadiusStressPreset(nextPreset)
+  }, preset)
 }
 
 function startVite() {
@@ -155,6 +178,12 @@ async function collectLatest(page, expected) {
       ) {
         return false
       }
+      if (
+        match.vbaoRadiusStressPreset !== undefined &&
+        latest.vbaoRadiusStressPreset !== match.vbaoRadiusStressPreset
+      ) {
+        return false
+      }
       if (match.viewMode !== undefined && latest.viewMode !== match.viewMode) return false
       if (
         match.denoiseEnabled !== undefined &&
@@ -209,6 +238,9 @@ async function captureScreenshot(page, latest, resolution) {
   if (latest.vbaoDenoiseFilter !== 'n/a') {
     fileNameParts.push(latest.vbaoDenoiseFilter)
   }
+  if (latest.vbaoRadiusStressPreset !== baselineVbaoRadiusStressPreset) {
+    fileNameParts.push(latest.vbaoRadiusStressPreset)
+  }
   const fileName = fileNameParts.map(slug).join('__')
 
   const absolutePath = resolve(screenshotDir, `${fileName}.png`)
@@ -236,6 +268,9 @@ async function toRow(page, latest, resolution) {
     vbaoSamplingSchedule: latest.vbaoSamplingSchedule,
     vbaoSamplePreset: latest.vbaoSamplePreset,
     vbaoDenoiseFilter: latest.vbaoDenoiseFilter,
+    vbaoRadiusStressPreset: latest.vbaoRadiusStressPreset,
+    vbaoRadius: latest.vbaoRadius,
+    vbaoExpectedDepthHierarchyLevel: latest.vbaoExpectedDepthHierarchyLevel,
     vbaoSamples: latest.vbaoSamples,
     vbaoSlices: latest.vbaoSlices,
     renderer: latest.rendererBackend,
@@ -293,6 +328,7 @@ async function run() {
           vbaoDenoiseFilterMatrixEnabled,
           vbaoSampleMatrixEnabled,
           vbaoScheduleMatrixEnabled,
+          vbaoRadiusStressMatrixEnabled,
           launchArgs: launchOptions.args,
           environment: snapshot?.environment,
           rows,
@@ -317,24 +353,33 @@ async function run() {
               for (const vbaoSamplingSchedule of vbaoSchedulesFor(mode, denoiseEnabled)) {
                 await setVbaoSamplingSchedule(page, vbaoSamplingSchedule)
 
-                for (const vbaoSamplePreset of vbaoSamplePresetsFor(mode, denoiseEnabled)) {
-                  await setVbaoSamplePreset(page, vbaoSamplePreset)
-                  await setChecked(page, '[data-compose-debug]', false)
-                  await setChecked(page, '[data-full-resolution]', mode === 'vbao')
-                  await page.locator(`[data-mode="${mode}"]`).click()
-                  const latest = await collectLatest(page, {
-                    renderMode: 'single',
-                    mode,
-                    includesVbao: mode === 'vbao',
-                    vbaoSamplingSchedule:
-                      mode === 'vbao' ? vbaoSamplingSchedule : baselineVbaoSamplingSchedule,
-                    vbaoSamplePreset: mode === 'vbao' ? vbaoSamplePreset : 'n/a',
-                    vbaoDenoiseFilter:
-                      mode === 'vbao' && denoiseEnabled ? vbaoDenoiseFilter : 'n/a',
-                    viewMode,
-                    denoiseEnabled,
-                  })
-                  rows.push(await toRow(page, latest, `${viewport.width}x${viewport.height}`))
+                for (const vbaoRadiusStressPreset of vbaoRadiusStressPresetsFor(
+                  mode,
+                  denoiseEnabled,
+                )) {
+                  await setVbaoRadiusStressPreset(page, vbaoRadiusStressPreset)
+
+                  for (const vbaoSamplePreset of vbaoSamplePresetsFor(mode, denoiseEnabled)) {
+                    await setVbaoSamplePreset(page, vbaoSamplePreset)
+                    await setChecked(page, '[data-compose-debug]', false)
+                    await setChecked(page, '[data-full-resolution]', mode === 'vbao')
+                    await page.locator(`[data-mode="${mode}"]`).click()
+                    const latest = await collectLatest(page, {
+                      renderMode: 'single',
+                      mode,
+                      includesVbao: mode === 'vbao',
+                      vbaoSamplingSchedule:
+                        mode === 'vbao' ? vbaoSamplingSchedule : baselineVbaoSamplingSchedule,
+                      vbaoSamplePreset: mode === 'vbao' ? vbaoSamplePreset : 'n/a',
+                      vbaoDenoiseFilter:
+                        mode === 'vbao' && denoiseEnabled ? vbaoDenoiseFilter : 'n/a',
+                      vbaoRadiusStressPreset:
+                        mode === 'vbao' ? vbaoRadiusStressPreset : 'n/a',
+                      viewMode,
+                      denoiseEnabled,
+                    })
+                    rows.push(await toRow(page, latest, `${viewport.width}x${viewport.height}`))
+                  }
                 }
               }
             }
@@ -345,9 +390,16 @@ async function run() {
               ? vbaoSamplingSchedules
               : [baselineVbaoSamplingSchedule]
           const composeVbaoSamplePresets =
-            vbaoSampleMatrixEnabled && !denoiseEnabled && !vbaoScheduleMatrixEnabled
+            vbaoSampleMatrixEnabled &&
+            !denoiseEnabled &&
+            !vbaoScheduleMatrixEnabled &&
+            !vbaoRadiusStressMatrixEnabled
               ? [baselineVbaoSamplePreset, highVbaoSamplePreset]
               : [baselineVbaoSamplePreset]
+          const composeVbaoRadiusStressPresets =
+            vbaoRadiusStressMatrixEnabled && !denoiseEnabled && !vbaoScheduleMatrixEnabled
+              ? [baselineVbaoRadiusStressPreset, largeRadiusVbaoStressPreset]
+              : [baselineVbaoRadiusStressPreset]
           const composeVbaoDenoiseFilters =
             vbaoDenoiseFilterMatrixEnabled && denoiseEnabled
               ? vbaoDenoiseFilters
@@ -358,26 +410,31 @@ async function run() {
             for (const vbaoSamplingSchedule of composeVbaoSamplingSchedules) {
               await setVbaoSamplingSchedule(page, vbaoSamplingSchedule)
 
-              for (const vbaoSamplePreset of composeVbaoSamplePresets) {
-                await setVbaoSamplePreset(page, vbaoSamplePreset)
-                await setChecked(page, '[data-compose-debug]', true)
-                await setChecked(page, '[data-compose-mode="ssao"]', false)
-                await setChecked(page, '[data-compose-mode="gtao"]', true)
-                await setChecked(page, '[data-compose-mode="vbao"]', true)
-                await setChecked(page, '[data-compose-mode="n8ao"]', true)
-                await setChecked(page, '[data-full-resolution]', true)
-                const latest = await collectLatest(page, {
-                  renderMode: 'compose',
-                  mode: 'compose',
-                  includesVbao: true,
-                  vbaoSamplingSchedule,
-                  vbaoSamplePreset,
-                  vbaoDenoiseFilter: denoiseEnabled ? vbaoDenoiseFilter : 'n/a',
-                  composeModes: ['gtao', 'vbao', 'n8ao'],
-                  viewMode,
-                  denoiseEnabled,
-                })
-                rows.push(await toRow(page, latest, `${viewport.width}x${viewport.height}`))
+              for (const vbaoRadiusStressPreset of composeVbaoRadiusStressPresets) {
+                await setVbaoRadiusStressPreset(page, vbaoRadiusStressPreset)
+
+                for (const vbaoSamplePreset of composeVbaoSamplePresets) {
+                  await setVbaoSamplePreset(page, vbaoSamplePreset)
+                  await setChecked(page, '[data-compose-debug]', true)
+                  await setChecked(page, '[data-compose-mode="ssao"]', false)
+                  await setChecked(page, '[data-compose-mode="gtao"]', true)
+                  await setChecked(page, '[data-compose-mode="vbao"]', true)
+                  await setChecked(page, '[data-compose-mode="n8ao"]', true)
+                  await setChecked(page, '[data-full-resolution]', true)
+                  const latest = await collectLatest(page, {
+                    renderMode: 'compose',
+                    mode: 'compose',
+                    includesVbao: true,
+                    vbaoSamplingSchedule,
+                    vbaoSamplePreset,
+                    vbaoDenoiseFilter: denoiseEnabled ? vbaoDenoiseFilter : 'n/a',
+                    vbaoRadiusStressPreset,
+                    composeModes: ['gtao', 'vbao', 'n8ao'],
+                    viewMode,
+                    denoiseEnabled,
+                  })
+                  rows.push(await toRow(page, latest, `${viewport.width}x${viewport.height}`))
+                }
               }
             }
           }
@@ -396,6 +453,7 @@ async function run() {
       vbaoDenoiseFilterMatrixEnabled,
       vbaoSampleMatrixEnabled,
       vbaoScheduleMatrixEnabled,
+      vbaoRadiusStressMatrixEnabled,
       launchArgs: launchOptions.args,
       environment,
       rows,

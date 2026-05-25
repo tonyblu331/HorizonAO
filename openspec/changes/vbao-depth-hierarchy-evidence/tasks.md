@@ -14,6 +14,6 @@
 
 ## Phase 3: Evidence Planning
 
-- [ ] 3.1 Add spec delta for radius stress evidence rows.
-- [ ] 3.2 Add benchmark labels for future radius stress captures without public API.
+- [x] 3.1 Add spec delta for radius stress evidence rows.
+- [x] 3.2 Add benchmark labels for future radius stress captures without public API.
 - [ ] 3.3 Update `EVIDENCE.md` only after screenshots and median/p95 rows exist.

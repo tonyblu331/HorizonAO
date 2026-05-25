@@ -64,6 +64,8 @@ type VbaoSamplePreset = 'baseline' | 'high-sample'
 type VbaoBenchmarkSamplePreset = VbaoSamplePreset | 'n/a'
 type VbaoDenoiseFilter = 'generic' | 'custom-bilateral'
 type VbaoBenchmarkDenoiseFilter = VbaoDenoiseFilter | 'n/a'
+type VbaoRadiusStressPreset = 'baseline' | 'large-radius'
+type VbaoBenchmarkRadiusStressPreset = VbaoRadiusStressPreset | 'n/a'
 type TslIntLoop = (
   params: { readonly start: unknown; readonly end: unknown; readonly type: 'int'; readonly condition: '<' },
   body: (vars: { readonly i: never }) => void,
@@ -90,6 +92,9 @@ interface Stats {
   readonly vbaoSamplingSchedule: VbaoBenchmarkSamplingSchedule
   readonly vbaoSamplePreset: VbaoBenchmarkSamplePreset
   readonly vbaoDenoiseFilter: VbaoBenchmarkDenoiseFilter
+  readonly vbaoRadiusStressPreset: VbaoBenchmarkRadiusStressPreset
+  readonly vbaoRadius: number
+  readonly vbaoExpectedDepthHierarchyLevel: number
   readonly vbaoSamples: number
   readonly vbaoSlices: number
   readonly viewport: {
@@ -125,6 +130,13 @@ const VBAO_SAMPLE_PRESETS = {
   baseline: { samples: 8, slices: 3 },
   'high-sample': { samples: 16, slices: 3 },
 } as const satisfies Record<VbaoSamplePreset, { readonly samples: number; readonly slices: number }>
+const VBAO_RADIUS_STRESS_PRESETS = {
+  baseline: { radius: 0.35, expectedDepthHierarchyLevel: 0 },
+  'large-radius': { radius: 0.7, expectedDepthHierarchyLevel: 1 },
+} as const satisfies Record<
+  VbaoRadiusStressPreset,
+  { readonly radius: number; readonly expectedDepthHierarchyLevel: number }
+>
 
 interface AoBenchmarkApi {
   readonly environment: AoBenchmarkEnvironment
@@ -132,6 +144,7 @@ interface AoBenchmarkApi {
   readonly history: Stats[]
   reset: () => void
   setVbaoDenoiseFilter: (filter: VbaoDenoiseFilter) => void
+  setVbaoRadiusStressPreset: (preset: VbaoRadiusStressPreset) => void
   setVbaoSamplingSchedule: (schedule: VbaoSamplingSchedule) => void
   setVbaoSamplePreset: (preset: VbaoSamplePreset) => void
   snapshot: () => {
@@ -153,6 +166,10 @@ function isVbaoSamplePreset(value: string): value is VbaoSamplePreset {
 
 function isVbaoDenoiseFilter(value: string): value is VbaoDenoiseFilter {
   return value === 'generic' || value === 'custom-bilateral'
+}
+
+function isVbaoRadiusStressPreset(value: string): value is VbaoRadiusStressPreset {
+  return value === 'baseline' || value === 'large-radius'
 }
 
 function isVbaoSamplingSchedule(value: string): value is VbaoSamplingSchedule {
@@ -283,6 +300,7 @@ async function runGtaoReferenceScene(
   let vbaoSamplingSchedule: VbaoSamplingSchedule = VBAO_PRODUCTION_SAMPLING_SCHEDULE
   let vbaoSamplePreset: VbaoSamplePreset = 'baseline'
   let vbaoDenoiseFilter: VbaoDenoiseFilter = 'generic'
+  let vbaoRadiusStressPreset: VbaoRadiusStressPreset = 'baseline'
 
   const labels = createSplitLabels(container)
   const panel = createReferencePanel(container, {
@@ -357,6 +375,10 @@ async function runGtaoReferenceScene(
       setVbaoDenoiseFilter: (filter) => {
         vbaoDenoiseFilter = filter
       },
+      setVbaoRadiusStressPreset: (preset) => {
+        vbaoRadiusStressPreset = preset
+        pipelines?.setVbaoRadiusStressPreset(preset)
+      },
       setVbaoSamplingSchedule: (schedule) => {
         vbaoSamplingSchedule = schedule
         pipelines?.setVbaoSamplingSchedule(schedule)
@@ -385,6 +407,7 @@ async function runGtaoReferenceScene(
   > => {
     const usesVbao = mode === 'vbao' || (renderMode === 'compose' && composeDebugModes.includes('vbao'))
     const preset = usesVbao ? VBAO_SAMPLE_PRESETS[vbaoSamplePreset] : undefined
+    const radiusStress = usesVbao ? VBAO_RADIUS_STRESS_PRESETS[vbaoRadiusStressPreset] : undefined
 
     return {
       scene: sceneVariant,
@@ -398,6 +421,9 @@ async function runGtaoReferenceScene(
       vbaoSamplingSchedule: usesVbao ? vbaoSamplingSchedule : 'n/a',
       vbaoSamplePreset: usesVbao ? vbaoSamplePreset : 'n/a',
       vbaoDenoiseFilter: usesVbao && denoiseEnabled ? vbaoDenoiseFilter : 'n/a',
+      vbaoRadiusStressPreset: usesVbao ? vbaoRadiusStressPreset : 'n/a',
+      vbaoRadius: radiusStress?.radius ?? 0,
+      vbaoExpectedDepthHierarchyLevel: radiusStress?.expectedDepthHierarchyLevel ?? 0,
       vbaoSamples: preset?.samples ?? 0,
       vbaoSlices: preset?.slices ?? 0,
       viewport: {
@@ -548,7 +574,7 @@ function createReferencePipelines(
 
   const baselineVbaoPreset = VBAO_SAMPLE_PRESETS.baseline
   const vbaoNode = new VBAONode(prePassDepth, prePassNormal, camera, {
-    radius: 0.35,
+    radius: VBAO_RADIUS_STRESS_PRESETS.baseline.radius,
     thickness: 0.28,
     scale: 0.85,
     samples: baselineVbaoPreset.samples,
@@ -730,6 +756,10 @@ function createReferencePipelines(
   const setVbaoSamplingSchedule = (schedule: VbaoSamplingSchedule) => {
     vbaoNode.setBenchmarkSamplingSchedule(schedule)
   }
+  const setVbaoRadiusStressPreset = (preset: VbaoRadiusStressPreset) => {
+    const config = VBAO_RADIUS_STRESS_PRESETS[preset]
+    vbaoNode.configure({ radius: config.radius })
+  }
   const composeBufferSize = new Vector2()
   let composeBufferWidth = 0
   let composeBufferHeight = 0
@@ -788,6 +818,7 @@ function createReferencePipelines(
     renderSingle: renderMode,
     setVbaoSamplePreset,
     setVbaoSamplingSchedule,
+    setVbaoRadiusStressPreset,
     renderComposeDebug: (
       modes: readonly ComposeDebugMode[],
       viewMode: ViewMode,
@@ -1221,6 +1252,7 @@ function createAoBenchmarkPublisher(
     readonly setVbaoDenoiseFilter: (filter: VbaoDenoiseFilter) => void
     readonly setVbaoSamplePreset: (preset: VbaoSamplePreset) => void
     readonly setVbaoSamplingSchedule: (schedule: VbaoSamplingSchedule) => void
+    readonly setVbaoRadiusStressPreset: (preset: VbaoRadiusStressPreset) => void
   },
 ) {
   const history: Stats[] = []
@@ -1244,6 +1276,10 @@ function createAoBenchmarkPublisher(
     setVbaoDenoiseFilter: (filter) => {
       if (!isVbaoDenoiseFilter(filter)) return
       options.setVbaoDenoiseFilter(filter)
+    },
+    setVbaoRadiusStressPreset: (preset) => {
+      if (!isVbaoRadiusStressPreset(preset)) return
+      options.setVbaoRadiusStressPreset(preset)
     },
     setVbaoSamplePreset: (preset) => {
       if (!isVbaoSamplePreset(preset)) return
