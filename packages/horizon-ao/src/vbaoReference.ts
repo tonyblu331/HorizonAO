@@ -173,6 +173,123 @@ export interface SampleMaskContribution {
   readonly thickness: number
 }
 
+export interface AdaptiveThicknessSample {
+  readonly position: Vec3
+  readonly normal?: Vec3
+  readonly valid?: boolean
+}
+
+export interface AdaptiveThicknessContinuityOptions {
+  readonly continuityDepthTolerance: number
+  readonly continuityNormalDot: number
+}
+
+export interface AdaptiveThicknessOptions extends AdaptiveThicknessContinuityOptions {
+  readonly minThickness: number
+  readonly maxThickness: number
+  readonly thicknessScale: number
+}
+
+export function areSameSurfaceSamples(
+  a: AdaptiveThicknessSample,
+  b: AdaptiveThicknessSample,
+  viewDir: Vec3,
+  options: AdaptiveThicknessContinuityOptions,
+): boolean {
+  if (a.valid === false || b.valid === false) {
+    return false
+  }
+
+  const depthDelta = Math.abs(dot3(sub3(b.position, a.position), normalize3(viewDir)))
+  if (depthDelta > options.continuityDepthTolerance) {
+    return false
+  }
+
+  if (a.normal !== undefined && b.normal !== undefined) {
+    return dot3(normalize3(a.normal), normalize3(b.normal)) >= options.continuityNormalDot
+  }
+
+  return true
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
+function depthAlongView(sample: AdaptiveThicknessSample, viewDir: Vec3): number {
+  return dot3(sample.position, normalize3(viewDir))
+}
+
+export function estimateAdaptiveThickness(
+  samples: readonly AdaptiveThicknessSample[],
+  sampleIndex: number,
+  viewDir: Vec3,
+  options: AdaptiveThicknessOptions,
+): number {
+  const clampedMin = Math.min(options.minThickness, options.maxThickness)
+  const clampedMax = Math.max(options.minThickness, options.maxThickness)
+  const center = samples[sampleIndex]
+
+  if (center === undefined || center.valid === false) {
+    return clampedMin
+  }
+
+  const V = normalize3(viewDir)
+  let first = sampleIndex
+  let last = sampleIndex
+
+  while (first > 0 && areSameSurfaceSamples(samples[first - 1]!, samples[first]!, V, options)) {
+    first--
+  }
+
+  while (
+    last < samples.length - 1 &&
+    areSameSurfaceSamples(samples[last]!, samples[last + 1]!, V, options)
+  ) {
+    last++
+  }
+
+  let minDepth = Number.POSITIVE_INFINITY
+  let maxDepth = Number.NEGATIVE_INFINITY
+  for (let i = first; i <= last; i++) {
+    const sample = samples[i]!
+    const depth = depthAlongView(sample, V)
+    minDepth = Math.min(minDepth, depth)
+    maxDepth = Math.max(maxDepth, depth)
+  }
+
+  const span = maxDepth - minDepth
+  return clampNumber(clampedMin + span * options.thicknessScale, clampedMin, clampedMax)
+}
+
+export interface AdaptiveThicknessReferenceMaskContribution {
+  readonly samples: readonly AdaptiveThicknessSample[]
+  readonly sampleIndex: number
+  readonly pixelPosition: Vec3
+  readonly viewDir: Vec3
+  readonly sliceDir: Vec3
+  readonly options: AdaptiveThicknessOptions
+}
+
+export function buildAdaptiveThicknessReferenceMask(
+  c: AdaptiveThicknessReferenceMaskContribution,
+): number {
+  const sample = c.samples[c.sampleIndex]
+  if (sample === undefined || sample.valid === false) {
+    return 0
+  }
+
+  const thickness = estimateAdaptiveThickness(c.samples, c.sampleIndex, c.viewDir, c.options)
+
+  return buildSampleMask({
+    samplePosition: sample.position,
+    pixelPosition: c.pixelPosition,
+    viewDir: c.viewDir,
+    sliceDir: c.sliceDir,
+    thickness,
+  })
+}
+
 export function sampleBlockerInterval(c: SampleMaskContribution): {
   readonly theta0: number
   readonly theta1: number
@@ -301,6 +418,162 @@ export function cosineWeightedReduction(mask: number, gammaNorm: number): number
   }
 
   return numerator / Math.max(denominator, 1e-6)
+}
+
+export interface DirectionalVisibilitySlice {
+  readonly mask: number
+  readonly sliceDir: Vec3
+  readonly gammaNorm: number
+}
+
+export interface DirectionalVisibilityInput {
+  readonly viewDir: Vec3
+  readonly slices: readonly DirectionalVisibilitySlice[]
+}
+
+export interface DirectionalVisibilityResult {
+  readonly accessibility: number
+  readonly directionalWeight: number
+  readonly bentNormal: Vec3
+  readonly buckets: readonly DirectionalVisibilityBucket[]
+}
+
+export interface DirectionalVisibilityBucket {
+  readonly direction: Vec3
+  readonly weight: number
+  readonly aperture: number
+}
+
+export function reconstructDirectionalVisibility(
+  input: DirectionalVisibilityInput,
+): DirectionalVisibilityResult {
+  const V = normalize3(input.viewDir)
+  let openWeight = 0
+  let possibleWeight = 0
+  let bent: Vec3 = [0, 0, 0]
+  const rawBuckets: DirectionalVisibilityBucket[] = []
+
+  for (const slice of input.slices) {
+    const mask = slice.mask >>> 0
+    const S = normalize3(slice.sliceDir)
+    const cosGamma = Math.cos(slice.gammaNorm)
+    const sinGamma = Math.sin(slice.gammaNorm)
+
+    for (let k = 0; k < SECTOR_COUNT; k++) {
+      const cosTheta = VBAO_SECTOR_COSINES[k]!
+      const sinTheta = VBAO_SECTOR_SINES[k]!
+      const weight = Math.max(0, cosTheta * cosGamma + sinTheta * sinGamma)
+      possibleWeight += weight
+
+      if (((mask >>> k) & 1) !== 0) {
+        continue
+      }
+
+      const sectorDir = normalize3(add3(scale3(S, cosTheta), scale3(V, sinTheta)))
+      openWeight += weight
+      bent = add3(bent, scale3(sectorDir, weight))
+    }
+
+    rawBuckets.push(...extractDirectionalLobes(mask, S, V, cosGamma, sinGamma))
+  }
+
+  return {
+    accessibility: possibleWeight <= 1e-6 ? 0 : openWeight / possibleWeight,
+    directionalWeight: openWeight,
+    bentNormal: openWeight <= 1e-6 ? [0, 0, 0] : normalize3(bent),
+    buckets: mergeDirectionalBuckets(rawBuckets).slice(0, 2),
+  }
+}
+
+function isOpenSector(mask: number, sector: number): boolean {
+  return ((mask >>> sector) & 1) === 0
+}
+
+function sectorDirection(sliceDir: Vec3, viewDir: Vec3, sector: number): Vec3 {
+  return normalize3(
+    add3(
+      scale3(sliceDir, VBAO_SECTOR_COSINES[sector]!),
+      scale3(viewDir, VBAO_SECTOR_SINES[sector]!),
+    ),
+  )
+}
+
+function sectorWeight(sector: number, cosGamma: number, sinGamma: number): number {
+  return Math.max(
+    0,
+    VBAO_SECTOR_COSINES[sector]! * cosGamma + VBAO_SECTOR_SINES[sector]! * sinGamma,
+  )
+}
+
+function extractDirectionalLobes(
+  mask: number,
+  sliceDir: Vec3,
+  viewDir: Vec3,
+  cosGamma: number,
+  sinGamma: number,
+): DirectionalVisibilityBucket[] {
+  const buckets: DirectionalVisibilityBucket[] = []
+  let sector = 0
+
+  while (sector < SECTOR_COUNT) {
+    if (!isOpenSector(mask, sector)) {
+      sector++
+      continue
+    }
+
+    const firstSector = sector
+    let weight = 0
+    let directionSum: Vec3 = [0, 0, 0]
+
+    while (sector < SECTOR_COUNT && isOpenSector(mask, sector)) {
+      const w = sectorWeight(sector, cosGamma, sinGamma)
+      weight += w
+      directionSum = add3(directionSum, scale3(sectorDirection(sliceDir, viewDir, sector), w))
+      sector++
+    }
+
+    if (weight > 1e-6) {
+      buckets.push({
+        direction: normalize3(directionSum),
+        weight,
+        aperture: (sector - firstSector) * VBAO_THETA_STEP,
+      })
+    }
+  }
+
+  return buckets
+}
+
+function mergeDirectionalBuckets(
+  buckets: readonly DirectionalVisibilityBucket[],
+): DirectionalVisibilityBucket[] {
+  const merged: DirectionalVisibilityBucket[] = []
+
+  for (const bucket of buckets) {
+    const existingIndex = merged.findIndex(
+      (candidate) => dot3(candidate.direction, bucket.direction) >= 0.94,
+    )
+
+    if (existingIndex < 0) {
+      merged.push(bucket)
+      continue
+    }
+
+    const existing = merged[existingIndex]!
+    const weight = existing.weight + bucket.weight
+    merged[existingIndex] = {
+      direction: normalize3(
+        add3(
+          scale3(existing.direction, existing.weight),
+          scale3(bucket.direction, bucket.weight),
+        ),
+      ),
+      weight,
+      aperture: Math.max(existing.aperture, bucket.aperture),
+    }
+  }
+
+  return merged.sort((a, b) => b.weight - a.weight || a.direction[2] - b.direction[2])
 }
 
 // ─── sentinels for test introspection ────────────────────────────────────────

@@ -22,5 +22,5 @@
 ## Phase 4: Verification
 
 - [x] 4.1 Run targeted Vitest only if helper logic was added.
-- [ ] 4.2 Run targeted Playwright route/control smoke tests; do not run production builds.
+- [x] 4.2 Run targeted Playwright route/control smoke tests; do not run production builds.
 - [x] 4.3 Manually capture WebGPU screenshots/timings and fill evidence rows, or mark remaining rows as pending with explicit blockers.

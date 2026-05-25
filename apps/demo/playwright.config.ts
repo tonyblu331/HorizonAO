@@ -1,11 +1,16 @@
 import { defineConfig, devices } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
 
-const testPort = 41737
-const baseURL = `http://127.0.0.1:${testPort}`
+const testPort = Number(process.env.PLAYWRIGHT_TEST_PORT ?? 41737)
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://127.0.0.1:${testPort}`
 const nodeBin = JSON.stringify(process.execPath)
 const viteBin = JSON.stringify(fileURLToPath(new URL('./node_modules/vite/bin/vite.js', import.meta.url)))
 const useExternalServer = process.env.PLAYWRIGHT_EXTERNAL_SERVER === '1'
+const webgpuArgs = [
+  '--enable-unsafe-webgpu',
+  '--ignore-gpu-blocklist',
+  '--enable-features=WebGPUDeveloperFeatures',
+]
 
 export default defineConfig({
   testDir: './e2e',
@@ -33,7 +38,13 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        channel: 'chromium',
+        launchOptions: {
+          args: webgpuArgs,
+        },
+      },
     },
   ],
 })

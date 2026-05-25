@@ -28,8 +28,11 @@ import {
 } from '../vbaoConstants'
 import {
   buildViewLocalFrame,
+  buildAdaptiveThicknessReferenceMask,
   buildSampleMask,
+  areSameSurfaceSamples,
   cosineWeightedReduction,
+  estimateAdaptiveThickness,
   maskCoverage,
   maskRange,
   maskTransitions,
@@ -317,6 +320,223 @@ describe('mask metadata helpers', () => {
     expect(maskTransitions(0x00000000)).toBe(0)
     expect(maskTransitions(0xffffffff)).toBe(0)
     expect(maskTransitions(maskRange(0, 16))).toBe(2 / 32)
+  })
+})
+
+describe('adaptive thickness same-surface continuity', () => {
+  const viewDir = [0, 0, 1] as const
+  const options = {
+    continuityDepthTolerance: 0.08,
+    continuityNormalDot: 0.95,
+  } as const
+
+  it('treats nearby valid samples with aligned normals as the same surface', () => {
+    expect(
+      areSameSurfaceSamples(
+        { position: [0, 0, -2], normal: [0, 0, 1] },
+        { position: [0.04, 0, -2.05], normal: [0, 0, 1] },
+        viewDir,
+        options,
+      ),
+    ).toBe(true)
+  })
+
+  it('breaks a run across a depth discontinuity even when normals align', () => {
+    expect(
+      areSameSurfaceSamples(
+        { position: [0, 0, -2], normal: [0, 0, 1] },
+        { position: [0.04, 0, -2.4], normal: [0, 0, 1] },
+        viewDir,
+        options,
+      ),
+    ).toBe(false)
+  })
+
+  it('breaks a run across a normal discontinuity even when depth is close', () => {
+    expect(
+      areSameSurfaceSamples(
+        { position: [0, 0, -2], normal: [0, 0, 1] },
+        { position: [0.04, 0, -2.05], normal: [1, 0, 0] },
+        viewDir,
+        options,
+      ),
+    ).toBe(false)
+  })
+
+  it('does not treat invalid samples as continuous', () => {
+    expect(
+      areSameSurfaceSamples(
+        { position: [0, 0, -2], normal: [0, 0, 1] },
+        { position: [0.04, 0, -2.05], normal: [0, 0, 1], valid: false },
+        viewDir,
+        options,
+      ),
+    ).toBe(false)
+  })
+})
+
+describe('adaptive thickness estimate', () => {
+  const viewDir = [0, 0, 1] as const
+  const options = {
+    minThickness: 0.02,
+    maxThickness: 0.5,
+    thicknessScale: 2,
+    continuityDepthTolerance: 0.08,
+    continuityNormalDot: 0.95,
+  } as const
+
+  it('isolated thin occluder clamps to minimum thickness', () => {
+    const thickness = estimateAdaptiveThickness(
+      [{ position: [0, 0, -2], normal: [0, 0, 1] }],
+      0,
+      viewDir,
+      options,
+    )
+
+    expect(thickness).toBeCloseTo(options.minThickness, 12)
+  })
+
+  it('continuous thick wall estimates more thickness than an isolated occluder', () => {
+    const isolated = estimateAdaptiveThickness(
+      [{ position: [0, 0, -2], normal: [0, 0, 1] }],
+      0,
+      viewDir,
+      options,
+    )
+    const continuous = estimateAdaptiveThickness(
+      [
+        { position: [0, 0, -2], normal: [0, 0, 1] },
+        { position: [0.03, 0, -2.05], normal: [0, 0, 1] },
+        { position: [0.06, 0, -2.1], normal: [0, 0, 1] },
+      ],
+      0,
+      viewDir,
+      options,
+    )
+
+    expect(continuous).toBeGreaterThan(isolated)
+    expect(continuous).toBeCloseTo(options.minThickness + 0.1 * options.thicknessScale, 12)
+  })
+
+  it('depth gap behind an object does not merge into one blocker', () => {
+    const thickness = estimateAdaptiveThickness(
+      [
+        { position: [0, 0, -2], normal: [0, 0, 1] },
+        { position: [0.03, 0, -2.4], normal: [0, 0, 1] },
+      ],
+      0,
+      viewDir,
+      options,
+    )
+
+    expect(thickness).toBeCloseTo(options.minThickness, 12)
+  })
+
+  it('normal gap behind an object does not merge into one blocker', () => {
+    const thickness = estimateAdaptiveThickness(
+      [
+        { position: [0, 0, -2], normal: [0, 0, 1] },
+        { position: [0.03, 0, -2.04], normal: [1, 0, 0] },
+      ],
+      0,
+      viewDir,
+      options,
+    )
+
+    expect(thickness).toBeCloseTo(options.minThickness, 12)
+  })
+
+  it('clamps large continuous runs to maximum thickness', () => {
+    const thickness = estimateAdaptiveThickness(
+      [
+        { position: [0, 0, -2], normal: [0, 0, 1] },
+        { position: [0.03, 0, -2.2], normal: [0, 0, 1] },
+        { position: [0.06, 0, -2.4], normal: [0, 0, 1] },
+      ],
+      1,
+      viewDir,
+      {
+        ...options,
+        continuityDepthTolerance: 0.25,
+        thicknessScale: 10,
+      },
+    )
+
+    expect(thickness).toBe(options.maxThickness)
+  })
+})
+
+describe('adaptive thickness reference mask', () => {
+  const P = [0, 0, -3] as const
+  const V = [0, 0, 1] as const
+  const S_i = [1, 0, 0] as const
+  const frontSample = { position: [0.5, 0, -1.5], normal: [0, 0, 1] } as const
+  const options = {
+    minThickness: 0.02,
+    maxThickness: 1.4,
+    thicknessScale: 10,
+    continuityDepthTolerance: 0.08,
+    continuityNormalDot: 0.95,
+  } as const
+
+  function constantMask(thickness: number): number {
+    return buildSampleMask({
+      samplePosition: frontSample.position,
+      pixelPosition: P,
+      viewDir: V,
+      sliceDir: S_i,
+      thickness,
+    })
+  }
+
+  it('keeps an isolated thin occluder at the minimum-thickness sector count', () => {
+    const adaptiveMask = buildAdaptiveThicknessReferenceMask({
+      samples: [frontSample],
+      sampleIndex: 0,
+      pixelPosition: P,
+      viewDir: V,
+      sliceDir: S_i,
+      options,
+    })
+
+    expect(popcount(adaptiveMask)).toBe(popcount(constantMask(options.minThickness)))
+    expect(popcount(adaptiveMask)).toBeLessThan(popcount(constantMask(options.maxThickness)))
+  })
+
+  it('widens a continuous thick wall beyond the minimum-thickness mask', () => {
+    const adaptiveMask = buildAdaptiveThicknessReferenceMask({
+      samples: [
+        frontSample,
+        { position: [0.53, 0, -1.57], normal: [0, 0, 1] },
+        { position: [0.56, 0, -1.64], normal: [0, 0, 1] },
+      ],
+      sampleIndex: 0,
+      pixelPosition: P,
+      viewDir: V,
+      sliceDir: S_i,
+      options,
+    })
+
+    expect(popcount(adaptiveMask)).toBeGreaterThan(popcount(constantMask(options.minThickness)))
+    expect(popcount(adaptiveMask)).toBe(popcount(constantMask(options.maxThickness)))
+  })
+
+  it('preserves a gap behind the front object instead of merging it into a thick mask', () => {
+    const adaptiveMask = buildAdaptiveThicknessReferenceMask({
+      samples: [
+        frontSample,
+        { position: [0.53, 0, -1.57], normal: [1, 0, 0] },
+        { position: [0.56, 0, -1.64], normal: [1, 0, 0] },
+      ],
+      sampleIndex: 0,
+      pixelPosition: P,
+      viewDir: V,
+      sliceDir: S_i,
+      options,
+    })
+
+    expect(popcount(adaptiveMask)).toBe(popcount(constantMask(options.minThickness)))
+    expect(popcount(adaptiveMask)).toBeLessThan(popcount(constantMask(options.maxThickness)))
   })
 })
 

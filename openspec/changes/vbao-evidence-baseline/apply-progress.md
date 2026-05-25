@@ -2,10 +2,11 @@
 
 ## Status
 
-11/12 tasks complete. Task 4.2 is still not fully green. The original blocker
-was local port reuse on `127.0.0.1:5173`; the config now uses isolated port
-`41737`, and the targeted assertion passes. The remaining failure is Playwright
-webServer teardown timing out on Windows after the test passes.
+12/12 tasks complete. Task 4.2 is green when Playwright runs against an
+externally managed Vite server on isolated port `41737`. The built-in
+Playwright `webServer` lifecycle still times out during teardown on this
+Windows/Node 26 environment, so the supported verification path starts Vite
+explicitly and runs Playwright with `PLAYWRIGHT_EXTERNAL_SERVER=1` under Node 24.
 
 ## Completed Tasks
 
@@ -20,6 +21,8 @@ webServer teardown timing out on Windows after the test passes.
 - [x] 3.2 Manual WebGPU capture steps documented.
 - [x] 3.3 Timing source fields documented.
 - [x] 4.1 Targeted Vitest run passed.
+- [x] 4.2 Targeted and full Playwright route/control smoke tests passed through
+  the external-server verification path.
 - [x] 4.3 Manual capture rows remain pending with explicit WebGPU/device blocker.
 
 ## TDD Cycle Evidence
@@ -27,17 +30,23 @@ webServer teardown timing out on Windows after the test passes.
 | Task | Test File | Layer | Safety Net | RED | GREEN | TRIANGULATE | REFACTOR |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1.1 | `apps/demo/src/evidence/evidenceCameras.test.ts` | Unit | N/A (new) | Written first for missing schema/labels | Passed via direct Vitest CLI | 2 cases: schema + labels | Clean |
-| 2.1 | `apps/demo/e2e/ao-compare.spec.ts` | E2E | Direct CLI used | Written first for missing full-res control | Assertion passes; command exits nonzero on teardown | WebGPU/fallback branches | Pending teardown fix |
-| 3.1 | `apps/demo/e2e/ao-compare.spec.ts` | E2E | Same as 2.1 | Museum control smoke added | Assertion passes; command exits nonzero on teardown | Route/control case | Pending teardown fix |
+| 2.1 | `apps/demo/e2e/ao-compare.spec.ts` | E2E | External Vite server on 41737 | Written first for missing full-res control | Full e2e passes with `PLAYWRIGHT_EXTERNAL_SERVER=1` | WebGPU/fallback branches | Museum uses evidence panel contract |
+| 3.1 | `apps/demo/e2e/ao-compare.spec.ts` | E2E | External Vite server on 41737 | Museum control smoke added | Full e2e passes with `PLAYWRIGHT_EXTERNAL_SERVER=1` | Route/control case | WebGPU parity gated by `E2E_WEBGPU_PARITY=1` |
 
 ## Verification
 
-- Passed: `node node_modules/vitest/vitest.mjs run --config apps/demo/vitest.config.ts src/evidence/evidenceCameras.test.ts`
+- Passed: `node node_modules/vitest/vitest.mjs run`
+- Passed: `node node_modules/vitest/vitest.mjs run --config apps/demo/vitest.config.ts`
+- Passed: `node node_modules/typescript/bin/tsc --noEmit -p packages/horizon-ao/tsconfig.json`
 - Passed: `node node_modules/typescript/bin/tsc --noEmit -p apps/demo/tsconfig.json`
-- Behavior passed but command failed in teardown:
-  `node node_modules/@playwright/test/cli.js test --grep "museum exposes evidence controls" --reporter=list --timeout=15000 --global-timeout=45000`
-  reported `ok 1 ... museum exposes evidence controls...` and then timed out waiting for webServer teardown.
+- Passed: `node node_modules/@typescript/native-preview/bin/tsgo.js --noEmit -p packages/horizon-ao/tsconfig.json`
+- Passed: `node node_modules/@typescript/native-preview/bin/tsgo.js --noEmit -p apps/demo/tsconfig.json`
+- Passed: `node node_modules/eslint/bin/eslint.js .`
+- Passed: Playwright e2e through external Vite server:
+  `PLAYWRIGHT_EXTERNAL_SERVER=1 node apps/demo/node_modules/@playwright/test/cli.js test --config apps/demo/playwright.config.ts --reporter=list --global-timeout=240000`
+  reported 12 passed and 4 skipped WebGPU parity tests. The skips are expected
+  unless `E2E_WEBGPU_PARITY=1` is set in a WebGPU-capable browser session.
 
 ## Remaining
 
-- [ ] 4.2 Fix or bypass Windows Playwright webServer teardown, then re-run targeted Playwright to get a zero exit code.
+- [ ] Manual WebGPU screenshots and timings remain pending in `EVIDENCE.md`.

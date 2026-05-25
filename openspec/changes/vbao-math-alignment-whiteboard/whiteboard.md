@@ -277,42 +277,36 @@ depth/normal baseline fails a named evidence case.
 | Cost honesty | Raw, denoised, and higher-sample raw timings are recorded | Filter is cheaper only because the comparison is unfair |
 | API restraint | Demo/internal option only until proof | New public denoise knob appears before the formula wins |
 
-## Current Core Pipeline
+## Evidence Alignment Pipeline
 
 ```mermaid
 flowchart TD
-  A["Depth + normal prepass"] --> B["VBAONode setup"]
-  B --> C["Reconstruct P from depth"]
-  C --> D["Build view-local frame: V, T0, T1"]
-  D --> E["For each rotated slice"]
-  E --> F["March both sides in screen space"]
-  F --> G["Sample depth and reconstruct Q"]
-  G --> H["Build front/back blocker interval using constant thickness"]
-  H --> I["OR interval into 32-bit occluded mask"]
-  I --> J["Cosine-weighted open-sector reduction"]
-  J --> K["Average slices"]
-  K --> L["pow(accessibility, scale)"]
-  L --> M["Write RedFormat raw accessibility"]
-  M --> N["Composite: sceneColor * accessibility"]
-```
+  subgraph Current["Current shipped path"]
+    A["Depth + normal prepass"] --> B["VBAONode setup"]
+    B --> C["Reconstruct P from depth"]
+    C --> D["VBAO sector kernel"]
+    D --> E["Adaptive thickness per blocker interval"]
+    E --> F["Cosine-weighted accessibility"]
+    F --> G["Write raw RedFormat AO"]
+    G --> H["Optional generic demo denoise"]
+    H --> I["Evidence capture"]
+  end
 
-## Target Production Pipeline
+  subgraph Candidate["Evidence candidate path"]
+    J["Schedule matrix"] --> K["magic-square / R2 / Hilbert / blue-noise"]
+    K --> L["rotation + radial jitter"]
+    L --> M["screenshots + median/p95 timings"]
+    M --> N["accept/reject production sampling"]
+  end
 
-```mermaid
-flowchart TD
-  A["Depth + normal + optional velocity prepass"] --> B["Depth prefilter / MIP hierarchy"]
-  B --> C["Sample schedule: Hilbert/R2/blue-noise rotation"]
-  C --> D["VBAO sector kernel"]
-  D --> E["Surface-continuity analysis along slice"]
-  E --> F["Adaptive thickness per blocker interval"]
-  F --> G["Optional stochastic thickness scale"]
-  G --> H["32-bit visibility mask + confidence metadata"]
-  H --> I["Cosine-weighted AO reduction"]
-  H --> J["Optional visibility-bucket lighting"]
-  I --> K["Depth/normal/metadata-aware spatial denoise"]
-  J --> K
-  K --> L["Optional temporal accumulation with rejection"]
-  L --> M["Composite beauty / AO-only debug / evidence capture"]
+  subgraph Future["Future pipeline path"]
+    O["Depth prefilter / MIP hierarchy"] --> P["bitmask confidence metadata"]
+    P --> Q["custom spatial filter"]
+    Q --> R["optional visibility-bucket lighting"]
+  end
+
+  I --> J
+  N --> O
 ```
 
 ## Math Contract
@@ -346,7 +340,7 @@ gamma_i = atan2(dot(N, V), dot(N, S_i))
 gamma_i_norm = clamp(gamma_i, -pi/2, pi/2)
 ```
 
-### Current constant-thickness interval
+### Current blocker interval
 
 For a sampled surface point `Q`:
 

@@ -81,6 +81,13 @@ import {
   clampVbaoNodeOptions,
   type VBAONodeOptions,
 } from './vbaoConstants'
+import { VBAO_ADAPTIVE_THICKNESS } from './vbaoAdaptiveThickness'
+import {
+  VBAO_SAMPLING_SCHEDULES,
+  sampleVbaoRadialJitter,
+  sampleVbaoRotation,
+  type VbaoSamplingSchedule,
+} from './vbaoSampling'
 
 // ─── module-level singletons (mirrors GTAONode pattern) ──────────────────────
 
@@ -88,48 +95,46 @@ const quadMesh = new QuadMesh()
 const size = new Vector2()
 let rendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
 
-// ─── magic-square noise (deterministic per-pixel rotation, AA-agnostic) ──────
-// Adapted from THREE.GTAONode — same 5×5 magic-square pattern.
+// ─── sampling noise (deterministic per-pixel rotation + radial scale) ────────
 
-function generateMagicSquare(n: number): number[] {
-  const sz = n * n
-  const sq = Array(sz).fill(0)
-  let r = Math.floor(n / 2)
-  let c = n - 1
-
-  for (let num = 1; num <= sz; ) {
-    if (r === -1 && c === n) {
-      c = n - 2
-      r = 0
-    } else {
-      if (c === n) c = 0
-      if (r < 0) r = n - 1
-    }
-    if (sq[r * n + c] !== 0) {
-      c -= 2
-      r++
-      continue
-    }
-    sq[r * n + c] = num++
-    c++
-    r--
+function getSamplingTileSize(schedule: VbaoSamplingSchedule): number {
+  switch (schedule) {
+    case 'magic-square':
+      return 5
+    case 'blue-noise':
+      return 8
+    case 'r2':
+    case 'hilbert':
+      return 16
   }
-  return sq
 }
 
-function generateMagicSquareNoise(size = 5): DataTexture {
-  const n = Math.floor(size) % 2 === 0 ? Math.floor(size) + 1 : Math.floor(size)
-  const sq = generateMagicSquare(n)
-  const total = sq.length
+function generateSamplingNoise(schedule: VbaoSamplingSchedule): DataTexture {
+  const n = getSamplingTileSize(schedule)
+  const total = n * n
   const data = new Uint8Array(total * 4)
 
-  for (let i = 0; i < total; i++) {
-    const angle = (2 * Math.PI * sq[i]) / total
-    const v = new Vector3(Math.cos(angle), Math.sin(angle), 0).normalize()
-    data[i * 4 + 0] = (v.x * 0.5 + 0.5) * 255
-    data[i * 4 + 1] = (v.y * 0.5 + 0.5) * 255
-    data[i * 4 + 2] = 127
-    data[i * 4 + 3] = 255
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) {
+      const i = y * n + x
+      const input = {
+        pixel: [x, y],
+        viewport: [n, n],
+        sliceIndex: 0,
+        sliceCount: 1,
+        sampleIndex: 0,
+        sampleCount: 1,
+      } as const
+      const rotation = sampleVbaoRotation(schedule, input)
+      const radialJitter = sampleVbaoRadialJitter(schedule, input)
+      const angle = rotation * Math.PI * 2 - Math.PI
+      const v = new Vector3(Math.cos(angle), Math.sin(angle), 0).normalize()
+
+      data[i * 4 + 0] = (v.x * 0.5 + 0.5) * 255
+      data[i * 4 + 1] = (v.y * 0.5 + 0.5) * 255
+      data[i * 4 + 2] = 127
+      data[i * 4 + 3] = Math.max(0, Math.min(254, Math.floor(radialJitter * 255)))
+    }
   }
 
   const tex = new DataTexture(data, n, n)
@@ -184,6 +189,7 @@ export class VBAONode extends TempNode<'float'> {
   private readonly cameraNear
   private readonly cameraFar
   private readonly noiseNode
+  private benchmarkSamplingSchedule: VbaoSamplingSchedule = 'magic-square'
 
   /**
    * @param depthNode  - TSL node producing scene depth (`float`).
@@ -211,7 +217,7 @@ export class VBAONode extends TempNode<'float'> {
     this.cameraProjectionMatrixInverse = uniform(camera.projectionMatrixInverse)
     this.cameraNear = reference('near', 'float', camera)
     this.cameraFar = reference('far', 'float', camera)
-    this.noiseNode = texture(generateMagicSquareNoise())
+    this.noiseNode = texture(generateSamplingNoise(this.benchmarkSamplingSchedule))
 
     this.configure(options)
   }
@@ -237,6 +243,27 @@ export class VBAONode extends TempNode<'float'> {
     this.slices.value = next.slices
     this.samples.value = next.samples
     this.resolutionScale = next.resolutionScale
+  }
+
+  /**
+   * Internal evidence hook used by the Museum benchmark harness.
+   *
+   * This intentionally does not live in `VBAONodeOptions`: the public v1 API
+   * remains a single production schedule until screenshot/timing evidence picks
+   * a replacement.
+   */
+  setBenchmarkSamplingSchedule(schedule: VbaoSamplingSchedule): void {
+    if (!VBAO_SAMPLING_SCHEDULES.includes(schedule)) {
+      throw new TypeError(`VBAONode: unknown benchmark sampling schedule "${schedule}"`)
+    }
+
+    this.benchmarkSamplingSchedule = schedule
+    this.noiseNode.value = generateSamplingNoise(schedule)
+    this.noiseNode.value.needsUpdate = true
+  }
+
+  getBenchmarkSamplingSchedule(): VbaoSamplingSchedule {
+    return this.benchmarkSamplingSchedule
   }
 
   getTextureNode(): TextureNode {
@@ -319,8 +346,7 @@ export class VBAONode extends TempNode<'float'> {
     // normalNode is required (ADR-010); constructor already guards null.
     const sampleNormal = (uvCoord) => this.normalNode.sample(uvCoord).rgb.normalize()
 
-    // ── per-pixel rotation from magic-square noise ──────────────────────────
-    // Same 5×5 pattern as GTAONode — deterministic, frame-invariant, AA-agnostic.
+    // ── per-pixel rotation + radial scale from deterministic noise ─────────
 
     const noiseResolution = textureSize(this.noiseNode, 0)
     const noiseUv = vec2(uvNode.x, uvNode.y.oneMinus()).mul(this.resolution.div(noiseResolution))
@@ -329,11 +355,16 @@ export class VBAONode extends TempNode<'float'> {
     const noiseDir = noiseTexel.xy.mul(2.0).sub(1.0)
     // atan2(y, x) ∈ (−π, π], +π → (0, 2π], /2π → (0, 1]
     const rotation = atan(noiseDir.y, noiseDir.x).add(PI).div(PI.mul(2.0))
+    const radialScale = noiseTexel.w.mul(0.5).add(0.5)
 
     // ── compile-time constants ──────────────────────────────────────────────
 
     const THETA_MIN = float(-Math.PI / 2) // lower bound of sector range
     const DELTA_THETA = float(Math.PI / SECTOR_COUNT) // sector angular width
+    const ADAPTIVE_MIN_THICKNESS = float(VBAO_ADAPTIVE_THICKNESS.minThickness)
+    const ADAPTIVE_THICKNESS_SCALE = float(VBAO_ADAPTIVE_THICKNESS.thicknessScale)
+    const ADAPTIVE_CONTINUITY_DEPTH = float(VBAO_ADAPTIVE_THICKNESS.continuityDepthTolerance)
+    const ADAPTIVE_CONTINUITY_NORMAL = float(VBAO_ADAPTIVE_THICKNESS.continuityNormalDot)
 
     // ── maskRange sub-function (design.md §5) ──────────────────────────────
     // count-clamped 3-way branch; lo/hi individually clamped so out-of-domain
@@ -419,8 +450,9 @@ export class VBAONode extends TempNode<'float'> {
             const sideSign = sideIdx.equal(int(0)).select(float(1), float(-1))
             const S_side = S_i.mul(sideSign).toVar('S_side')
 
-            // Uniform step spacing: t = (j+1) / samples  ∈ (0, 1]
-            // No center-bias exponent — VBAO uses uniform sampling.
+            // Uniform step spacing with a deterministic per-pixel radial scale.
+            // This keeps ordering uniform while breaking the screen-space lattice
+            // that made high-sample raw captures add pattern instead of clarity.
             Loop(
               {
                 start: int(0),
@@ -430,7 +462,7 @@ export class VBAONode extends TempNode<'float'> {
                 name: 'j',
               },
               ({ j }) => {
-                const stepFrac = float(j).add(1.0).div(float(this.samples))
+                const stepFrac = float(j).add(1.0).div(float(this.samples)).mul(radialScale)
                 // Project the slice endpoint once, then march linearly in screen
                 // space. Reprojecting P + S * radius * t per step bends the
                 // sample path for off-axis pixels under perspective.
@@ -463,11 +495,134 @@ export class VBAONode extends TempNode<'float'> {
 
                       // Front face: the sample surface.
                       const D_front = normalize(samplePos.sub(P))
+                      // Estimate blocker thickness from the contiguous same-surface
+                      // run on this slice side. This mirrors the scalar reference:
+                      // background breaks the run, depth/normal gaps split surfaces,
+                      // and `this.thickness` is only the max cap.
+                      const adaptiveThickness = ADAPTIVE_MIN_THICKNESS.toVar('adaptiveThickness')
+                      const adaptiveMaxThickness = max(
+                        ADAPTIVE_MIN_THICKNESS,
+                        this.thickness,
+                      ).toVar('adaptiveMaxThickness')
+                      const segmentValid = int(0).toVar('adaptiveSegmentValid')
+                      const segmentContainsTarget = int(0).toVar('adaptiveSegmentContainsTarget')
+                      const foundTargetSegment = int(0).toVar('adaptiveFoundTargetSegment')
+                      const segmentMinDepth = float(0).toVar('adaptiveSegmentMinDepth')
+                      const segmentMaxDepth = float(0).toVar('adaptiveSegmentMaxDepth')
+                      const previousValid = int(0).toVar('adaptivePreviousValid')
+                      const previousPos = vec3(0, 0, 0).toVar('adaptivePreviousPos')
+                      const previousNormal = vec3(0, 0, 1).toVar('adaptivePreviousNormal')
+
+                      const closeAdaptiveSegment = () => {
+                        If(
+                          segmentContainsTarget
+                            .equal(int(1))
+                            .and(foundTargetSegment.equal(int(0))),
+                          () => {
+                            const span = max(float(0), segmentMaxDepth.sub(segmentMinDepth))
+                            adaptiveThickness.assign(
+                              clamp(
+                                ADAPTIVE_MIN_THICKNESS.add(span.mul(ADAPTIVE_THICKNESS_SCALE)),
+                                ADAPTIVE_MIN_THICKNESS,
+                                adaptiveMaxThickness,
+                              ),
+                            )
+                            foundTargetSegment.assign(int(1))
+                          },
+                        )
+
+                        segmentValid.assign(int(0))
+                        segmentContainsTarget.assign(int(0))
+                      }
+
+                      Loop(
+                        {
+                          start: int(0),
+                          end: int(this.samples),
+                          type: 'int',
+                          condition: '<',
+                          name: 'adaptiveScanIdx',
+                        },
+                        ({ adaptiveScanIdx }) => {
+                          const scanStepFrac = float(adaptiveScanIdx)
+                            .add(1.0)
+                            .div(float(this.samples))
+                            .mul(radialScale)
+                          const scanScreenPos = uvNode
+                            .add(sampleScreenEnd.sub(uvNode).mul(scanStepFrac))
+                            .toVar('adaptiveScanScreenPos')
+                          const scanValid = int(0).toVar('adaptiveScanValid')
+                          const scanPos = vec3(0, 0, 0).toVar('adaptiveScanPos')
+                          const scanNormal = vec3(0, 0, 1).toVar('adaptiveScanNormal')
+
+                          If(
+                            scanScreenPos.x
+                              .greaterThanEqual(float(0))
+                              .and(scanScreenPos.x.lessThanEqual(float(1)))
+                              .and(scanScreenPos.y.greaterThanEqual(float(0)))
+                              .and(scanScreenPos.y.lessThanEqual(float(1))),
+                            () => {
+                              const scanDepth = sampleDepth(scanScreenPos)
+                              If(scanDepth.lessThan(float(1.0)), () => {
+                                scanPos.assign(
+                                  getViewPosition(
+                                    scanScreenPos,
+                                    scanDepth,
+                                    this.cameraProjectionMatrixInverse,
+                                  ),
+                                )
+                                scanNormal.assign(sampleNormal(scanScreenPos))
+                                scanValid.assign(int(1))
+                              })
+                            },
+                          )
+
+                          If(scanValid.equal(int(1)), () => {
+                            const sameSurface = previousValid
+                              .equal(int(1))
+                              .and(
+                                abs(dot(scanPos.sub(previousPos), V)).lessThanEqual(
+                                  ADAPTIVE_CONTINUITY_DEPTH,
+                                ),
+                              )
+                              .and(
+                                dot(scanNormal, previousNormal).greaterThanEqual(
+                                  ADAPTIVE_CONTINUITY_NORMAL,
+                                ),
+                              )
+
+                            If(segmentValid.equal(int(0)).or(sameSurface.not()), () => {
+                              closeAdaptiveSegment()
+                              segmentValid.assign(int(1))
+                              segmentMinDepth.assign(dot(scanPos, V))
+                              segmentMaxDepth.assign(dot(scanPos, V))
+                            }).Else(() => {
+                              const scanViewDepth = dot(scanPos, V)
+                              segmentMinDepth.assign(min(segmentMinDepth, scanViewDepth))
+                              segmentMaxDepth.assign(max(segmentMaxDepth, scanViewDepth))
+                            })
+
+                            If(adaptiveScanIdx.equal(j), () => {
+                              segmentContainsTarget.assign(int(1))
+                            })
+
+                            previousValid.assign(int(1))
+                            previousPos.assign(scanPos)
+                            previousNormal.assign(scanNormal)
+                          }).Else(() => {
+                            closeAdaptiveSegment()
+                            previousValid.assign(int(0))
+                          })
+                        },
+                      )
+
+                      closeAdaptiveSegment()
+
                       // Back face: recede along the sampled point's view vector.
                       // Under perspective, using the shaded pixel's V here bends thin blockers.
                       const sampleViewDir = normalize(samplePos.negate())
                       const D_back = normalize(
-                        samplePos.sub(sampleViewDir.mul(this.thickness)).sub(P),
+                        samplePos.sub(sampleViewDir.mul(adaptiveThickness)).sub(P),
                       )
 
                       // Horizon angles (design.md §4).

@@ -40,6 +40,7 @@ import {
   sqrt,
   uniform,
   uv,
+  vec2,
   vec3,
   vec4,
   velocity,
@@ -57,6 +58,12 @@ type CompareMode = 'off' | 'gtao' | 'ssao' | 'vbao' | 'n8ao'
 type ComposeDebugMode = Exclude<CompareMode, 'off'>
 type ViewMode = 'beauty' | 'ao'
 type SceneVariant = 'city' | 'museum'
+type VbaoSamplingSchedule = 'magic-square' | 'r2' | 'hilbert' | 'blue-noise'
+type VbaoBenchmarkSamplingSchedule = VbaoSamplingSchedule | 'n/a'
+type VbaoSamplePreset = 'baseline' | 'high-sample'
+type VbaoBenchmarkSamplePreset = VbaoSamplePreset | 'n/a'
+type VbaoDenoiseFilter = 'generic' | 'custom-bilateral'
+type VbaoBenchmarkDenoiseFilter = VbaoDenoiseFilter | 'n/a'
 type TslIntLoop = (
   params: { readonly start: unknown; readonly end: unknown; readonly type: 'int'; readonly condition: '<' },
   body: (vars: { readonly i: never }) => void,
@@ -67,7 +74,38 @@ const loopInt = Loop as unknown as TslIntLoop
 interface Stats {
   readonly fps: number
   readonly frameMs: number
+  readonly avgFrameMs: number
+  readonly medianFrameMs: number
+  readonly p95FrameMs: number
+  readonly reportIndex: number
+  readonly sampleCount: number
+  readonly scene: SceneVariant
+  readonly rendererBackend: 'webgpu' | 'webgl'
+  readonly renderMode: 'single' | 'compose'
   readonly mode: CompareMode | 'compose'
+  readonly composeModes: readonly ComposeDebugMode[]
+  readonly viewMode: ViewMode
+  readonly denoiseEnabled: boolean
+  readonly fullResolutionVbao: boolean
+  readonly vbaoSamplingSchedule: VbaoBenchmarkSamplingSchedule
+  readonly vbaoSamplePreset: VbaoBenchmarkSamplePreset
+  readonly vbaoDenoiseFilter: VbaoBenchmarkDenoiseFilter
+  readonly vbaoSamples: number
+  readonly vbaoSlices: number
+  readonly viewport: {
+    readonly width: number
+    readonly height: number
+  }
+  readonly devicePixelRatio: number
+  readonly timestamp: number
+}
+
+interface AoBenchmarkEnvironment {
+  readonly rendererBackend: 'webgpu' | 'webgl'
+  readonly aoAvailable: boolean
+  readonly navigatorGpu: boolean
+  readonly requiredBackend: 'webgpu'
+  readonly userAgent: string
 }
 
 const COMPOSE_DEBUG_MODES = [
@@ -76,6 +114,50 @@ const COMPOSE_DEBUG_MODES = [
   'vbao',
   'n8ao',
 ] as const satisfies readonly ComposeDebugMode[]
+const VBAO_BENCHMARK_SAMPLING_SCHEDULES = [
+  'magic-square',
+  'r2',
+  'hilbert',
+  'blue-noise',
+] as const satisfies readonly VbaoSamplingSchedule[]
+const VBAO_PRODUCTION_SAMPLING_SCHEDULE: VbaoSamplingSchedule = 'magic-square'
+const VBAO_SAMPLE_PRESETS = {
+  baseline: { samples: 8, slices: 3 },
+  'high-sample': { samples: 16, slices: 3 },
+} as const satisfies Record<VbaoSamplePreset, { readonly samples: number; readonly slices: number }>
+
+interface AoBenchmarkApi {
+  readonly environment: AoBenchmarkEnvironment
+  latest?: Stats
+  readonly history: Stats[]
+  reset: () => void
+  setVbaoDenoiseFilter: (filter: VbaoDenoiseFilter) => void
+  setVbaoSamplingSchedule: (schedule: VbaoSamplingSchedule) => void
+  setVbaoSamplePreset: (preset: VbaoSamplePreset) => void
+  snapshot: () => {
+    readonly environment: AoBenchmarkEnvironment
+    readonly latest?: Stats
+    readonly history: Stats[]
+  }
+}
+
+declare global {
+  interface Window {
+    __aoBenchmark?: AoBenchmarkApi
+  }
+}
+
+function isVbaoSamplePreset(value: string): value is VbaoSamplePreset {
+  return value === 'baseline' || value === 'high-sample'
+}
+
+function isVbaoDenoiseFilter(value: string): value is VbaoDenoiseFilter {
+  return value === 'generic' || value === 'custom-bilateral'
+}
+
+function isVbaoSamplingSchedule(value: string): value is VbaoSamplingSchedule {
+  return VBAO_BENCHMARK_SAMPLING_SCHEDULES.some((schedule) => schedule === value)
+}
 
 function isComposeDebugMode(value: string | undefined): value is ComposeDebugMode {
   return COMPOSE_DEBUG_MODES.some((mode) => mode === value)
@@ -198,6 +280,9 @@ async function runGtaoReferenceScene(
   const sceneVariant = initialVariant
   let denoiseEnabled = true
   let fullResolutionVbao = false
+  let vbaoSamplingSchedule: VbaoSamplingSchedule = VBAO_PRODUCTION_SAMPLING_SCHEDULE
+  let vbaoSamplePreset: VbaoSamplePreset = 'baseline'
+  let vbaoDenoiseFilter: VbaoDenoiseFilter = 'generic'
 
   const labels = createSplitLabels(container)
   const panel = createReferencePanel(container, {
@@ -256,8 +341,72 @@ async function runGtaoReferenceScene(
   const resizeObserver = new ResizeObserver(scheduleResize)
   resizeObserver.observe(container)
 
-  const stats = createStatsSampler((next) => panel.updateStats(next))
+  const benchmark = createAoBenchmarkPublisher(
+    {
+      rendererBackend: isWebGlFallback ? 'webgl' : 'webgpu',
+      aoAvailable: !isWebGlFallback,
+      navigatorGpu: 'gpu' in navigator,
+      requiredBackend: 'webgpu',
+      userAgent: navigator.userAgent,
+    },
+    {
+      setVbaoSamplePreset: (preset) => {
+        vbaoSamplePreset = preset
+        pipelines?.setVbaoSamplePreset(preset)
+      },
+      setVbaoDenoiseFilter: (filter) => {
+        vbaoDenoiseFilter = filter
+      },
+      setVbaoSamplingSchedule: (schedule) => {
+        vbaoSamplingSchedule = schedule
+        pipelines?.setVbaoSamplingSchedule(schedule)
+      },
+    },
+  )
+  const stats = createStatsSampler((next) => {
+    benchmark.publish(next)
+    panel.updateStats(next)
+  })
   let rafId = 0
+
+  const benchmarkContext = (
+    renderMode: Stats['renderMode'],
+    mode: Stats['mode'],
+  ): Omit<
+    Stats,
+    | 'fps'
+    | 'frameMs'
+    | 'avgFrameMs'
+    | 'medianFrameMs'
+    | 'p95FrameMs'
+    | 'reportIndex'
+    | 'sampleCount'
+    | 'timestamp'
+  > => {
+    const usesVbao = mode === 'vbao' || (renderMode === 'compose' && composeDebugModes.includes('vbao'))
+    const preset = usesVbao ? VBAO_SAMPLE_PRESETS[vbaoSamplePreset] : undefined
+
+    return {
+      scene: sceneVariant,
+      rendererBackend: isWebGlFallback ? 'webgl' : 'webgpu',
+      renderMode,
+      mode,
+      composeModes: renderMode === 'compose' ? [...composeDebugModes] : [],
+      viewMode,
+      denoiseEnabled,
+      fullResolutionVbao,
+      vbaoSamplingSchedule: usesVbao ? vbaoSamplingSchedule : 'n/a',
+      vbaoSamplePreset: usesVbao ? vbaoSamplePreset : 'n/a',
+      vbaoDenoiseFilter: usesVbao && denoiseEnabled ? vbaoDenoiseFilter : 'n/a',
+      vbaoSamples: preset?.samples ?? 0,
+      vbaoSlices: preset?.slices ?? 0,
+      viewport: {
+        width: rendererCssWidth,
+        height: rendererCssHeight,
+      },
+      devicePixelRatio: window.devicePixelRatio,
+    }
+  }
 
   function animate() {
     if (signal.aborted) return
@@ -270,16 +419,28 @@ async function runGtaoReferenceScene(
 
     if (isWebGlFallback || pipelines === undefined) {
       renderer.render(scene, camera)
-      stats.sample(performance.now() - frameStart, 'off')
+      stats.sample(performance.now() - frameStart, benchmarkContext('single', 'off'))
       return
     }
 
     if (composeDebugEnabled) {
-      pipelines.renderComposeDebug(composeDebugModes, viewMode, denoiseEnabled, fullResolutionVbao)
-      stats.sample(performance.now() - frameStart, 'compose')
+      pipelines.renderComposeDebug(
+        composeDebugModes,
+        viewMode,
+        denoiseEnabled,
+        fullResolutionVbao,
+        vbaoDenoiseFilter,
+      )
+      stats.sample(performance.now() - frameStart, benchmarkContext('compose', 'compose'))
     } else {
-      pipelines.renderSingle(activeMode, viewMode, denoiseEnabled, fullResolutionVbao)
-      stats.sample(performance.now() - frameStart, activeMode)
+      pipelines.renderSingle(
+        activeMode,
+        viewMode,
+        denoiseEnabled,
+        fullResolutionVbao,
+        vbaoDenoiseFilter,
+      )
+      stats.sample(performance.now() - frameStart, benchmarkContext('single', activeMode))
     }
   }
   rafId = requestAnimationFrame(animate)
@@ -291,6 +452,7 @@ async function runGtaoReferenceScene(
     controls.dispose()
     panel.remove()
     labels.remove()
+    benchmark.dispose()
     pipelines?.dispose()
     renderer.dispose()
     canvas.remove()
@@ -314,7 +476,9 @@ function createReferencePipelines(
   const prePassNormal = sample((sampleUv) =>
     colorToDirection(prePass.getTextureNode().sample(sampleUv)),
   )
-  const samplePrePassNormal = (sampleUv: ReturnType<typeof uv>) =>
+  const samplePrePassNormal = (
+    sampleUv: Parameters<ReturnType<typeof prePass.getTextureNode>['sample']>[0],
+  ) =>
     colorToDirection(prePass.getTextureNode().sample(sampleUv))
   const prePassDepth = prePass.getTextureNode('depth')
   const normalTexture = prePass.getTexture('output')
@@ -382,12 +546,13 @@ function createReferencePipelines(
   gtaoNode.resolutionScale = 0.5
   gtaoNode.useTemporalFiltering = false
 
+  const baselineVbaoPreset = VBAO_SAMPLE_PRESETS.baseline
   const vbaoNode = new VBAONode(prePassDepth, prePassNormal, camera, {
     radius: 0.35,
     thickness: 0.28,
     scale: 0.85,
-    samples: 8,
-    slices: 3,
+    samples: baselineVbaoPreset.samples,
+    slices: baselineVbaoPreset.slices,
     resolutionScale: 0.5,
   })
 
@@ -422,6 +587,7 @@ function createReferencePipelines(
 
   const gtaoRaw = gtaoNode.getTextureNode()
   const vbaoRaw = vbaoNode.getTextureNode()
+  const vbaoCustomDenoiseResolution = uniform(new Vector2(1, 1))
   const ssaoDenoised = denoise(
     vec4(vec3(ssaoRawScalar), float(1)),
     prePassDepth,
@@ -439,6 +605,60 @@ function createReferencePipelines(
   ssaoDenoised.normalPhi.value = 8
   gtaoDenoised.normalPhi.value = 8
   vbaoDenoised.normalPhi.value = 8
+  const vbaoCustomBilateralScalar = Fn(() => {
+    const centerUv = uv()
+    const centerDepth = prePassDepth.sample(centerUv).r.toVar()
+    const centerNormal = samplePrePassNormal(centerUv).toVar()
+    const centerView = getViewPosition(centerUv, centerDepth, ssaoProjectionMatrixInverse).toVar()
+    const centerAo = vbaoRaw.sample(centerUv).r.toVar()
+    const filtered = centerAo.toVar()
+    const totalWeight = float(1).toVar()
+    const texelSize = vec2(1, 1).div(vbaoCustomDenoiseResolution).toVar()
+
+    const addTap = (x: number, y: number, kernelWeight: number) => {
+      const sampleUv = centerUv.add(vec2(x, y).mul(texelSize)).toVar()
+      const sampleDepth = prePassDepth.sample(sampleUv).r.toVar()
+      const sampleNormal = samplePrePassNormal(sampleUv).toVar()
+      const sampleView = getViewPosition(sampleUv, sampleDepth, ssaoProjectionMatrixInverse).toVar()
+      const normalDot = centerNormal.dot(sampleNormal).toVar()
+      const tangentDepthDistance = centerView.sub(sampleView).dot(centerNormal).abs().toVar()
+      const depthWeight = tangentDepthDistance.negate().div(float(0.06)).exp().toVar()
+      const normalWeight = normalDot.max(0).pow(float(8)).toVar()
+      const weight = depthWeight.mul(normalWeight).mul(float(kernelWeight)).toVar()
+
+      If(
+        sampleDepth
+          .lessThan(1)
+          .and(normalDot.greaterThanEqual(0.5))
+          .and(sampleUv.x.greaterThanEqual(0))
+          .and(sampleUv.x.lessThanEqual(1))
+          .and(sampleUv.y.greaterThanEqual(0))
+          .and(sampleUv.y.lessThanEqual(1)),
+        () => {
+          filtered.addAssign(vbaoRaw.sample(sampleUv).r.mul(weight))
+          totalWeight.addAssign(weight)
+        },
+      )
+    }
+
+    If(centerDepth.lessThan(1).and(centerNormal.dot(centerNormal).greaterThan(0)), () => {
+      addTap(1, 0, 0.5)
+      addTap(-1, 0, 0.5)
+      addTap(0, 1, 0.5)
+      addTap(0, -1, 0.5)
+      addTap(1, 1, 0.35)
+      addTap(-1, 1, 0.35)
+      addTap(1, -1, 0.35)
+      addTap(-1, -1, 0.35)
+      addTap(2, 0, 0.2)
+      addTap(-2, 0, 0.2)
+      addTap(0, 2, 0.2)
+      addTap(0, -2, 0.2)
+      filtered.divAssign(totalWeight)
+    })
+
+    return filtered.clamp(0, 1)
+  })()
 
   const gtaoRawScalar = gtaoRaw.r
   const vbaoRawScalar = vbaoRaw.r
@@ -447,6 +667,7 @@ function createReferencePipelines(
   const ssaoDenoisedScalar = (ssaoDenoised as unknown as typeof gtaoRaw).r
   const gtaoDenoisedScalar = (gtaoDenoised as unknown as typeof gtaoRaw).r
   const vbaoDenoisedScalar = (vbaoDenoised as unknown as typeof vbaoRaw).r
+  const vbaoCustomDenoisedScalar = vbaoCustomBilateralScalar
   const n8aoTex = n8aoNode.getTextureNode() as unknown as {
     readonly rgb: TslVec3
     readonly a: TslScalar
@@ -480,8 +701,10 @@ function createReferencePipelines(
     vbao: {
       beautyRaw: makeBeautyPipeline(vbaoRawScalar),
       beautyDenoised: makeBeautyPipeline(vbaoDenoisedScalar),
+      beautyCustomDenoised: makeBeautyPipeline(vbaoCustomDenoisedScalar),
       aoRaw: makeAoPipeline(vbaoRawScalar),
       aoDenoised: makeAoPipeline(vbaoDenoisedScalar),
+      aoCustomDenoised: makeAoPipeline(vbaoCustomDenoisedScalar),
     },
     n8ao: {
       beautyRaw: new RenderPipeline(renderer, vec4(n8aoTex.rgb, n8aoTex.a)),
@@ -491,8 +714,21 @@ function createReferencePipelines(
     },
   }
 
+  const vbaoDenoiseBufferSize = new Vector2()
   const setVbaoEvidenceResolution = (enabled: boolean) => {
     vbaoNode.resolutionScale = enabled ? 1.0 : 0.5
+    renderer.getDrawingBufferSize(vbaoDenoiseBufferSize)
+    vbaoCustomDenoiseResolution.value.set(
+      Math.max(1, Math.round(vbaoNode.resolutionScale * vbaoDenoiseBufferSize.width)),
+      Math.max(1, Math.round(vbaoNode.resolutionScale * vbaoDenoiseBufferSize.height)),
+    )
+  }
+  const setVbaoSamplePreset = (preset: VbaoSamplePreset) => {
+    const config = VBAO_SAMPLE_PRESETS[preset]
+    vbaoNode.configure({ samples: config.samples, slices: config.slices })
+  }
+  const setVbaoSamplingSchedule = (schedule: VbaoSamplingSchedule) => {
+    vbaoNode.setBenchmarkSamplingSchedule(schedule)
   }
   const composeBufferSize = new Vector2()
   let composeBufferWidth = 0
@@ -528,10 +764,11 @@ function createReferencePipelines(
     viewMode: ViewMode,
     denoiseEnabled: boolean,
     fullResolutionVbao: boolean,
+    vbaoDenoiseFilter: VbaoDenoiseFilter,
   ) => {
     setVbaoEvidenceResolution(fullResolutionVbao)
     if (mode === 'n8ao') n8aoNode.setDisplayMode(viewMode === 'ao' ? 'AO' : 'Combined')
-    const key =
+    const key: 'beautyRaw' | 'beautyDenoised' | 'aoRaw' | 'aoDenoised' =
       viewMode === 'ao'
         ? denoiseEnabled
           ? 'aoDenoised'
@@ -539,23 +776,31 @@ function createReferencePipelines(
         : denoiseEnabled
           ? 'beautyDenoised'
           : 'beautyRaw'
+    if (mode === 'vbao' && denoiseEnabled && vbaoDenoiseFilter === 'custom-bilateral') {
+      const customKey = viewMode === 'ao' ? 'aoCustomDenoised' : 'beautyCustomDenoised'
+      pipelines.vbao[customKey].render()
+      return
+    }
     pipelines[mode][key].render()
   }
 
   return {
     renderSingle: renderMode,
+    setVbaoSamplePreset,
+    setVbaoSamplingSchedule,
     renderComposeDebug: (
       modes: readonly ComposeDebugMode[],
       viewMode: ViewMode,
       denoiseEnabled: boolean,
       fullResolutionVbao: boolean,
+      vbaoDenoiseFilter: VbaoDenoiseFilter,
     ) => {
       if (modes.length === 0) {
-        renderMode('off', viewMode, denoiseEnabled, fullResolutionVbao)
+        renderMode('off', viewMode, denoiseEnabled, fullResolutionVbao, vbaoDenoiseFilter)
         return
       }
       setVbaoEvidenceResolution(fullResolutionVbao)
-      const key =
+      const key: 'beautyRaw' | 'beautyDenoised' | 'aoRaw' | 'aoDenoised' =
         viewMode === 'ao'
           ? denoiseEnabled
             ? 'aoDenoised'
@@ -564,18 +809,34 @@ function createReferencePipelines(
             ? 'beautyDenoised'
             : 'beautyRaw'
       const segments = getComposeSegments(modes.length)
-      renderer.setScissorTest(true)
-      modes.forEach((mode, index) => {
-        const segment = segments[index]
-        if (segment === undefined) return
-        renderer.setViewport(segment.x, 0, segment.width, composeBufferHeight)
-        renderer.setScissor(segment.x, 0, segment.width, composeBufferHeight)
-        if (mode === 'n8ao') n8aoNode.setDisplayMode(viewMode === 'ao' ? 'AO' : 'Combined')
-        pipelines[mode][key].render()
-      })
+      const previousAutoClear = renderer.autoClear
+      renderer.autoClear = false
       renderer.setScissorTest(false)
       renderer.setViewport(0, 0, composeBufferWidth, composeBufferHeight)
       renderer.setScissor(0, 0, composeBufferWidth, composeBufferHeight)
+      renderer.clear(true, true, true)
+
+      try {
+        renderer.setScissorTest(true)
+        modes.forEach((mode, index) => {
+          const segment = segments[index]
+          if (segment === undefined) return
+          renderer.setViewport(segment.x, 0, segment.width, composeBufferHeight)
+          renderer.setScissor(segment.x, 0, segment.width, composeBufferHeight)
+          if (mode === 'n8ao') n8aoNode.setDisplayMode(viewMode === 'ao' ? 'AO' : 'Combined')
+          if (mode === 'vbao' && denoiseEnabled && vbaoDenoiseFilter === 'custom-bilateral') {
+            const customKey = viewMode === 'ao' ? 'aoCustomDenoised' : 'beautyCustomDenoised'
+            pipelines.vbao[customKey].render()
+            return
+          }
+          pipelines[mode][key].render()
+        })
+      } finally {
+        renderer.autoClear = previousAutoClear
+        renderer.setScissorTest(false)
+        renderer.setViewport(0, 0, composeBufferWidth, composeBufferHeight)
+        renderer.setScissor(0, 0, composeBufferWidth, composeBufferHeight)
+      }
     },
     dispose: () => {
       const disposedPipelines = new Set<RenderPipeline>()
@@ -954,20 +1215,111 @@ function createSplitLabels(container: HTMLElement) {
   }
 }
 
+function createAoBenchmarkPublisher(
+  environment: AoBenchmarkEnvironment,
+  options: {
+    readonly setVbaoDenoiseFilter: (filter: VbaoDenoiseFilter) => void
+    readonly setVbaoSamplePreset: (preset: VbaoSamplePreset) => void
+    readonly setVbaoSamplingSchedule: (schedule: VbaoSamplingSchedule) => void
+  },
+) {
+  const history: Stats[] = []
+  const api: AoBenchmarkApi = {
+    environment,
+    history,
+    reset: () => {
+      history.length = 0
+      delete api.latest
+    },
+    snapshot: () => {
+      const snapshot: { environment: AoBenchmarkEnvironment; latest?: Stats; history: Stats[] } = {
+        environment,
+        history: [...history],
+      }
+      if (api.latest !== undefined) {
+        snapshot.latest = api.latest
+      }
+      return snapshot
+    },
+    setVbaoDenoiseFilter: (filter) => {
+      if (!isVbaoDenoiseFilter(filter)) return
+      options.setVbaoDenoiseFilter(filter)
+    },
+    setVbaoSamplePreset: (preset) => {
+      if (!isVbaoSamplePreset(preset)) return
+      options.setVbaoSamplePreset(preset)
+    },
+    setVbaoSamplingSchedule: (schedule) => {
+      if (!isVbaoSamplingSchedule(schedule)) return
+      options.setVbaoSamplingSchedule(schedule)
+    },
+  }
+
+  window.__aoBenchmark = api
+
+  return {
+    publish: (stats: Stats) => {
+      api.latest = stats
+      history.push(stats)
+      if (history.length > 240) history.shift()
+    },
+    dispose: () => {
+      if (window.__aoBenchmark === api) {
+        delete window.__aoBenchmark
+      }
+    },
+  }
+}
+
+function percentile(sorted: readonly number[], p: number): number {
+  if (sorted.length === 0) return 0
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * p) - 1))
+  return sorted[index]!
+}
+
 function createStatsSampler(onStats: (stats: Stats) => void) {
   let frames = 0
   let totalMs = 0
+  let reportIndex = 0
+  const frameSamples: number[] = []
   let lastReport = performance.now()
   return {
-    sample: (frameMs: number, mode: Stats['mode']) => {
+    sample: (
+      frameMs: number,
+      context: Omit<
+        Stats,
+        | 'fps'
+        | 'frameMs'
+        | 'avgFrameMs'
+        | 'medianFrameMs'
+        | 'p95FrameMs'
+        | 'reportIndex'
+        | 'sampleCount'
+        | 'timestamp'
+      >,
+    ) => {
       frames += 1
       totalMs += frameMs
+      frameSamples.push(frameMs)
       const now = performance.now()
       if (now - lastReport < 500) return
       const avgMs = totalMs / frames
-      onStats({ fps: 1000 / avgMs, frameMs: avgMs, mode })
+      const sorted = [...frameSamples].sort((a, b) => a - b)
+      reportIndex += 1
+      onStats({
+        ...context,
+        fps: 1000 / avgMs,
+        frameMs: avgMs,
+        avgFrameMs: avgMs,
+        medianFrameMs: percentile(sorted, 0.5),
+        p95FrameMs: percentile(sorted, 0.95),
+        reportIndex,
+        sampleCount: frames,
+        timestamp: now,
+      })
       frames = 0
       totalMs = 0
+      frameSamples.length = 0
       lastReport = now
     },
   }

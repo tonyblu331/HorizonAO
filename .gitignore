@@ -5,5 +5,7 @@ test-results/
 playwright-report/
 .vite/
 .vite-demo*.log
+.codex*.log
+.claude/settings.local.json
 *.tsbuildinfo
 apps/demo/src/routeTree.gen.ts
