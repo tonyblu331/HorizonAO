@@ -1,4 +1,4 @@
-/** Minimal scene fixture type. Updated in PR-04/PR-05 to include all VBAO demo routes. */
+/** Minimal scene fixture type for demo routes and evidence camera defaults. */
 export interface SceneFixture {
   readonly key: string
   readonly label: string
@@ -13,59 +13,6 @@ export interface SceneFixture {
 }
 
 export const PARITY_SCENES = {
-  /** /vbao — VBAONode demo: raw Three.js loop with post-processing pipeline. */
-  vbao: {
-    key: 'vbao',
-    label: 'VBAO Grid',
-    route: '/vbao',
-    camera: {
-      position: [9, 7, 12] as unknown as readonly [number, number, number],
-      target: [0, 0, 0] as unknown as readonly [number, number, number],
-      fov: 42,
-      near: 0.1,
-      far: 120,
-    },
-  },
-  /** /vbao-sponza — VBAONode on the Sponza model. */
-  vbaoSponza: {
-    key: 'vbaoSponza',
-    label: 'VBAO Sponza',
-    route: '/vbao-sponza',
-    camera: {
-      position: [0, 5.2, 8.4],
-      target: [0, 0.35, 0],
-      fov: 48,
-      near: 0.04,
-      far: 180,
-    },
-  },
-  /** /vbao-bunny — VBAONode on the Stanford Bunny. */
-  vbaoBunny: {
-    key: 'vbaoBunny',
-    label: 'VBAO Bunny',
-    route: '/vbao-bunny',
-    camera: {
-      position: [0.92, 0.56, 1.62],
-      target: [0, 0.12, 0],
-      fov: 34,
-      near: 0.01,
-      far: 18,
-    },
-  },
-  /** /vbao-suzanne — VBAONode on Suzanne. */
-  vbaoSuzanne: {
-    key: 'vbaoSuzanne',
-    label: 'VBAO Suzanne',
-    route: '/vbao-suzanne',
-    camera: {
-      position: [3.2, 2.05, 4.8],
-      target: [0, 1.1, 0],
-      fov: 34,
-      near: 0.04,
-      far: 40,
-    },
-  },
-  /** / — R3F grid scene without VBAO (reference). */
   grid: {
     key: 'grid',
     label: 'Primitive Grid',
@@ -76,6 +23,30 @@ export const PARITY_SCENES = {
       fov: 42,
       near: 0.1,
       far: 120,
+    },
+  },
+  lab: {
+    key: 'lab',
+    label: 'Sphere Lab',
+    route: '/lab',
+    camera: {
+      position: [4.6, 2.8, 6.2],
+      target: [0, 0.75, -0.35],
+      fov: 44,
+      near: 0.03,
+      far: 60,
+    },
+  },
+  museum: {
+    key: 'museum',
+    label: 'Museum',
+    route: '/museum',
+    camera: {
+      position: [1, 3, 7],
+      target: [0, 1.2, 0],
+      fov: 45,
+      near: 0.1,
+      far: 50,
     },
   },
   sponza: {

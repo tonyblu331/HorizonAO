@@ -1,15 +1,7 @@
-import {
-  Link,
-  Outlet,
-  createRootRoute,
-  createRoute,
-  createRouter,
-} from '@tanstack/react-router'
-import { BunnyScene } from './scenes/BunnyScene'
-import { GridScene } from './scenes/GridScene'
-import { SponzaScene } from './scenes/SponzaScene'
-import { SuzanneScene } from './scenes/SuzanneScene'
+import { Link, Outlet, createRootRoute, createRoute, createRouter } from '@tanstack/react-router'
+import { CityScene, MuseumScene } from './scenes/MuseumScene'
 import { VbaoBunnyScene } from './scenes/VbaoBunnyScene'
+import { VbaoLabScene } from './scenes/VbaoLabScene'
 import { VbaoParityPage } from './scenes/VbaoParityPage'
 import { VbaoScene } from './scenes/VbaoScene'
 import { VbaoSponzaScene } from './scenes/VbaoSponzaScene'
@@ -23,9 +15,18 @@ function RootLayout() {
           <span>Horizon</span>
           <strong>AO</strong>
         </Link>
-        <nav>
+        <nav aria-label="Scenes">
           <Link to="/" activeProps={{ className: 'active' }}>
             Grid
+          </Link>
+          <Link to="/lab" activeProps={{ className: 'active' }}>
+            Lab
+          </Link>
+          <Link to="/city" activeProps={{ className: 'active' }}>
+            City
+          </Link>
+          <Link to="/museum" activeProps={{ className: 'active' }}>
+            Museum
           </Link>
           <Link to="/sponza" activeProps={{ className: 'active' }}>
             Sponza
@@ -35,18 +36,6 @@ function RootLayout() {
           </Link>
           <Link to="/bunny" activeProps={{ className: 'active' }}>
             Bunny
-          </Link>
-          <Link to="/vbao" activeProps={{ className: 'active' }}>
-            VBAO
-          </Link>
-          <Link to="/vbao-sponza" activeProps={{ className: 'active' }}>
-            VBAO·Sponza
-          </Link>
-          <Link to="/vbao-bunny" activeProps={{ className: 'active' }}>
-            VBAO·Bunny
-          </Link>
-          <Link to="/vbao-suzanne" activeProps={{ className: 'active' }}>
-            VBAO·Suzanne
           </Link>
         </nav>
       </header>
@@ -62,49 +51,49 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: GridScene,
+  component: VbaoScene,
 })
 
 const sponzaRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/sponza',
-  component: SponzaScene,
+  component: VbaoSponzaScene,
+})
+
+const labRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/lab',
+  component: VbaoLabScene,
+})
+
+const cityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/city',
+  component: CityScene,
+})
+
+const museumRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/museum',
+  component: MuseumScene,
+})
+
+const gtaoReferenceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/gtao-reference',
+  component: MuseumScene,
 })
 
 const suzanneRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/suzanne',
-  component: SuzanneScene,
+  component: VbaoSuzanneScene,
 })
 
 const bunnyRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/bunny',
-  component: BunnyScene,
-})
-
-const vbaoRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/vbao',
-  component: VbaoScene,
-})
-
-const vbaoSponzaRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/vbao-sponza',
-  component: VbaoSponzaScene,
-})
-
-const vbaoBunnyRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/vbao-bunny',
   component: VbaoBunnyScene,
-})
-
-const vbaoSuzanneRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/vbao-suzanne',
-  component: VbaoSuzanneScene,
 })
 
 const parityRoute = createRoute({
@@ -115,13 +104,13 @@ const parityRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  labRoute,
+  cityRoute,
+  museumRoute,
+  gtaoReferenceRoute,
   sponzaRoute,
   suzanneRoute,
   bunnyRoute,
-  vbaoRoute,
-  vbaoSponzaRoute,
-  vbaoBunnyRoute,
-  vbaoSuzanneRoute,
   parityRoute,
 ])
 

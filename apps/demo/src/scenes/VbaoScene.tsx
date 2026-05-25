@@ -24,17 +24,17 @@ import {
   MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
-  RenderPipeline,
   Scene,
   WebGPURenderer,
 } from 'three/webgpu'
-import { float, mrt, normalView, output, pass, vec4 } from 'three/tsl'
+import { mrt, normalView, output, pass } from 'three/tsl'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { VBAONode } from '@horizonao/core'
+import { createAoComparePanel, type AoMode, type AoViewMode } from './aoComparePanel'
+import { createAoPipelines } from './aoPipelines'
 
 // ─── grid constants (mirrors GridScene.tsx) ───────────────────────────────────
 
-const GRID_N   = 13   // grid is GRID_N × GRID_N instances
+const GRID_N = 13 // grid is GRID_N × GRID_N instances
 const GRID_GAP = 1.55
 const GRID_HALF = Math.floor(GRID_N / 2)
 
@@ -45,7 +45,7 @@ type PageState = 'loading' | 'ready' | 'error'
 export function VbaoScene() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [pageState, setPageState] = useState<PageState>('loading')
-  const [errorMsg, setErrorMsg]   = useState<string>('')
+  const [errorMsg, setErrorMsg] = useState<string>('')
 
   useEffect(() => {
     const container = containerRef.current
@@ -55,7 +55,9 @@ export function VbaoScene() {
     const ctrl = new AbortController()
 
     void runVbaoScene(container, ctrl.signal).then(
-      () => { if (!disposed) setPageState('ready') },
+      () => {
+        if (!disposed) setPageState('ready')
+      },
       (err: unknown) => {
         if (!disposed) {
           setErrorMsg(err instanceof Error ? err.message : String(err))
@@ -94,15 +96,6 @@ export function VbaoScene() {
           {errorMsg}
         </div>
       )}
-      <div className="scene-copy">
-        <h1>
-          <strong>VBAO</strong>
-        </h1>
-        <p>
-          Visibility-Bitmask Ambient Occlusion · 32-sector per-slice mask · cosine-weighted
-          reduction · WebGPU / TSL
-        </p>
-      </div>
     </section>
   )
 }
@@ -121,11 +114,18 @@ async function runVbaoScene(container: HTMLDivElement, signal: AbortSignal): Pro
     antialias: true,
     forceWebGL: false,
     powerPreference: 'high-performance',
-    trackTimestamp: true,
+    trackTimestamp: false,
   })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
   await renderer.init()
-  if (signal.aborted) { renderer.dispose(); return }
+  const isWebGlFallback =
+    (renderer as unknown as { readonly backend?: { readonly isWebGLBackend?: boolean } }).backend
+      ?.isWebGLBackend === true
+  container.dataset.rendererBackend = isWebGlFallback ? 'webgl' : 'webgpu'
+  if (signal.aborted) {
+    renderer.dispose()
+    return
+  }
 
   // ── camera ──────────────────────────────────────────────────────────────────
   const camera = new PerspectiveCamera(42, 1, 0.1, 120)
@@ -154,9 +154,9 @@ async function runVbaoScene(container: HTMLDivElement, signal: AbortSignal): Pro
   scene.add(groundMesh)
 
   // instanced box grid
-  const count    = GRID_N * GRID_N
-  const dummy    = new Object3D()
-  const color    = new Color()
+  const count = GRID_N * GRID_N
+  const dummy = new Object3D()
+  const color = new Color()
   const gridMesh = new InstancedMesh(
     new BoxGeometry(1, 1, 1),
     new MeshStandardMaterial({ roughness: 0.66, metalness: 0.02, vertexColors: true }),
@@ -196,31 +196,39 @@ async function runVbaoScene(container: HTMLDivElement, signal: AbortSignal): Pro
   const scenePass = pass(scene, camera)
   scenePass.setMRT(
     mrt({
-      output,          // colour output (required for sceneColor below)
+      output, // colour output (required for sceneColor below)
       normal: normalView, // view-space normals (required by VBAONode, ADR-010)
     }),
   )
 
-  const depthNode  = scenePass.getTextureNode('depth')
+  const depthNode = scenePass.getTextureNode('depth')
   const normalNode = scenePass.getTextureNode('normal')
   const sceneColor = scenePass.getTextureNode('output')
 
-  const vbaoNode = new VBAONode(depthNode, normalNode, camera, {
-    radius:          1.25,
-    samples:         8,
-    slices:          3,
-    thickness:       0.25,
-    scale:           1.0,
-    resolutionScale: 0.5, // half-res AO, upsampled at composite
-  })
+  const aoPipelines = isWebGlFallback
+    ? undefined
+    : createAoPipelines({
+        renderer,
+        scene,
+        sceneColor,
+        depthNode,
+        normalNode,
+        camera,
+        radius: 1.25,
+        samples: 8,
+        slices: 3,
+        thickness: 0.25,
+        scale: 1.0,
+        resolutionScale: 0.5, // half-res AO, upsampled at composite
+      })
 
-  const aoTex = vbaoNode.getTextureNode()
-
-  // Composite: multiply scene colour by AO factor.
-  // Using scene alpha from the colour pass.
-  const composited = vec4(sceneColor.rgb.mul(aoTex.r), float(1.0))
-
-  const pipeline = new RenderPipeline(renderer, composited)
+  let activeAo: AoMode = isWebGlFallback ? 'off' : 'vbao'
+  let activeView: AoViewMode = 'combined'
+  const comparePanel = createAoComparePanel(container, activeAo, activeView, (next) => {
+    if (next.mode !== undefined) activeAo = next.mode
+    if (next.viewMode !== undefined) activeView = next.viewMode
+    comparePanel.sync(activeAo, activeView)
+  }, !isWebGlFallback)
 
   // ── resize ───────────────────────────────────────────────────────────────────
   function onResize() {
@@ -253,7 +261,11 @@ async function runVbaoScene(container: HTMLDivElement, signal: AbortSignal): Pro
     gridMesh.rotation.y = gridRotY
 
     controls.update()
-    pipeline.render()
+    if (isWebGlFallback) {
+      renderer.render(scene, camera)
+      return
+    }
+    aoPipelines?.render(activeAo, activeView)
   }
 
   rafId = requestAnimationFrame(animate)
@@ -266,10 +278,9 @@ async function runVbaoScene(container: HTMLDivElement, signal: AbortSignal): Pro
     cancelAnimationFrame(rafId)
     resizeObserver.disconnect()
     controls.dispose()
-    pipeline.dispose()
-    vbaoNode.dispose()
+    comparePanel.remove()
+    aoPipelines?.dispose()
     renderer.dispose()
     canvas.remove()
   })
 }
-

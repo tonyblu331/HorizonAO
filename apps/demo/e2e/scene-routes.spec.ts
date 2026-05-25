@@ -30,24 +30,30 @@ for (const fixture of Object.values(PARITY_SCENES)) {
     // Allow the renderer up to 3 s to produce at least one frame.
     await page.waitForTimeout(3_000)
 
-    const hasContent = await canvas.evaluate((node) => {
-      const el = node as HTMLCanvasElement
-      if (el.width === 0 || el.height === 0) return false
+    const canvasBox = await canvas.boundingBox()
+    expect(canvasBox, `${fixture.key}: canvas should have a layout box`).not.toBeNull()
 
-      // Try to sample via 2D context (available when compositor exposes pixels).
-      const ctx = el.getContext('2d')
-      if (ctx) {
-        const w = Math.min(el.width, 64)
-        const h = Math.min(el.height, 64)
-        const x = Math.floor((el.width - w) / 2)
-        const y = Math.floor((el.height - h) / 2)
-        const pixels = ctx.getImageData(x, y, w, h).data
-        return Array.from(pixels).some((v) => v !== 0)
-      }
-
-      // WebGPU canvases may not expose a 2D context — accept them if they have dimensions.
-      return el.clientWidth > 0 && el.clientHeight > 0
-    })
+    let hasContent: boolean
+    try {
+      const client = await page.context().newCDPSession(page)
+      const capture = await client.send('Page.captureScreenshot', {
+        format: 'png',
+        fromSurface: true,
+        clip: {
+          x: canvasBox!.x,
+          y: canvasBox!.y,
+          width: canvasBox!.width,
+          height: canvasBox!.height,
+          scale: 1,
+        },
+      })
+      hasContent = Buffer.from(capture.data, 'base64').byteLength > 10_000
+    } catch {
+      hasContent = await canvas.evaluate((node) => {
+        const el = node as HTMLCanvasElement
+        return el.width > 0 && el.height > 0 && el.clientWidth > 0 && el.clientHeight > 0
+      })
+    }
 
     expect(hasContent, `${fixture.key}: canvas should have non-zero pixels`).toBe(true)
     expect(pageErrors, `${fixture.key}: no console/page errors`).toEqual([])

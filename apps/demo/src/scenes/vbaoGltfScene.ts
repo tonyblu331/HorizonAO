@@ -15,16 +15,15 @@ import {
   Color,
   Fog,
   PerspectiveCamera,
-  RenderPipeline,
   Scene,
   WebGPURenderer,
 } from 'three/webgpu'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { float, mrt, normalView, output, pass, vec4 } from 'three/tsl'
+import { mrt, normalView, output, pass } from 'three/tsl'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { VBAONode, type VBAONodeOptions } from '@horizonao/core'
-
-// ─── types ────────────────────────────────────────────────────────────────────
+import { type VBAONodeOptions } from '@horizonao/core'
+import { createAoComparePanel, type AoMode, type AoViewMode } from './aoComparePanel'
+import { createAoPipelines } from './aoPipelines'
 
 export interface VbaoGltfSceneConfig {
   /** Remote or local URL of the GLTF/GLB model to load. */
@@ -91,11 +90,19 @@ export async function runVbaoGltfScene(
     antialias: true,
     forceWebGL: false,
     powerPreference: 'high-performance',
-    trackTimestamp: true,
+    trackTimestamp: false,
   })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
   await renderer.init()
-  if (signal.aborted) { renderer.dispose(); canvas.remove(); return }
+  const isWebGlFallback =
+    (renderer as unknown as { readonly backend?: { readonly isWebGLBackend?: boolean } }).backend
+      ?.isWebGLBackend === true
+  container.dataset.rendererBackend = isWebGlFallback ? 'webgl' : 'webgpu'
+  if (signal.aborted) {
+    renderer.dispose()
+    canvas.remove()
+    return
+  }
 
   // ── camera ──────────────────────────────────────────────────────────────────
   const { position: camPos, target: camTarget, fov, near, far } = cfg.camera
@@ -120,10 +127,16 @@ export async function runVbaoGltfScene(
 
   // ── load model ──────────────────────────────────────────────────────────────
   const loader = new GLTFLoader()
-  const gltf = await new Promise<Awaited<ReturnType<GLTFLoader['loadAsync']>>>((resolve, reject) => {
-    loader.load(cfg.modelUrl, resolve, undefined, reject)
-  })
-  if (signal.aborted) { renderer.dispose(); canvas.remove(); return }
+  const gltf = await new Promise<Awaited<ReturnType<GLTFLoader['loadAsync']>>>(
+    (resolve, reject) => {
+      loader.load(cfg.modelUrl, resolve, undefined, reject)
+    },
+  )
+  if (signal.aborted) {
+    renderer.dispose()
+    canvas.remove()
+    return
+  }
 
   const modelRoot = gltf.scene
   modelRoot.scale.setScalar(cfg.modelScale)
@@ -150,23 +163,35 @@ export async function runVbaoGltfScene(
     }),
   )
 
-  const depthNode  = scenePass.getTextureNode('depth')
+  const depthNode = scenePass.getTextureNode('depth')
   const normalNode = scenePass.getTextureNode('normal')
   const sceneColor = scenePass.getTextureNode('output')
 
-  const vbaoNode = new VBAONode(depthNode, normalNode, camera, {
-    radius:          1.25,
-    samples:         8,
-    slices:          3,
-    thickness:       0.25,
-    scale:           1.0,
-    resolutionScale: 0.5,
-    ...cfg.vbao,
-  })
+  const aoPipelines = isWebGlFallback
+    ? undefined
+    : createAoPipelines({
+        renderer,
+        scene,
+        sceneColor,
+        depthNode,
+        normalNode,
+        camera,
+        radius: 1.25,
+        samples: 8,
+        slices: 3,
+        thickness: 0.25,
+        scale: 1.0,
+        resolutionScale: 0.5,
+        ...cfg.vbao,
+      })
 
-  const aoTex = vbaoNode.getTextureNode()
-  const composited = vec4(sceneColor.rgb.mul(aoTex.r), float(1.0))
-  const pipeline = new RenderPipeline(renderer, composited)
+  let activeAo: AoMode = isWebGlFallback ? 'off' : 'vbao'
+  let activeView: AoViewMode = 'combined'
+  const comparePanel = createAoComparePanel(container, activeAo, activeView, (next) => {
+    if (next.mode !== undefined) activeAo = next.mode
+    if (next.viewMode !== undefined) activeView = next.viewMode
+    comparePanel.sync(activeAo, activeView)
+  }, !isWebGlFallback)
 
   // ── resize ───────────────────────────────────────────────────────────────────
   function onResize() {
@@ -188,7 +213,11 @@ export async function runVbaoGltfScene(
     if (signal.aborted) return
     rafId = requestAnimationFrame(animate)
     controls.update()
-    pipeline.render()
+    if (isWebGlFallback) {
+      renderer.render(scene, camera)
+      return
+    }
+    aoPipelines?.render(activeAo, activeView)
   }
 
   rafId = requestAnimationFrame(animate)
@@ -198,8 +227,8 @@ export async function runVbaoGltfScene(
     cancelAnimationFrame(rafId)
     resizeObserver.disconnect()
     controls.dispose()
-    pipeline.dispose()
-    vbaoNode.dispose()
+    comparePanel.remove()
+    aoPipelines?.dispose()
     renderer.dispose()
     canvas.remove()
   })
