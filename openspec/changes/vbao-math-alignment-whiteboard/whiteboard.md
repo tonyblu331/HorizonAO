@@ -423,7 +423,7 @@ Keep scalar output as accessibility: `1` open, `0` blocked.
 | Adaptive thickness from same-surface runs | Fixes muddy occluders and binary gaps caused by constant thickness | More per-sample state and tuning thresholds | Side-by-side thin fence, rocks, building edges |
 | Thickness stochastic scaling | Reduces hard binary artifacts when gaps open behind blockers | Can become noise if no denoise exists | Raw and denoised AO-only frames |
 | Bitmask-aware denoise | Cleans raw grain without washing geometry edges | Extra pass and new math contract | GPU timings raw vs denoised vs higher samples |
-| Depth prefilter/MIPs | Stabilizes large-radius samples and reduces single-texel overreaction | Extra prepass and memory | Large-radius scene, distant creases |
+| Depth prefilter/MIPs | Stabilizes large-radius samples and reduces single-texel overreaction | Extra prepass and memory | Captured radius-stress rows with `scale-mismatch` |
 | Sampling schedule upgrade | Removes visible 5x5 structure and improves convergence | Temporal variant needs rejection | Static and camera-motion comparisons |
 | Edge/confidence metadata | Gives denoise useful signal beyond depth/normal | Requires render target format/API decision | Denoise preserves edges better than generic filter |
 | Visibility-bucket lighting | Moves beyond scalar AO into the richer GT-VBAO look | Larger scope, lighting API design | Distant light sample scene |
@@ -434,55 +434,55 @@ Keep scalar output as accessibility: `1` open, `0` blocked.
 
 Outcome: know exactly where raw VBAO fails before changing math.
 
-- [ ] Capture raw GTAO, raw VBAO, denoised VBAO, and N8AO on the Museum route.
-- [ ] Capture AO-only and beauty at 1920x1080 and 1280x720.
+- [x] Capture raw GTAO, raw VBAO, denoised VBAO, and N8AO on the Museum route.
+- [x] Capture AO-only and beauty at 1920x1080 and 1280x720.
 - [ ] Use pinned cameras where available.
-- [ ] Record GPU timings for raw VBAO and denoised VBAO.
-- [ ] Add failure screenshots to `EVIDENCE.md`.
-- [ ] Classify failures as noise, mud, halo, thin-gap artifact, edge bleeding, or scale mismatch.
+- [x] Record GPU timings for raw VBAO and denoised VBAO.
+- [x] Add failure screenshots to `EVIDENCE.md`.
+- [x] Classify failures as noise, mud, halo, thin-gap artifact, edge bleeding, or scale mismatch.
 
 ### Phase 1 - Adaptive Thickness Prototype
 
 Outcome: fix the main muddy/weird blocker model.
 
-- [ ] Add JS reference helpers for same-surface run detection.
-- [ ] Add tests for isolated thin occluder, continuous thick wall, and gap-behind-object cases.
-- [ ] Prototype adaptive thickness in the scalar reference first.
-- [ ] Define clamp defaults: `minThickness`, `maxThickness`, `thicknessScale`.
+- [x] Add JS reference helpers for same-surface run detection.
+- [x] Add tests for isolated thin occluder, continuous thick wall, and gap-behind-object cases.
+- [x] Prototype adaptive thickness in the scalar reference first.
+- [x] Define clamp defaults: `minThickness`, `maxThickness`, `thicknessScale`.
 - [ ] Add optional stochastic thickness scale in reference.
-- [ ] Port adaptive thickness to TSL only after reference tests prove behavior.
+- [x] Port adaptive thickness to TSL only after reference tests prove behavior.
 - [ ] Compare against constant-thickness output in screenshots.
 
 ### Phase 2 - Sampling And Resolution
 
 Outcome: reduce visible patterning before hiding it with filters.
 
-- [ ] Add a sampling-pattern abstraction in the reference tests.
-- [ ] Compare current 5x5 magic-square, R2, Hilbert, and blue-noise rotations.
-- [ ] Add a full-resolution quality preset for evidence, even if not default.
+- [x] Add a sampling-pattern abstraction in the reference tests.
+- [x] Compare current 5x5 magic-square, R2, Hilbert, and blue-noise rotations.
+- [x] Add a full-resolution quality preset for evidence, even if not default.
 - [ ] Validate half-res output only with an explicit denoise/upsample path.
-- [ ] Keep fallback deterministic for non-temporal mode.
+- [x] Keep fallback deterministic for non-temporal mode.
 
 ### Phase 3 - Denoise With Formula
 
 Outcome: production-grade output without violating ADR-011.
 
-- [ ] Write denoise formula before shader code.
-- [ ] Start with depth/normal-aware spatial denoise using Three `DenoiseNode` as baseline.
-- [ ] Evaluate a VBAO-specific filter using mask coverage and transition density.
+- [x] Write denoise formula before shader code.
+- [x] Start with depth/normal-aware spatial denoise using Three `DenoiseNode` as baseline.
+- [x] Evaluate a VBAO-specific filter using depth/normal bilateral filtering before mask metadata.
 - [ ] Decide whether the G channel stores edge confidence, coverage, or transition density.
-- [ ] Add GPU timings for raw, higher-sample raw, generic denoise, and bitmask-aware denoise.
-- [ ] Document when denoise is enabled in demos and comparisons.
+- [x] Add GPU timings for raw, higher-sample raw, generic denoise, and custom-bilateral denoise.
+- [x] Document when denoise is enabled in demos and comparisons.
 
 ### Phase 4 - Depth Hierarchy
 
 Outcome: stabilize larger radii and distant occluders.
 
-- [ ] Add a depth prefilter/MIP design note.
+- [x] Add a depth hierarchy evidence design note.
 - [ ] Decide whether TSL render targets are enough or WebGPU compute is needed.
-- [ ] Add reference cases where direct depth samples fail.
+- [x] Add reference cases where direct depth samples fail.
 - [ ] Implement depth hierarchy behind an internal path, not as a renamed GTAO knob.
-- [ ] Capture radius stress tests.
+- [x] Capture radius stress tests.
 
 ### Phase 5 - Directional Visibility Buckets
 
@@ -498,20 +498,20 @@ Outcome: move from AO-only toward the richer GT-VBAO++ look.
 
 ### P0 Tasks
 
-- [ ] Create `EVIDENCE.md` entries for current raw VBAO failures.
-- [ ] Add an adaptive-thickness proposal/spec before code.
-- [ ] Add scalar reference tests for adaptive thickness.
-- [ ] Add denoise math proposal that satisfies ADR-011.
-- [ ] Decide whether Museum denoise remains demo-only or graduates into a core option.
-- [ ] Add a full-res VBAO comparison preset to the benchmark route.
+- [x] Create `EVIDENCE.md` entries for current raw VBAO failures.
+- [x] Add an adaptive-thickness proposal/spec before code.
+- [x] Add scalar reference tests for adaptive thickness.
+- [x] Add denoise math proposal that satisfies ADR-011.
+- [x] Decide whether Museum denoise remains demo-only or graduates into a core option: rejected for production promotion.
+- [x] Add a full-res VBAO comparison preset to the benchmark route.
 
 ### P1 Tasks
 
 - [ ] Add mask metadata helpers to shader output design.
-- [ ] Prototype R2/Hilbert sample rotation.
-- [ ] Add depth-MIP design.
+- [x] Prototype R2/Hilbert sample rotation.
+- [x] Add depth hierarchy evidence design.
 - [ ] Expand parity tests with GPU-readback inputs from the actual scene pass.
-- [ ] Add screenshots for radius/thickness sweeps.
+- [x] Add screenshots for radius sweeps.
 
 ### P2 Tasks
 

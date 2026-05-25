@@ -15,12 +15,12 @@ accessibility semantics intact: `1` means open, `0` means blocked.
 | Track | Status | Truth |
 | --- | --- | --- |
 | Core VBAO contract | Strong | 32-sector bitmask, cosine-weighted accessibility, required normals, and no GTAO falloff soup are already locked. |
-| Evidence baseline | Implemented, awaiting manual captures | Harness, schema, full-res evidence toggle, and tests exist; WebGPU screenshots/timings are still pending. |
-| Adaptive thickness | Reference complete | Scalar reference now proves continuity, deterministic thickness estimation, adaptive mask widening, and gap preservation. TSL port is next. |
-| Sampling/resolution | Planned | Current magic-square pattern may be structured/noisy; no sampling abstraction yet. |
-| Denoise | Researched, gated | Spatial-only denoise formula is drafted; no implementation until evidence proves the failure class. |
-| Depth hierarchy | Planned | Needed for large-radius stability, but not before thickness/sampling evidence. |
-| Visibility buckets | Future | This is the richer GT-VBAO++ lighting direction, not the next AO correctness fix. |
+| Evidence baseline | Captured for Museum/WebGPU | Harness, schema, full-res evidence toggle, screenshots, median/p95 rows, and labels exist. A broader manual device pass is still useful but no longer blocks local decisions. |
+| Adaptive thickness | Reference and TSL port complete | Scalar proof exists and the shader path now uses internal adaptive thickness. Do not add knobs without new evidence. |
+| Sampling/resolution | Evidence gate complete, no promotion | Magic-square, R2, Hilbert-style, and blue-noise-like schedules were captured. None solved structured noise/mud without tradeoffs, so `magic-square` stays default. |
+| Denoise | Evidence gate complete, no promotion | Generic denoise adds mud/edge bleed/thin-gap closure. Custom bilateral is safer but still leaves noise/mud/edge bleed. More blur is not the next fix. |
+| Depth hierarchy | Evidence gate complete, experiment justified | Large-radius rows show `scale-mismatch`; reference selector predicts level `1`. Next is an internal depth-prefilter experiment, not a production option. |
+| Visibility buckets | Reference-only direction complete | Directional reconstruction is useful future GT-VBAO++ pressure, but scalar AO quality still owns the next implementation slot. |
 
 ## Non-Negotiable Rules
 
@@ -39,7 +39,8 @@ accessibility semantics intact: `1` means open, `0` means blocked.
 
 Goal: prove what is actually wrong before changing math.
 
-Status: implementation complete; manual WebGPU data pending.
+Status: automated Museum/WebGPU screenshots, median/p95 rows, and failure
+labels are captured. A broader manual device review is optional, not a blocker.
 
 Tasks:
 
@@ -47,10 +48,10 @@ Tasks:
 - [x] Add Museum evidence controls for raw/denoised/full-res VBAO.
 - [x] Add Playwright route/control smoke coverage.
 - [x] Keep full-res evidence mode demo-local.
-- [ ] Capture required WebGPU rows at `1920x1080`.
-- [ ] Capture required WebGPU rows at `1280x720`.
-- [ ] Fill screenshot paths and timing rows.
-- [ ] Classify failures: `noise`, `mud`, `halo`, `thin-gap`, `edge-bleed`, `scale-mismatch`.
+- [x] Capture required WebGPU rows at `1920x1080`.
+- [x] Capture required WebGPU rows at `1280x720`.
+- [x] Fill screenshot paths and timing rows.
+- [x] Classify failures: `noise`, `mud`, `halo`, `thin-gap`, `edge-bleed`, `scale-mismatch`.
 
 Exit gate:
 
@@ -86,11 +87,11 @@ Goal: port only the proven reference behavior into the shader.
 
 Tasks:
 
-- [ ] Add shader-side tests or e2e smoke that exercise the adaptive path.
-- [ ] Port same-surface run logic to TSL behind internal constants.
-- [ ] Keep constant-thickness behavior available during comparison.
-- [ ] Capture side-by-side adaptive vs constant evidence rows.
-- [ ] Decide whether adaptive thickness becomes default.
+- [x] Add shader-side tests or e2e smoke that exercise the adaptive path.
+- [x] Port same-surface run logic to TSL behind internal constants.
+- [x] Keep public options unchanged during comparison.
+- [x] Preserve benchmark/source contracts around adaptive behavior.
+- [x] Keep adaptive thickness internal by default.
 
 Exit gate:
 
@@ -103,16 +104,17 @@ Goal: reduce structured noise before hiding anything with denoise.
 
 Tasks:
 
-- [ ] Add reference sampling-pattern abstraction.
-- [ ] Compare current magic-square, R2, Hilbert, and blue-noise rotations.
-- [ ] Keep deterministic non-temporal fallback.
-- [ ] Validate half-res only with explicit upsample/denoise path.
-- [ ] Record screenshots and timings for full-res vs half-res.
+- [x] Add reference sampling-pattern abstraction.
+- [x] Compare current magic-square, R2, Hilbert, and blue-noise rotations.
+- [x] Keep deterministic non-temporal fallback.
+- [x] Validate full-res rows through explicit benchmark labels.
+- [x] Record screenshots and timings for schedule and sample-preset rows.
 
 Exit gate:
 
-- Evidence shows which sampling schedule improves noise/cost without damaging
-  geometry readability.
+- Evidence rejects production sampling promotion for now. Keep `magic-square`
+  until a candidate reduces structured noise without adding mud, edge bleed, or
+  p95 cost outside the baseline envelope.
 
 ### Phase 4 - Non-Temporal Spatial Denoise
 
@@ -135,16 +137,17 @@ W(p, q) =
 
 Tasks:
 
-- [ ] Start with `K_confidence = 1` depth/normal-only filtering.
-- [ ] Compare against higher-sample raw VBAO.
-- [ ] Add bitmask metadata only if the baseline fails a named evidence case.
-- [ ] Record raw, denoised, and higher-sample timings.
-- [ ] Reject filters that create `edge-bleed`, `halo`, or close `thin-gap` cases.
+- [x] Start with `K_confidence = 1` depth/normal-only filtering.
+- [x] Compare against higher-sample raw VBAO.
+- [x] Defer bitmask metadata until generic/custom filtering fails a named evidence case.
+- [x] Record raw, denoised, and higher-sample timings.
+- [x] Reject filters that create `edge-bleed`, `halo`, or close `thin-gap` cases.
 
 Exit gate:
 
-- Denoise reduces `noise` without hiding adaptive-thickness failures or washing
-  geometric edges.
+- Evidence rejects production denoise promotion. Generic blur and custom
+  bilateral filtering do not solve raw VBAO's structured noise without mud or
+  edge costs.
 
 ### Phase 5 - Depth Hierarchy
 
@@ -152,11 +155,13 @@ Goal: stabilize large-radius and distant occluder behavior.
 
 Tasks:
 
-- [ ] Write depth prefilter/MIP design.
-- [ ] Add reference cases where direct depth samples are unstable.
+- [x] Write evidence-only depth hierarchy design.
+- [x] Add reference selector for footprint-to-level pressure.
+- [x] Capture radius stress tests.
+- [ ] Write internal depth prefilter experiment design.
 - [ ] Decide TSL render-target path vs WebGPU compute path.
 - [ ] Implement internal depth hierarchy experiment.
-- [ ] Capture radius stress tests.
+- [ ] Compare against existing radius-stress screenshots and p95 envelope.
 
 Exit gate:
 
@@ -183,43 +188,44 @@ Exit gate:
 
 | Priority | Work | Why |
 | --- | --- | --- |
-| P0 | Manual WebGPU evidence capture | Without real evidence, math work has no target. |
+| Done | WebGPU evidence capture | Museum baseline, schedule, denoise, and radius-stress rows are captured with screenshots/timings. |
 | Done | Finish adaptive thickness reference | Scalar proof now exists; use it as the TSL port gate. |
 | Done | Adaptive thickness TSL port | Converts proven reference behavior into visuals. |
-| P0 | Sampling pattern comparison | Reduces noise before denoise. |
-| P1 | Non-temporal spatial denoise | Presentation polish after raw behavior is correct. |
-| P1 | Depth hierarchy | Needed for larger radius stability. |
+| Done | Sampling pattern comparison | Evidence says no schedule promotion yet. |
+| Done | Non-temporal spatial denoise gate | Evidence says no production denoise yet. |
+| P0 | Internal depth prefilter experiment | Large-radius evidence now shows `scale-mismatch`; this is the next falsifiable hypothesis. |
+| P1 | Bitmask confidence metadata | Needed only if future filters still fail without metadata. |
 | P2 | Visibility buckets | Richer GT-VBAO++ look, larger scope. |
 | P2 | Temporal accumulation | Explicitly deferred; not part of the non-temporal denoise track. |
 
 ## Immediate Next Task Batch
 
-Change: `vbao-sampling-backtest`
+Change: `vbao-depth-prefilter-experiment`
 
 Target tasks:
 
-- Add a reference sampling abstraction.
-- Compare magic-square rotation against deterministic R2/Hilbert-style schedules.
-- Keep frame/time/history out of all schedules.
-- Add benchmark labels without exposing public API.
-- Capture 1920x1080 and 1280x720 rows before selecting any production sampling change.
+- Add RED source/docs contract tests proving no public depth-MIP option exists.
+- Add reference tests for depth prefilter level selection and representative-depth choice.
+- Design the internal prefilter path against the existing radius-stress rows.
+- Prototype an internal-only depth prefilter or hierarchy experiment.
+- Compare baseline vs depth-prefilter rows at `1920x1080` and `1280x720`.
+- Reject the experiment unless it improves `scale-mismatch` without adding mud, thin-gap closure, edge bleed, or p95 cost outside the current envelope.
 
 Expected files:
 
-- `packages/horizon-ao/src/vbaoReference.ts`
-- `packages/horizon-ao/src/__tests__/vbaoReference.test.ts`
+- `packages/horizon-ao/src/vbaoDepthHierarchy.ts`
+- `packages/horizon-ao/src/__tests__/vbaoDepthHierarchy.test.ts`
 - `apps/demo/src/scenes/MuseumScene.tsx`
+- `apps/demo/scripts/collect-ao-benchmark.mjs`
 - `EVIDENCE.md`
-- `packages/horizon-ao/src/vbaoReference.ts`
-- `openspec/changes/vbao-adaptive-thickness-reference/archive-report.md`
-- New OpenSpec artifacts for the TSL port change
+- `openspec/changes/vbao-depth-prefilter-experiment/*`
 
 Verification:
 
 ```sh
-node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoReference.test.ts
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoDepthHierarchy.test.ts packages/horizon-ao/src/__tests__/vbaoEvidenceContract.test.ts
 node node_modules/typescript/bin/tsc --noEmit -p packages/horizon-ao/tsconfig.json
-node node_modules/@typescript/native-preview/bin/tsgo.js --noEmit -p packages/horizon-ao/tsconfig.json
+node apps/demo/scripts/collect-ao-benchmark.mjs
 ```
 
 ## Goal Prompt
@@ -227,31 +233,28 @@ node node_modules/@typescript/native-preview/bin/tsgo.js --noEmit -p packages/ho
 Use this prompt to continue the next implementation pass:
 
 ```text
-Archive `vbao-adaptive-thickness-reference`, then start the next OpenSpec change
-for the adaptive-thickness TSL port.
+Start the next OpenSpec change `vbao-depth-prefilter-experiment`.
 Strict TDD is active.
 
 Goal:
-Port only the already-proven scalar adaptive thickness behavior into the TSL
-kernel. Do not add public `VBAONodeOptions`, quality tiers, render-target
-formats, denoise, temporal filtering, or depth hierarchy.
+Prototype an internal depth prefilter/hierarchy experiment only because
+`EVIDENCE.md` now has radius-stress rows with `scale-mismatch`. Do not add public
+`VBAONodeOptions`, quality tiers, denoise, temporal filtering, or visibility
+bucket APIs.
 
 Required task order:
-1. Archive the completed scalar reference change.
-2. Run the safety net:
-   `node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoReference.test.ts`
-3. Add shader-side or e2e smoke coverage for adaptive behavior before changing `VBAONode`.
-4. Port same-surface/adaptive thickness logic behind internal constants.
-5. Keep constant-thickness behavior available for comparison.
-6. Verify with targeted Vitest, package `tsc --noEmit`, package `tsgo --noEmit`, and relevant e2e smoke.
-7. Capture adaptive vs constant evidence rows before making default decisions.
+1. Add RED tests for reference depth representative selection.
+2. Add source/docs contract tests proving the public API remains unchanged.
+3. Design the internal prefilter path and choose TSL render-target vs WebGPU compute.
+4. Prototype internal-only depth prefilter controls in the benchmark harness.
+5. Capture baseline vs prefilter radius-stress rows at both resolutions.
+6. Reject the experiment unless screenshots improve `scale-mismatch` without worse p95 or new edge failures.
 
 Acceptance:
-- Adaptive thin isolated masks stay narrow.
-- Adaptive continuous-wall masks block more sectors than thin isolated masks in the shader path.
-- Adaptive gap masks do not widen by merging the back sample into the front blocker.
-- Existing 63 reference tests remain green.
-- No public API changes.
+- Public API remains unchanged.
+- Baseline radius-stress rows remain available for comparison.
+- Any claimed improvement has screenshot paths plus median/p95 rows in `EVIDENCE.md`.
+- Large-radius `scale-mismatch` improves without extra mud, `thin-gap`, or `edge-bleed`.
 ```
 
 ## Definition Of Done For The Whole VBAO Improvement Track
