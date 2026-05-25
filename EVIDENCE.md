@@ -14,6 +14,7 @@ Capture each required row in both view modes:
 | `viewMode` | `beauty`, `ao` |
 | `denoise` | `raw`, `denoised` |
 | `vbaoSamplingSchedule` | `magic-square`, `r2`, `hilbert`, `blue-noise`, or `n/a` |
+| `vbaoRadiusStressPreset` | `baseline`, `large-radius`, or `n/a` |
 | `resolution` | `1920x1080`, `1280x720` |
 | `failureLabels` | `none`, `noise`, `mud`, `halo`, `thin-gap`, `edge-bleed`, `scale-mismatch` |
 
@@ -38,6 +39,8 @@ locked public quality tiers.
 | `timingMethod` | `webgpu-timestamp`, `frame-median`, `performance-panel`, or `pending` |
 | `medianTime_ms` | Median of 10 steady-state frames/passes, or `pending` |
 | `radius` | AO radius used |
+| `vbaoRadiusStressPreset` | Radius stress label for depth hierarchy evidence, or `n/a` |
+| `vbaoExpectedDepthHierarchyLevel` | Reference-only expected depth hierarchy level for the radius stress row |
 | `thickness` | Thickness used |
 | `slices` | Slice count |
 | `samples` | Samples per slice |
@@ -111,6 +114,10 @@ The Museum route publishes machine-readable rolling stats on
 | `fullResolutionVbao` | Whether the demo-only full-res VBAO toggle was enabled |
 | `vbaoSamplingSchedule` | Current VBAO sampling label; `magic-square`, `r2`, `hilbert`, `blue-noise`, or `n/a` |
 | `vbaoSamplePreset` | `baseline`, `high-sample`, or `n/a` for non-VBAO rows |
+| `vbaoDenoiseFilter` | `generic`, `custom-bilateral`, or `n/a` |
+| `vbaoRadiusStressPreset` | `baseline`, `large-radius`, or `n/a` for non-VBAO rows |
+| `vbaoRadius` | Active VBAO radius for stress rows, or `0` for non-VBAO rows |
+| `vbaoExpectedDepthHierarchyLevel` | Reference-only depth hierarchy level predicted by the radius stress preset |
 | `vbaoSamples` | Active VBAO samples per slice, or `0` for non-VBAO rows |
 | `vbaoSlices` | Active VBAO slice count, or `0` for non-VBAO rows |
 | `fps` | `1000 / avgFrameMs` for the latest reporting window |
@@ -157,6 +164,7 @@ Chromium path rather than the legacy headless shell. Useful environment override
 | `AO_BENCHMARK_DENOISE_MATRIX=1` | Capture raw/denoised rows for both Beauty and AO-only views |
 | `AO_BENCHMARK_VBAO_SAMPLE_MATRIX=1` | Add raw baseline/high-sample VBAO rows for single and compose comparisons |
 | `AO_BENCHMARK_VBAO_SCHEDULE_MATRIX=1` | Add raw VBAO schedule rows for `magic-square`, `r2`, `hilbert`, and `blue-noise`; disables the high-sample expansion for that run |
+| `AO_BENCHMARK_VBAO_RADIUS_STRESS_MATRIX=1` | Add raw baseline/large-radius VBAO rows for the depth hierarchy gate; disables high-sample expansion for that run |
 | `AO_BENCHMARK_REQUIRE_WEBGPU=1` | Exit non-zero if the session falls back to WebGL |
 | `AO_BENCHMARK_EXTERNAL_SERVER=1` | Reuse an already-running demo server |
 
@@ -342,6 +350,46 @@ median/p95 timings, but it does not materially remove the structured VBAO noise.
 The next algorithmic pressure is not "more blur"; it is either depth hierarchy
 for large-radius sampling or bitmask/confidence metadata for a filter that knows
 which sectors were uncertain.
+
+## VBAO Depth Hierarchy / Radius Stress Matrix
+
+Artifact: `artifacts/benchmarks/ao-vbao-radius-stress-latest.json`.
+
+Command:
+
+```sh
+AO_BENCHMARK_PORT=41763 AO_BENCHMARK_DENOISE_MATRIX=1 AO_BENCHMARK_VBAO_RADIUS_STRESS_MATRIX=1 AO_BENCHMARK_SCREENSHOTS=1 AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_OUT=artifacts/benchmarks/ao-vbao-radius-stress-latest.json node scripts/collect-ao-benchmark.mjs
+```
+
+The run produced 40 WebGPU rows. The table below records raw VBAO baseline vs
+large-radius focus rows; denoised rows remain generic-denoise evidence and do
+not promote depth hierarchy.
+
+| resolution | renderMode | viewMode | radiusPreset | radius | expectedDepthLevel | medianFrameMs | p95FrameMs | failureLabels | screenshotPath |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1920x1080 | single | beauty | baseline | 0.35 | 0 | 1.7 | 2.9 | noise,mud,edge-bleed | artifacts/benchmarks/screenshots/museum__museumBaseline__1920x1080__single__vbao__single__beauty__raw__magic-square.png |
+| 1920x1080 | single | beauty | large-radius | 0.7 | 1 | 1.5 | 1.8 | noise,mud,edge-bleed,scale-mismatch | artifacts/benchmarks/screenshots/museum__museumBaseline__1920x1080__single__vbao__single__beauty__raw__magic-square__large-radius.png |
+| 1920x1080 | compose | beauty | baseline | 0.35 | 0 | 3.0 | 4.4 | noise,halo,scale-mismatch | artifacts/benchmarks/screenshots/museum__museumBaseline__1920x1080__compose__compose__gtao-vbao-n8ao__beauty__raw__magic-square.png |
+| 1920x1080 | compose | beauty | large-radius | 0.7 | 1 | 3.4 | 4.6 | noise,mud,halo,scale-mismatch | artifacts/benchmarks/screenshots/museum__museumBaseline__1920x1080__compose__compose__gtao-vbao-n8ao__beauty__raw__magic-square__large-radius.png |
+| 1920x1080 | single | ao | baseline | 0.35 | 0 | 1.4 | 5.2 | noise,mud,edge-bleed | artifacts/benchmarks/screenshots/museum__museumBaseline__1920x1080__single__vbao__single__ao__raw__magic-square.png |
+| 1920x1080 | single | ao | large-radius | 0.7 | 1 | 1.1 | 1.8 | noise,mud,edge-bleed,scale-mismatch | artifacts/benchmarks/screenshots/museum__museumBaseline__1920x1080__single__vbao__single__ao__raw__magic-square__large-radius.png |
+| 1920x1080 | compose | ao | baseline | 0.35 | 0 | 2.6 | 3.1 | noise,halo,scale-mismatch | artifacts/benchmarks/screenshots/museum__museumBaseline__1920x1080__compose__compose__gtao-vbao-n8ao__ao__raw__magic-square.png |
+| 1920x1080 | compose | ao | large-radius | 0.7 | 1 | 2.3 | 3.5 | noise,mud,halo,scale-mismatch | artifacts/benchmarks/screenshots/museum__museumBaseline__1920x1080__compose__compose__gtao-vbao-n8ao__ao__raw__magic-square__large-radius.png |
+| 1280x720 | single | beauty | baseline | 0.35 | 0 | 2.4 | 3.9 | noise,mud,edge-bleed | artifacts/benchmarks/screenshots/museum__museumBaseline__1280x720__single__vbao__single__beauty__raw__magic-square.png |
+| 1280x720 | single | beauty | large-radius | 0.7 | 1 | 1.9 | 3.7 | noise,mud,edge-bleed,scale-mismatch | artifacts/benchmarks/screenshots/museum__museumBaseline__1280x720__single__vbao__single__beauty__raw__magic-square__large-radius.png |
+| 1280x720 | compose | beauty | baseline | 0.35 | 0 | 3.5 | 6.3 | noise,halo,scale-mismatch | artifacts/benchmarks/screenshots/museum__museumBaseline__1280x720__compose__compose__gtao-vbao-n8ao__beauty__raw__magic-square.png |
+| 1280x720 | compose | beauty | large-radius | 0.7 | 1 | 4.1 | 8.6 | noise,mud,halo,scale-mismatch | artifacts/benchmarks/screenshots/museum__museumBaseline__1280x720__compose__compose__gtao-vbao-n8ao__beauty__raw__magic-square__large-radius.png |
+| 1280x720 | single | ao | baseline | 0.35 | 0 | 1.1 | 2.5 | noise,mud,edge-bleed | artifacts/benchmarks/screenshots/museum__museumBaseline__1280x720__single__vbao__single__ao__raw__magic-square.png |
+| 1280x720 | single | ao | large-radius | 0.7 | 1 | 1.2 | 3.2 | noise,mud,edge-bleed,scale-mismatch | artifacts/benchmarks/screenshots/museum__museumBaseline__1280x720__single__vbao__single__ao__raw__magic-square__large-radius.png |
+| 1280x720 | compose | ao | baseline | 0.35 | 0 | 3.5 | 8.6 | noise,halo,scale-mismatch | artifacts/benchmarks/screenshots/museum__museumBaseline__1280x720__compose__compose__gtao-vbao-n8ao__ao__raw__magic-square.png |
+| 1280x720 | compose | ao | large-radius | 0.7 | 1 | 2.5 | 7.2 | noise,mud,halo,scale-mismatch | artifacts/benchmarks/screenshots/museum__museumBaseline__1280x720__compose__compose__gtao-vbao-n8ao__ao__raw__magic-square__large-radius.png |
+
+Decision: continue depth hierarchy investigation, but do not promote a
+production depth-MIP path yet. Large-radius rows produce `scale-mismatch` and
+broader muddy accessibility while the reference selector predicts level `1`.
+The next implementation gate is an internal depth prefilter experiment compared
+against these exact rows; it must improve the large-radius captures without
+increasing p95 beyond the current envelope.
 
 ## Manual WebGPU Capture Steps
 

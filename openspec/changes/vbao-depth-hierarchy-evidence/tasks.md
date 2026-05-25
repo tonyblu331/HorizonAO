@@ -16,4 +16,4 @@
 
 - [x] 3.1 Add spec delta for radius stress evidence rows.
 - [x] 3.2 Add benchmark labels for future radius stress captures without public API.
-- [ ] 3.3 Update `EVIDENCE.md` only after screenshots and median/p95 rows exist.
+- [x] 3.3 Update `EVIDENCE.md` only after screenshots and median/p95 rows exist.

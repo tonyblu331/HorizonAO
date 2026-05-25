@@ -238,7 +238,10 @@ async function captureScreenshot(page, latest, resolution) {
   if (latest.vbaoDenoiseFilter !== 'n/a') {
     fileNameParts.push(latest.vbaoDenoiseFilter)
   }
-  if (latest.vbaoRadiusStressPreset !== baselineVbaoRadiusStressPreset) {
+  if (
+    latest.vbaoRadiusStressPreset !== 'n/a' &&
+    latest.vbaoRadiusStressPreset !== baselineVbaoRadiusStressPreset
+  ) {
     fileNameParts.push(latest.vbaoRadiusStressPreset)
   }
   const fileName = fileNameParts.map(slug).join('__')
