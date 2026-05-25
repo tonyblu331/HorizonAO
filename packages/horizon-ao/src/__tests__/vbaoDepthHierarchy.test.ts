@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest'
 import depthHierarchySpec from '../../../../openspec/changes/vbao-depth-hierarchy-evidence/specs/vbao-node/spec.md?raw'
 import benchmarkCollectorSource from '../../../../apps/demo/scripts/collect-ao-benchmark.mjs?raw'
 import museumSource from '../../../../apps/demo/src/scenes/MuseumScene.tsx?raw'
+import prefilterDesign from '../../../../openspec/changes/vbao-depth-prefilter-experiment/design.md?raw'
+import prefilterSpec from '../../../../openspec/changes/vbao-depth-prefilter-experiment/specs/vbao-node/spec.md?raw'
 import indexSource from '../index.ts?raw'
 import optionsSource from '../vbaoConstants.ts?raw'
-import { chooseVbaoDepthHierarchyLevel } from '../vbaoDepthHierarchy'
+import {
+  chooseVbaoDepthHierarchyLevel,
+  chooseVbaoRepresentativeDepth,
+} from '../vbaoDepthHierarchy'
 
 describe('VBAO depth hierarchy evidence gate', () => {
   it('chooses deterministic hierarchy levels from projected sample footprint', () => {
@@ -47,5 +52,40 @@ describe('VBAO depth hierarchy evidence gate', () => {
     expect(museumSource).toContain('vbaoExpectedDepthHierarchyLevel')
     expect(indexSource).not.toContain('vbaoDepthHierarchy')
     expect(optionsSource).not.toContain('radiusStress')
+  })
+
+  it('chooses a farthest-supported representative depth for coarse prefilter blocks', () => {
+    const result = chooseVbaoRepresentativeDepth({
+      fallbackViewDepth: 1,
+      farthestDepthTolerance: 0.1,
+      viewDepths: [6, 6.05, 5.98, 2.1],
+    })
+
+    expect(result.farthestViewDepth).toBe(6.05)
+    expect(result.supportCount).toBe(3)
+    expect(result.viewDepth).toBeCloseTo(6.01, 3)
+  })
+
+  it('documents the internal-only prefilter experiment without adding public knobs', () => {
+    expect(prefilterSpec).toContain('Internal Depth Prefilter Experiment')
+    expect(prefilterSpec).toContain('Representative depth ignores thin foreground outliers')
+    expect(prefilterDesign).toContain('farthest positive view depth')
+    expect(prefilterDesign).toContain('TSL render target chain preferred')
+    expect(indexSource).not.toContain('vbaoDepthPrefilter')
+    expect(optionsSource).not.toContain('depthPrefilter')
+    expect(optionsSource).not.toContain('depthHierarchy')
+    expect(optionsSource).not.toContain('depthMip')
+  })
+
+  it('defines the benchmark-only depth prefilter label schema before capture work', () => {
+    for (const required of [
+      'AO_BENCHMARK_VBAO_DEPTH_PREFILTER_MATRIX',
+      'vbaoDepthPrefilterPreset',
+      'baseline',
+      'prefilter',
+    ]) {
+      expect(prefilterSpec).toContain(required)
+      expect(prefilterDesign).toContain(required)
+    }
   })
 })
