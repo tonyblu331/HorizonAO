@@ -293,6 +293,48 @@ nav a.active {
   accent-color: #35d4ca;
 }
 
+.compose-debug-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.compose-debug-options label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid rgba(248, 246, 239, 0.18);
+  border-radius: 6px;
+  padding: 8px 7px;
+  color: rgba(248, 246, 239, 0.82);
+  background: rgba(248, 246, 239, 0.07);
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.compose-debug-options input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #35d4ca;
+}
+
+.compose-debug-options label:has(input:checked) {
+  color: #071012;
+  border-color: #35d4ca;
+  background: #35d4ca;
+}
+
+.compose-debug-options label:has(input:disabled) {
+  color: rgba(248, 246, 239, 0.38);
+  cursor: not-allowed;
+  background: rgba(248, 246, 239, 0.04);
+}
+
 .split-labels {
   position: absolute;
   z-index: 10;
@@ -402,6 +444,10 @@ nav a.active {
   }
 
   .compare-options-secondary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .compose-debug-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

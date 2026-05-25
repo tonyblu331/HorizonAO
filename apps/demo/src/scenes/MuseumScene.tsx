@@ -54,14 +54,33 @@ import { VBAONode } from '@horizonao/core'
 
 type PageState = 'loading' | 'ready' | 'error'
 type CompareMode = 'off' | 'gtao' | 'ssao' | 'vbao' | 'n8ao'
+type ComposeDebugMode = Exclude<CompareMode, 'off'>
 type ViewMode = 'beauty' | 'ao'
-type LayoutMode = 'single' | 'split'
 type SceneVariant = 'city' | 'museum'
 
 interface Stats {
   readonly fps: number
   readonly frameMs: number
-  readonly mode: CompareMode | 'split'
+  readonly mode: CompareMode | 'compose'
+}
+
+const COMPOSE_DEBUG_MODES = [
+  'ssao',
+  'gtao',
+  'vbao',
+  'n8ao',
+] as const satisfies readonly ComposeDebugMode[]
+
+function isComposeDebugMode(value: string | undefined): value is ComposeDebugMode {
+  return COMPOSE_DEBUG_MODES.some((mode) => mode === value)
+}
+
+function sortComposeDebugModes(modes: readonly ComposeDebugMode[]) {
+  return COMPOSE_DEBUG_MODES.filter((mode) => modes.includes(mode))
+}
+
+function getComposeDebugLabel(mode: ComposeDebugMode) {
+  return mode.toUpperCase()
 }
 
 export function CityScene() {
@@ -154,7 +173,7 @@ async function runGtaoReferenceScene(
 
   const scene = new Scene()
   scene.background = new Color('#e2e0e0')
-  const variants = await addSceneVariants(scene)
+  const variants = await addSceneVariants(scene, initialVariant)
   let lastTime = performance.now()
 
   const controls = new OrbitControls(camera, canvas)
@@ -168,40 +187,67 @@ async function runGtaoReferenceScene(
   const pipelines = isWebGlFallback ? undefined : createReferencePipelines(renderer, scene, camera)
   let activeMode: CompareMode = 'off'
   let viewMode: ViewMode = 'beauty'
-  let layoutMode: LayoutMode = 'split'
+  let composeDebugEnabled = !isWebGlFallback
+  let composeDebugModes: readonly ComposeDebugMode[] = COMPOSE_DEBUG_MODES
   const sceneVariant = initialVariant
   let denoiseEnabled = true
+  let fullResolutionVbao = false
 
   const labels = createSplitLabels(container)
   const panel = createReferencePanel(container, {
     title: sceneVariant === 'city' ? 'City' : 'Museum',
     mode: activeMode,
     viewMode,
-    layoutMode,
+    composeDebugEnabled,
+    composeDebugModes,
     denoiseEnabled,
+    fullResolutionVbao,
     aoAvailable: !isWebGlFallback,
     onChange: (next) => {
       if (next.mode !== undefined) activeMode = next.mode
       if (next.viewMode !== undefined) viewMode = next.viewMode
-      if (next.layoutMode !== undefined) layoutMode = next.layoutMode
+      if (next.composeDebugEnabled !== undefined) composeDebugEnabled = next.composeDebugEnabled
+      if (next.composeDebugModes !== undefined) composeDebugModes = next.composeDebugModes
       if (next.denoiseEnabled !== undefined) denoiseEnabled = next.denoiseEnabled
-      panel.sync({ mode: activeMode, viewMode, layoutMode, denoiseEnabled })
-      labels.sync(layoutMode)
+      if (next.fullResolutionVbao !== undefined) fullResolutionVbao = next.fullResolutionVbao
+      panel.sync({
+        mode: activeMode,
+        viewMode,
+        composeDebugEnabled,
+        composeDebugModes,
+        denoiseEnabled,
+        fullResolutionVbao,
+      })
+      labels.sync(composeDebugEnabled, composeDebugModes)
     },
   })
   applySceneVariant(sceneVariant, variants, camera, controls)
-  labels.sync(layoutMode)
+  labels.sync(composeDebugEnabled, composeDebugModes)
 
-  function onResize() {
+  let resizeRafId = 0
+  let rendererCssWidth = 0
+  let rendererCssHeight = 0
+
+  function applyResize() {
+    resizeRafId = 0
     const w = container.clientWidth
     const h = container.clientHeight
     if (w === 0 || h === 0) return
+    if (w === rendererCssWidth && h === rendererCssHeight) return
+    rendererCssWidth = w
+    rendererCssHeight = h
     camera.aspect = w / h
     camera.updateProjectionMatrix()
     renderer.setSize(w, h)
   }
-  onResize()
-  const resizeObserver = new ResizeObserver(onResize)
+
+  function scheduleResize() {
+    if (resizeRafId !== 0) return
+    resizeRafId = requestAnimationFrame(applyResize)
+  }
+
+  applyResize()
+  const resizeObserver = new ResizeObserver(scheduleResize)
   resizeObserver.observe(container)
 
   const stats = createStatsSampler((next) => panel.updateStats(next))
@@ -222,11 +268,11 @@ async function runGtaoReferenceScene(
       return
     }
 
-    if (layoutMode === 'split') {
-      pipelines.renderSplit(viewMode, denoiseEnabled)
-      stats.sample(performance.now() - frameStart, 'split')
+    if (composeDebugEnabled) {
+      pipelines.renderComposeDebug(composeDebugModes, viewMode, denoiseEnabled, fullResolutionVbao)
+      stats.sample(performance.now() - frameStart, 'compose')
     } else {
-      pipelines.renderSingle(activeMode, viewMode, denoiseEnabled)
+      pipelines.renderSingle(activeMode, viewMode, denoiseEnabled, fullResolutionVbao)
       stats.sample(performance.now() - frameStart, activeMode)
     }
   }
@@ -234,6 +280,7 @@ async function runGtaoReferenceScene(
 
   signal.addEventListener('abort', () => {
     cancelAnimationFrame(rafId)
+    if (resizeRafId !== 0) cancelAnimationFrame(resizeRafId)
     resizeObserver.disconnect()
     controls.dispose()
     panel.remove()
@@ -244,7 +291,11 @@ async function runGtaoReferenceScene(
   })
 }
 
-function createReferencePipelines(renderer: WebGPURenderer, scene: Scene, camera: PerspectiveCamera) {
+function createReferencePipelines(
+  renderer: WebGPURenderer,
+  scene: Scene,
+  camera: PerspectiveCamera,
+) {
   const prePass = pass(scene, camera)
   prePass.transparent = false
   prePass.setMRT(
@@ -254,7 +305,9 @@ function createReferencePipelines(renderer: WebGPURenderer, scene: Scene, camera
     }),
   )
 
-  const prePassNormal = sample((sampleUv) => colorToDirection(prePass.getTextureNode().sample(sampleUv)))
+  const prePassNormal = sample((sampleUv) =>
+    colorToDirection(prePass.getTextureNode().sample(sampleUv)),
+  )
   const samplePrePassNormal = (sampleUv: ReturnType<typeof uv>) =>
     colorToDirection(prePass.getTextureNode().sample(sampleUv))
   const prePassDepth = prePass.getTextureNode('depth')
@@ -308,7 +361,9 @@ function createReferencePipelines(renderer: WebGPURenderer, scene: Scene, camera
       )
     })
 
-    return float(1).sub(occlusion.div(float(sampleCount)).mul(ssaoIntensity)).clamp(0, 1)
+    return float(1)
+      .sub(occlusion.div(float(sampleCount)).mul(ssaoIntensity))
+      .clamp(0, 1)
   })()
 
   const gtaoNode = gtao(prePassDepth, prePassNormal, camera)
@@ -361,7 +416,12 @@ function createReferencePipelines(renderer: WebGPURenderer, scene: Scene, camera
 
   const gtaoRaw = gtaoNode.getTextureNode()
   const vbaoRaw = vbaoNode.getTextureNode()
-  const ssaoDenoised = denoise(vec4(vec3(ssaoRawScalar), float(1)), prePassDepth, prePassNormal, camera)
+  const ssaoDenoised = denoise(
+    vec4(vec3(ssaoRawScalar), float(1)),
+    prePassDepth,
+    prePassNormal,
+    camera,
+  )
   const gtaoDenoised = denoise(vec4(vec3(gtaoRaw.r), float(1)), prePassDepth, prePassNormal, camera)
   const vbaoDenoised = denoise(vec4(vec3(vbaoRaw.r), float(1)), prePassDepth, prePassNormal, camera)
   ssaoDenoised.radius.value = 4
@@ -386,39 +446,12 @@ function createReferencePipelines(renderer: WebGPURenderer, scene: Scene, camera
     readonly a: TslScalar
   }
 
-  const createSplitOutput = (options: {
-    readonly ssao: TslScalar
-    readonly gtao: TslScalar
-    readonly vbao: TslScalar
-    readonly n8aoRgb: TslVec3
-    readonly viewMode: ViewMode
-  }) =>
-    Fn(() => {
-      const x = uv().x
-      const ssaoRgb =
-        options.viewMode === 'ao' ? vec3(options.ssao) : sceneColor.rgb.mul(options.ssao)
-      const gtaoRgb =
-        options.viewMode === 'ao' ? vec3(options.gtao) : sceneColor.rgb.mul(options.gtao)
-      const vbaoRgb =
-        options.viewMode === 'ao' ? vec3(options.vbao) : sceneColor.rgb.mul(options.vbao)
-      const n8aoRgb = options.n8aoRgb
-      const outputRgb = x.lessThan(0.25).select(
-        ssaoRgb,
-        x.lessThan(0.5).select(gtaoRgb, x.lessThan(0.75).select(vbaoRgb, n8aoRgb)),
-      )
-
-      return vec4(outputRgb, float(1))
-    })()
-
   const makeBeautyPipeline = (aoValue: TslScalar) =>
     new RenderPipeline(renderer, vec4(sceneColor.rgb.mul(aoValue), float(1)))
   const makeAoPipeline = (aoValue: TslScalar) =>
     new RenderPipeline(renderer, vec4(vec3(aoValue), float(1)))
   const offBeautyPipeline = new RenderPipeline(renderer, vec4(sceneColor.rgb, float(1)))
-  const offAoPipeline = new RenderPipeline(
-    renderer,
-    vec4(float(1), float(1), float(1), float(1)),
-  )
+  const offAoPipeline = new RenderPipeline(renderer, vec4(float(1), float(1), float(1), float(1)))
   const pipelines = {
     off: {
       beautyRaw: offBeautyPipeline,
@@ -452,44 +485,45 @@ function createReferencePipelines(renderer: WebGPURenderer, scene: Scene, camera
     },
   }
 
-  const splitOutput = {
-    beautyRaw: createSplitOutput({
-      ssao: ssaoRawScalar,
-      gtao: gtaoRawScalar,
-      vbao: vbaoRawScalar,
-      n8aoRgb: n8aoTex.rgb,
-      viewMode: 'beauty',
-    }),
-    beautyDenoised: createSplitOutput({
-      ssao: ssaoDenoisedScalar,
-      gtao: gtaoDenoisedScalar,
-      vbao: vbaoDenoisedScalar,
-      n8aoRgb: n8aoTex.rgb,
-      viewMode: 'beauty',
-    }),
-    aoRaw: createSplitOutput({
-      ssao: ssaoRawScalar,
-      gtao: gtaoRawScalar,
-      vbao: vbaoRawScalar,
-      n8aoRgb: n8aoTex.rgb,
-      viewMode: 'ao',
-    }),
-    aoDenoised: createSplitOutput({
-      ssao: ssaoDenoisedScalar,
-      gtao: gtaoDenoisedScalar,
-      vbao: vbaoDenoisedScalar,
-      n8aoRgb: n8aoTex.rgb,
-      viewMode: 'ao',
-    }),
+  const setVbaoEvidenceResolution = (enabled: boolean) => {
+    vbaoNode.resolutionScale = enabled ? 1.0 : 0.5
   }
-  const splitPipelines = {
-    beautyRaw: new RenderPipeline(renderer, splitOutput.beautyRaw),
-    beautyDenoised: new RenderPipeline(renderer, splitOutput.beautyDenoised),
-    aoRaw: new RenderPipeline(renderer, splitOutput.aoRaw),
-    aoDenoised: new RenderPipeline(renderer, splitOutput.aoDenoised),
+  const composeBufferSize = new Vector2()
+  let composeBufferWidth = 0
+  let composeBufferHeight = 0
+  let composeSegmentCount = 0
+  let composeSegments: { readonly x: number; readonly width: number }[] = []
+
+  const getComposeSegments = (segmentCount: number) => {
+    renderer.getDrawingBufferSize(composeBufferSize)
+    if (
+      composeBufferWidth === composeBufferSize.width &&
+      composeBufferHeight === composeBufferSize.height &&
+      composeSegmentCount === segmentCount
+    ) {
+      return composeSegments
+    }
+    composeBufferWidth = composeBufferSize.width
+    composeBufferHeight = composeBufferSize.height
+    composeSegmentCount = segmentCount
+    composeSegments = Array.from({ length: segmentCount }, (_, index) => {
+      const x = Math.floor((index * composeBufferWidth) / segmentCount)
+      const nextX =
+        index === segmentCount - 1
+          ? composeBufferWidth
+          : Math.floor(((index + 1) * composeBufferWidth) / segmentCount)
+      return { x, width: nextX - x }
+    })
+    return composeSegments
   }
 
-  const renderMode = (mode: CompareMode, viewMode: ViewMode, denoiseEnabled: boolean) => {
+  const renderMode = (
+    mode: CompareMode,
+    viewMode: ViewMode,
+    denoiseEnabled: boolean,
+    fullResolutionVbao: boolean,
+  ) => {
+    setVbaoEvidenceResolution(fullResolutionVbao)
     if (mode === 'n8ao') n8aoNode.setDisplayMode(viewMode === 'ao' ? 'AO' : 'Combined')
     const key =
       viewMode === 'ao'
@@ -504,9 +538,17 @@ function createReferencePipelines(renderer: WebGPURenderer, scene: Scene, camera
 
   return {
     renderSingle: renderMode,
-    renderSplit: (viewMode: ViewMode, denoiseEnabled: boolean) => {
-      if (viewMode === 'ao') n8aoNode.setDisplayMode('AO')
-      else n8aoNode.setDisplayMode('Combined')
+    renderComposeDebug: (
+      modes: readonly ComposeDebugMode[],
+      viewMode: ViewMode,
+      denoiseEnabled: boolean,
+      fullResolutionVbao: boolean,
+    ) => {
+      if (modes.length === 0) {
+        renderMode('off', viewMode, denoiseEnabled, fullResolutionVbao)
+        return
+      }
+      setVbaoEvidenceResolution(fullResolutionVbao)
       const key =
         viewMode === 'ao'
           ? denoiseEnabled
@@ -515,10 +557,19 @@ function createReferencePipelines(renderer: WebGPURenderer, scene: Scene, camera
           : denoiseEnabled
             ? 'beautyDenoised'
             : 'beautyRaw'
-      const size = renderer.getDrawingBufferSize(new Vector2())
+      const segments = getComposeSegments(modes.length)
+      renderer.setScissorTest(true)
+      modes.forEach((mode, index) => {
+        const segment = segments[index]
+        if (segment === undefined) return
+        renderer.setViewport(segment.x, 0, segment.width, composeBufferHeight)
+        renderer.setScissor(segment.x, 0, segment.width, composeBufferHeight)
+        if (mode === 'n8ao') n8aoNode.setDisplayMode(viewMode === 'ao' ? 'AO' : 'Combined')
+        pipelines[mode][key].render()
+      })
       renderer.setScissorTest(false)
-      renderer.setViewport(0, 0, size.width, size.height)
-      splitPipelines[key].render()
+      renderer.setViewport(0, 0, composeBufferWidth, composeBufferHeight)
+      renderer.setScissor(0, 0, composeBufferWidth, composeBufferHeight)
     },
     dispose: () => {
       const disposedPipelines = new Set<RenderPipeline>()
@@ -529,7 +580,6 @@ function createReferencePipelines(renderer: WebGPURenderer, scene: Scene, camera
           pipeline.dispose()
         })
       }
-      Object.values(splitPipelines).forEach((pipeline) => pipeline.dispose())
       gtaoNode.dispose()
       vbaoNode.dispose()
       n8aoNode.dispose()
@@ -543,8 +593,13 @@ interface SceneVariants {
   readonly cityMixer: AnimationMixer | null
 }
 
-async function addSceneVariants(scene: Scene): Promise<SceneVariants> {
-  const { root: cityRoot, mixer: cityMixer } = await createCitySceneRoot()
+async function addSceneVariants(
+  scene: Scene,
+  initialVariant: SceneVariant,
+): Promise<SceneVariants> {
+  const { root: cityRoot, mixer: cityMixer } =
+    initialVariant === 'city' ? await createCitySceneRoot() : { root: new Group(), mixer: null }
+  cityRoot.name = 'CityRoot'
   const museumRoot = createMuseumSceneRoot()
   scene.add(cityRoot, museumRoot)
   return { cityRoot, museumRoot, cityMixer }
@@ -631,11 +686,27 @@ function createMuseumSceneRoot() {
   fill.position.set(-5, 3, -4)
   root.add(fill)
 
-  const floorMaterial = new MeshStandardMaterial({ color: '#8f887d', roughness: 0.88, metalness: 0 })
+  const floorMaterial = new MeshStandardMaterial({
+    color: '#8f887d',
+    roughness: 0.88,
+    metalness: 0,
+  })
   const wallMaterial = new MeshStandardMaterial({ color: '#d8d0c4', roughness: 0.82, metalness: 0 })
-  const stoneMaterial = new MeshStandardMaterial({ color: '#ece7dd', roughness: 0.74, metalness: 0 })
-  const bronzeMaterial = new MeshStandardMaterial({ color: '#b78f4c', roughness: 0.42, metalness: 0.3 })
-  const blueMaterial = new MeshStandardMaterial({ color: '#4f95a7', roughness: 0.48, metalness: 0.05 })
+  const stoneMaterial = new MeshStandardMaterial({
+    color: '#ece7dd',
+    roughness: 0.74,
+    metalness: 0,
+  })
+  const bronzeMaterial = new MeshStandardMaterial({
+    color: '#b78f4c',
+    roughness: 0.42,
+    metalness: 0.3,
+  })
+  const blueMaterial = new MeshStandardMaterial({
+    color: '#4f95a7',
+    roughness: 0.48,
+    metalness: 0.05,
+  })
 
   const floor = new Mesh(new BoxGeometry(8.8, 0.08, 8.8), floorMaterial)
   floor.position.set(0, -0.04, 0)
@@ -681,7 +752,12 @@ function createMuseumSceneRoot() {
 
   const wallPanel = new Mesh(
     new BoxGeometry(1.7, 0.95, 0.08),
-    new MeshStandardMaterial({ color: '#2e3839', roughness: 0.72, metalness: 0.02, side: DoubleSide }),
+    new MeshStandardMaterial({
+      color: '#2e3839',
+      roughness: 0.72,
+      metalness: 0.02,
+      side: DoubleSide,
+    }),
   )
   wallPanel.position.set(-1.55, 1.55, -3.7)
   root.add(wallPanel)
@@ -695,14 +771,18 @@ function createReferencePanel(
     readonly title: string
     readonly mode: CompareMode
     readonly viewMode: ViewMode
-    readonly layoutMode: LayoutMode
+    readonly composeDebugEnabled: boolean
+    readonly composeDebugModes: readonly ComposeDebugMode[]
     readonly denoiseEnabled: boolean
+    readonly fullResolutionVbao: boolean
     readonly aoAvailable: boolean
     readonly onChange: (next: {
       readonly mode?: CompareMode
       readonly viewMode?: ViewMode
-      readonly layoutMode?: LayoutMode
+      readonly composeDebugEnabled?: boolean
+      readonly composeDebugModes?: readonly ComposeDebugMode[]
       readonly denoiseEnabled?: boolean
+      readonly fullResolutionVbao?: boolean
     }) => void
   },
 ) {
@@ -720,9 +800,15 @@ function createReferencePanel(
       <button type="button" data-mode="vbao">VBAO</button>
       <button type="button" data-mode="n8ao">N8AO</button>
     </div>
-    <div class="compare-options compare-options-secondary" role="group" aria-label="Debug layout">
-      <button type="button" data-layout="single">Single</button>
-      <button type="button" data-layout="split">4 split</button>
+    <label class="benchmark-toggle">
+      <input type="checkbox" data-compose-debug />
+      <span>Compose debug</span>
+    </label>
+    <div class="compose-debug-options" role="group" aria-label="Compose debug choices">
+      <label><input type="checkbox" data-compose-mode="ssao" /><span>SSAO</span></label>
+      <label><input type="checkbox" data-compose-mode="gtao" /><span>GTAO</span></label>
+      <label><input type="checkbox" data-compose-mode="vbao" /><span>VBAO</span></label>
+      <label><input type="checkbox" data-compose-mode="n8ao" /><span>N8AO</span></label>
     </div>
     <div class="compare-options compare-options-secondary" role="group" aria-label="Output view">
       <button type="button" data-view="beauty">Beauty</button>
@@ -732,6 +818,10 @@ function createReferencePanel(
       <input type="checkbox" data-denoise />
       <span>Denoise</span>
     </label>
+    <label class="benchmark-toggle">
+      <input type="checkbox" data-full-resolution />
+      <span>Full-res VBAO</span>
+    </label>
   `
   container.appendChild(panel)
 
@@ -740,13 +830,19 @@ function createReferencePanel(
       button.disabled = true
       button.title = 'AO comparison requires the Three.js WebGPU backend.'
     })
+    panel.querySelectorAll<HTMLInputElement>('input').forEach((input) => {
+      input.disabled = true
+      input.title = 'AO comparison requires the Three.js WebGPU backend.'
+    })
   }
 
   const sync = (state: {
     readonly mode: CompareMode
     readonly viewMode: ViewMode
-    readonly layoutMode: LayoutMode
+    readonly composeDebugEnabled: boolean
+    readonly composeDebugModes: readonly ComposeDebugMode[]
     readonly denoiseEnabled: boolean
+    readonly fullResolutionVbao: boolean
   }) => {
     panel.querySelectorAll<HTMLButtonElement>('[data-mode]').forEach((button) => {
       const selected = button.dataset.mode === state.mode
@@ -758,13 +854,20 @@ function createReferencePanel(
       button.classList.toggle('active', selected)
       button.setAttribute('aria-pressed', String(selected))
     })
-    panel.querySelectorAll<HTMLButtonElement>('[data-layout]').forEach((button) => {
-      const selected = button.dataset.layout === state.layoutMode
-      button.classList.toggle('active', selected)
-      button.setAttribute('aria-pressed', String(selected))
+    const composeDebugInput = panel.querySelector<HTMLInputElement>('[data-compose-debug]')
+    if (composeDebugInput !== null) composeDebugInput.checked = state.composeDebugEnabled
+    panel.querySelectorAll<HTMLInputElement>('[data-compose-mode]').forEach((input) => {
+      const mode = input.dataset.composeMode
+      input.checked = isComposeDebugMode(mode) && state.composeDebugModes.includes(mode)
+      input.disabled =
+        !state.composeDebugEnabled ||
+        (state.composeDebugModes.length === 1 && input.checked) ||
+        !options.aoAvailable
     })
     const denoiseInput = panel.querySelector<HTMLInputElement>('[data-denoise]')
     if (denoiseInput !== null) denoiseInput.checked = state.denoiseEnabled
+    const fullResolutionInput = panel.querySelector<HTMLInputElement>('[data-full-resolution]')
+    if (fullResolutionInput !== null) fullResolutionInput.checked = state.fullResolutionVbao
   }
 
   const onClick = (event: MouseEvent) => {
@@ -782,15 +885,26 @@ function createReferencePanel(
     if (target.dataset.view === 'beauty' || target.dataset.view === 'ao') {
       options.onChange({ viewMode: target.dataset.view })
     }
-    if (target.dataset.layout === 'single' || target.dataset.layout === 'split') {
-      options.onChange({ layoutMode: target.dataset.layout })
-    }
   }
 
   const onInput = (event: Event) => {
     const target = event.target
+    if (target instanceof HTMLInputElement && target.dataset.composeDebug !== undefined) {
+      options.onChange({ composeDebugEnabled: target.checked })
+    }
+    if (target instanceof HTMLInputElement && target.dataset.composeMode !== undefined) {
+      const mode = target.dataset.composeMode
+      if (!isComposeDebugMode(mode)) return
+      const next = Array.from(panel.querySelectorAll<HTMLInputElement>('[data-compose-mode]'))
+        .filter((input) => input.checked && isComposeDebugMode(input.dataset.composeMode))
+        .map((input) => input.dataset.composeMode as ComposeDebugMode)
+      if (next.length > 0) options.onChange({ composeDebugModes: sortComposeDebugModes(next) })
+    }
     if (target instanceof HTMLInputElement && target.dataset.denoise !== undefined) {
       options.onChange({ denoiseEnabled: target.checked })
+    }
+    if (target instanceof HTMLInputElement && target.dataset.fullResolution !== undefined) {
+      options.onChange({ fullResolutionVbao: target.checked })
     }
   }
 
@@ -817,10 +931,19 @@ function createReferencePanel(
 function createSplitLabels(container: HTMLElement) {
   const labels = document.createElement('div')
   labels.className = 'split-labels'
-  labels.innerHTML = '<span>SSAO</span><span>GTAO</span><span>VBAO</span><span>N8AO</span>'
   container.appendChild(labels)
   return {
-    sync: (mode: LayoutMode) => labels.classList.toggle('hidden', mode !== 'split'),
+    sync: (composeDebugEnabled: boolean, modes: readonly ComposeDebugMode[]) => {
+      labels.classList.toggle('hidden', !composeDebugEnabled)
+      labels.style.gridTemplateColumns = `repeat(${modes.length}, minmax(0, 1fr))`
+      labels.replaceChildren(
+        ...modes.map((mode) => {
+          const label = document.createElement('span')
+          label.textContent = getComposeDebugLabel(mode)
+          return label
+        }),
+      )
+    },
     remove: () => labels.remove(),
   }
 }
