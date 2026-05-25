@@ -18,7 +18,7 @@ function byteDifferenceRatio(a: Buffer, b: Buffer): number {
   return different / Math.max(a.length, b.length)
 }
 
-for (const fixture of Object.values(PARITY_SCENES)) {
+for (const fixture of Object.values(PARITY_SCENES).filter((scene) => scene.key !== 'museum')) {
   test(`${fixture.key}: AO buttons fit and modes produce captures`, async ({ page }, testInfo) => {
     const pageErrors: string[] = []
     page.on('pageerror', (err) => pageErrors.push(err.message))

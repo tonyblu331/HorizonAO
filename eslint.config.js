@@ -11,6 +11,9 @@ export default tseslint.config(
       '**/coverage/**',
       '**/test-results/**',
       '**/playwright-report/**',
+      '**/archive/**',
+      'artifacts/**',
+      'output/**',
       'apps/demo/src/routeTree.gen.ts',
     ],
   },
@@ -19,7 +22,7 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['*.config.ts', 'packages/*/*.config.ts'],
+          allowDefaultProject: ['*.config.ts', 'apps/demo/vitest.config.ts', 'packages/*/*.config.ts'],
         },
         tsconfigRootDir: import.meta.dirname,
       },

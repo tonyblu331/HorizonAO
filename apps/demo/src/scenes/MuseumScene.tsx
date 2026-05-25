@@ -57,6 +57,12 @@ type CompareMode = 'off' | 'gtao' | 'ssao' | 'vbao' | 'n8ao'
 type ComposeDebugMode = Exclude<CompareMode, 'off'>
 type ViewMode = 'beauty' | 'ao'
 type SceneVariant = 'city' | 'museum'
+type TslIntLoop = (
+  params: { readonly start: unknown; readonly end: unknown; readonly type: 'int'; readonly condition: '<' },
+  body: (vars: { readonly i: never }) => void,
+) => void
+
+const loopInt = Loop as unknown as TslIntLoop
 
 interface Stats {
   readonly fps: number
@@ -332,7 +338,7 @@ function createReferencePipelines(
     const occlusion = float(0).toVar()
     const sampleCount = int(12)
 
-    Loop({ start: int(0), end: sampleCount, type: 'int', condition: '<' }, ({ i }) => {
+    loopInt({ start: int(0), end: sampleCount, type: 'int', condition: '<' }, ({ i }) => {
       const sampleIndex = float(i).add(0.5)
       const angle = sampleIndex.div(float(sampleCount)).mul(PI.mul(2))
       const sampleRadius = ssaoRadius

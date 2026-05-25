@@ -135,6 +135,10 @@ async function runParityCapture(canvas: HTMLCanvasElement): Promise<void> {
     powerPreference: 'high-performance',
   })
   await renderer.init()
+  const backend = (renderer as unknown as { readonly backend?: { readonly isWebGLBackend?: boolean } }).backend
+  if (backend?.isWebGLBackend === true) {
+    throw new Error('WebGPU unavailable: renderer fell back to WebGL2')
+  }
   renderer.setSize(PARITY_SIZE, PARITY_SIZE)
 
   try {

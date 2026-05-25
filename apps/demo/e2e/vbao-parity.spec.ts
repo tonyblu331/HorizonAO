@@ -26,7 +26,24 @@ import type { VbaoParityResult } from '../src/scenes/VbaoParityPage'
  * Browser requirement: Chromium with WebGPU enabled (default in Playwright ≥ 1.40).
  */
 
+const webGpuParityEnabled = process.env.E2E_WEBGPU_PARITY === '1'
+
+async function waitForParityReady(page: import('@playwright/test').Page): Promise<void> {
+  const status = page.getByTestId('parity-status')
+  await expect(status).toHaveAttribute('data-state', /^(ready|error)$/, { timeout: 15_000 })
+
+  const state = await status.getAttribute('data-state')
+  if (state === 'ready') {
+    return
+  }
+
+  const errMsg = await page.evaluate(() => window.__vbaoParityError ?? 'unknown error')
+  throw new Error(`VbaoParityPage reported error: ${errMsg}`)
+}
+
 test.describe('VBAONode parity', () => {
+  test.skip(!webGpuParityEnabled, 'Set E2E_WEBGPU_PARITY=1 to run WebGPU readback parity tests')
+
   test('parity page loads and sets window.__vbaoParity', async ({ page }) => {
     const pageErrors: string[] = []
     page.on('pageerror', (err) => pageErrors.push(err.message))
@@ -36,25 +53,14 @@ test.describe('VBAONode parity', () => {
 
     await page.goto('/vbao-parity')
 
-    // Wait for the kernel to finish (up to 15 s — first compile may be slow).
-    const status = page.getByTestId('parity-status')
-    await expect(status).toHaveAttribute('data-state', /^(ready|error)$/, { timeout: 15_000 })
-
-    // Fail early with a meaningful message if the page errored.
-    const state = await status.getAttribute('data-state')
-    if (state === 'error') {
-      const errMsg = await page.evaluate(() => window.__vbaoParityError ?? 'unknown error')
-      throw new Error(`VbaoParityPage reported error: ${errMsg}`)
-    }
+    await waitForParityReady(page)
 
     expect(pageErrors, 'No uncaught errors during parity render').toEqual([])
   })
 
   test('all AO pixels are in [0, 1] with no NaN', async ({ page }) => {
     await page.goto('/vbao-parity')
-    await expect(page.getByTestId('parity-status')).toHaveAttribute('data-state', 'ready', {
-      timeout: 15_000,
-    })
+    await waitForParityReady(page)
 
     const result = await page.evaluate((): VbaoParityResult | undefined => window.__vbaoParity)
     expect(result, '__vbaoParity should be set on window').toBeDefined()
@@ -73,9 +79,7 @@ test.describe('VBAONode parity', () => {
 
   test('flat-plane scene produces non-trivial, spatially varying AO', async ({ page }) => {
     await page.goto('/vbao-parity')
-    await expect(page.getByTestId('parity-status')).toHaveAttribute('data-state', 'ready', {
-      timeout: 15_000,
-    })
+    await waitForParityReady(page)
 
     const result = await page.evaluate((): VbaoParityResult | undefined => window.__vbaoParity)
     expect(result).toBeDefined()
@@ -110,9 +114,7 @@ test.describe('VBAONode parity', () => {
     page,
   }) => {
     await page.goto('/vbao-parity')
-    await expect(page.getByTestId('parity-status')).toHaveAttribute('data-state', 'ready', {
-      timeout: 15_000,
-    })
+    await waitForParityReady(page)
 
     const result = await page.evaluate((): VbaoParityResult | undefined => window.__vbaoParity)
     expect(result).toBeDefined()

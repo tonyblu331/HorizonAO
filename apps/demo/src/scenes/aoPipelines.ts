@@ -21,6 +21,12 @@ import type { AoMode, AoViewMode } from './aoComparePanel'
 
 type TslScalar = ReturnType<typeof float>
 type TslVec3 = ReturnType<typeof vec3>
+type TslIntLoop = (
+  params: { readonly start: unknown; readonly end: unknown; readonly type: 'int'; readonly condition: '<' },
+  body: (vars: { readonly i: never }) => void,
+) => void
+
+const loopInt = Loop as unknown as TslIntLoop
 
 interface N8AOTextureNode {
   readonly a: TslScalar
@@ -213,7 +219,7 @@ function createSsaoScalar(options: {
     const centerNormal = options.normalNode.sample(centerUv).rgb.normalize().toVar()
     const occlusion = float(0).toVar()
 
-    Loop({ start: int(0), end: ssaoSampleCount, type: 'int', condition: '<' }, ({ i }) => {
+    loopInt({ start: int(0), end: ssaoSampleCount, type: 'int', condition: '<' }, ({ i }) => {
       const sampleIndex = float(i).add(0.5)
       const angle = sampleIndex.div(float(ssaoSampleCount)).mul(PI.mul(2))
       const sampleRadius = ssaoRadius

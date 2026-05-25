@@ -5,6 +5,7 @@ const testPort = 41737
 const baseURL = `http://127.0.0.1:${testPort}`
 const nodeBin = JSON.stringify(process.execPath)
 const viteBin = JSON.stringify(fileURLToPath(new URL('./node_modules/vite/bin/vite.js', import.meta.url)))
+const useExternalServer = process.env.PLAYWRIGHT_EXTERNAL_SERVER === '1'
 
 export default defineConfig({
   testDir: './e2e',
@@ -18,13 +19,17 @@ export default defineConfig({
     baseURL,
     trace: 'retain-on-failure',
   },
-  webServer: {
-    command: `${nodeBin} ${viteBin} --host 127.0.0.1 --port ${testPort} --strictPort`,
-    url: baseURL,
-    reuseExistingServer: false,
-    gracefulShutdown: { signal: 'SIGINT', timeout: 500 },
-    timeout: 120_000,
-  },
+  ...(useExternalServer
+    ? {}
+    : {
+      webServer: {
+        command: `${nodeBin} ${viteBin} --host 127.0.0.1 --port ${testPort} --strictPort`,
+        url: baseURL,
+        reuseExistingServer: false,
+        gracefulShutdown: { signal: 'SIGTERM', timeout: 10_000 },
+        timeout: 120_000,
+      },
+    }),
   projects: [
     {
       name: 'chromium',
