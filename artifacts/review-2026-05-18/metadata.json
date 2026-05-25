@@ -1,0 +1,62 @@
+[
+  {
+    "file": "grid_scene_only.png",
+    "scene": "grid",
+    "baseline": "scene-only",
+    "baselineStatus": "available",
+    "debugView": "none",
+    "debugViewStatus": "rendered",
+    "renderBackend": "webgl-fallback",
+    "resolution": "1280x720",
+    "dpr": "1.00",
+    "artifact": "grid__scene-only__none__1280x720__dpr1.00.png",
+    "gpuTiming": "unavailable",
+    "gpuTimingSource": "not-measured",
+    "gpuTimingMs": ""
+  },
+  {
+    "file": "grid_three_gtao_raw.png",
+    "scene": "grid",
+    "baseline": "three-gtao-node",
+    "baselineStatus": "available",
+    "debugView": "raw-ao",
+    "debugViewStatus": "rendered",
+    "renderBackend": "webgl-fallback",
+    "resolution": "1280x720",
+    "dpr": "1.00",
+    "artifact": "grid__three-gtao-node__raw-ao__1280x720__dpr1.00.png",
+    "gpuTiming": "unsupported",
+    "gpuTimingSource": "not-measured",
+    "gpuTimingMs": ""
+  },
+  {
+    "file": "grid_horizonao_raw.png",
+    "scene": "grid",
+    "baseline": "horizonao-raw",
+    "baselineStatus": "available",
+    "debugView": "raw-ao",
+    "debugViewStatus": "rendered",
+    "renderBackend": "webgl-fallback",
+    "resolution": "1280x720",
+    "dpr": "1.00",
+    "artifact": "grid__horizonao-raw__raw-ao__1280x720__dpr1.00.png",
+    "gpuTiming": "unsupported",
+    "gpuTimingSource": "not-measured",
+    "gpuTimingMs": ""
+  },
+  {
+    "file": "grid_horizonao_denoised.png",
+    "scene": "grid",
+    "baseline": "horizonao-raw",
+    "baselineStatus": "available",
+    "debugView": "denoised-ao",
+    "debugViewStatus": "rendered",
+    "renderBackend": "webgl-fallback",
+    "resolution": "1280x720",
+    "dpr": "1.00",
+    "artifact": "grid__horizonao-raw__denoised-ao__1280x720__dpr1.00.png",
+    "gpuTiming": "unsupported",
+    "gpuTimingSource": "not-measured",
+    "gpuTimingMs": ""
+  }
+]

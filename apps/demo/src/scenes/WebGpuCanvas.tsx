@@ -17,7 +17,7 @@ export function WebGpuCanvas(props: WebGpuCanvasProps) {
           antialias: true,
           forceWebGL: false,
           powerPreference: 'high-performance',
-          trackTimestamp: true,
+          trackTimestamp: false,
         })
 
         renderer.outputColorSpace = THREE.SRGBColorSpace

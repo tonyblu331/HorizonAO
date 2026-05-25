@@ -2,7 +2,7 @@
 
 This document fully specifies the math and the public shape of `VBAONode` so that the scalar reference (`vbaoReference.ts`) and the TSL kernel (`VBAONode.ts`) are guaranteed to agree on every intermediate value. Disagreement on any constant below will manifest as silent parity-test failure later.
 
-Citation: Therrien, O., Levesque, Y., Gilet, G. *Screen Space Indirect Lighting with Visibility Bitmask*. arXiv:2301.11376, 2023.
+Citation: Therrien, O., Levesque, Y., Gilet, G. _Screen Space Indirect Lighting with Visibility Bitmask_. arXiv:2301.11376, 2023.
 
 ---
 
@@ -103,7 +103,24 @@ Sector centres (used by the cosine-weighted reduction):
                                             // for k ∈ [0, 32)
 ```
 
-The 32 `cos(θ_k)` values are NOT precomputed as a constant table, because `γ_i_norm` enters the weight: `w_k = max(0, cos(θ_k − γ_i_norm))`. We instead precompute the 32 `θ_k` values as a compile-time constant in `vbaoConstants.ts` and evaluate `cos(θ_k − γ)` per pixel. Cost: 32 cos + 32 max per slice — trivial vs. the depth taps.
+The 32 sector centres, sines, and cosines are precomputed as compile-time
+tables in `vbaoConstants.ts`. The production weight is still:
+
+```txt
+w_k = max(0, cos(θ_k − γ_i_norm))
+```
+
+The implementation evaluates it with the angle-difference identity:
+
+```txt
+cos(θ_k − γ_i_norm) = cos(θ_k) · cos(γ_i_norm) + sin(θ_k) · sin(γ_i_norm)
+```
+
+This keeps the exact cosine-weighted reduction while replacing 32 per-sector
+cosine calls with two trigonometric calls per slice plus fused multiply-add
+style arithmetic. That follows the usual real-time rendering rule: keep the
+algorithmic contract fixed, but move invariant work out of the per-pixel hot
+loop whenever the math allows it.
 
 ---
 
@@ -119,8 +136,12 @@ for side in [-1, +1]:
     // sample march outward in screen-space along projection of S_side
     samplePosition_j = reconstructed view-space position from sampled depth
 
+    if sampled depth >= 1:
+      continue
+
+    V_j     = normalize(-samplePosition_j)
     D_front = normalize(samplePosition_j - P)
-    D_back  = normalize((samplePosition_j - thickness · V) - P)
+    D_back  = normalize((samplePosition_j - thickness · V_j) - P)
 
     θ_front = atan2(dot(D_front, V), dot(D_front, S_side))
     θ_back  = atan2(dot(D_back , V), dot(D_back , S_side))
@@ -134,7 +155,7 @@ for side in [-1, +1]:
     M_i = M_i | maskRange(k0, k1)
 ```
 
-`thickness` is the user uniform; it is a real model parameter, not the GTAO falloff heuristic. `thickness ∈ [0, ∞)`, default `0.25` view-space units.
+`thickness` is the user uniform; it is a real model parameter, not the GTAO falloff heuristic. `thickness ∈ [0, ∞)`, default `0.25` view-space units. Sampled depth values at the far plane/background are empty space and MUST NOT contribute to the mask. Under perspective, the back-face offset MUST use the sampled point's own view vector `V_j`, not the shaded pixel's `V`; otherwise thin blockers bend incorrectly away from the camera ray that produced the depth sample.
 
 ---
 
@@ -200,15 +221,20 @@ finalColor = sceneColor * A_out
 
 ## 8. Public uniforms
 
-| Uniform | Type | Default | Range | Notes |
-|---|---|---|---|---|
-| `radius` | `float` | `1.25` | `[0.05, 8]` | View-space units. |
-| `thickness` | `float` | `0.25` | `[0, 2]` | Bitmask interval thickness — real model parameter. |
-| `scale` | `float` | `1.0` | `[0, 4]` | `pow(A, scale)`. Matches `GTAONode.scale`. |
-| `slices` | `int` | `3` | `[1, 8]` | Slice directions per pixel. Quality tier overrides. |
-| `samples` | `int` | `8` | `[2, 32]` | March samples per side per slice. Quality tier overrides. |
-| `resolution` | `vec2` | `Vector2()` | runtime | Effect resolution. |
-| `resolutionScale` | `number` (JS field) | `0.5` | `(0, 1]` | Render target size multiplier. Quality tier overrides. |
+| Uniform           | Type                | Default     | Range       | Notes                                                     |
+| ----------------- | ------------------- | ----------- | ----------- | --------------------------------------------------------- |
+| `radius`          | `float`             | `1.25`      | `[0.05, 8]` | View-space units.                                         |
+| `thickness`       | `float`             | `0.25`      | `[0, 2]`    | Bitmask interval thickness — real model parameter.        |
+| `scale`           | `float`             | `1.0`       | `[0, 4]`    | `pow(A, scale)`. Matches `GTAONode.scale`.                |
+| `slices`          | `int`               | `3`         | `[1, 8]`    | Slice directions per pixel. Quality tier overrides.       |
+| `samples`         | `int`               | `8`         | `[2, 32]`   | March samples per side per slice. Quality tier overrides. |
+| `resolution`      | `vec2`              | `Vector2()` | runtime     | Effect resolution.                                        |
+| `resolutionScale` | `number` (JS field) | `0.5`       | `(0, 1]`    | Render target size multiplier. Quality tier overrides.    |
+
+Constructor/config option only: `preset?: "fast" | "balanced" | "quality"`.
+The preset applies the locked tier values below first; explicit numeric options
+then override those values. `sectors`, denoise mode, debug mode, and temporal
+mode remain outside the v1 public options surface.
 
 Compile-time constant: `SECTOR_COUNT = 32`. Documentary: `readonly sectors = 32 as const`.
 
@@ -218,19 +244,19 @@ Compile-time constant: `SECTOR_COUNT = 32`. Documentary: `readonly sectors = 32 
 
 One sector count across all tiers to ship a single shader variant:
 
-| Tier | `resolutionScale` | `slices` | `samples` | `sectors` |
-|---|---:|---:|---:|---:|
-| `fast` | `0.5` | `2` | `6` | `32` |
-| `balanced` | `0.5` | `3` | `8` | `32` |
-| `quality` | `1.0` | `4` | `10` | `32` |
+| Tier       | `resolutionScale` | `slices` | `samples` | `sectors` |
+| ---------- | ----------------: | -------: | --------: | --------: |
+| `fast`     |             `0.5` |      `2` |       `6` |      `32` |
+| `balanced` |             `0.5` |      `3` |       `8` |      `32` |
+| `quality`  |             `1.0` |      `4` |      `10` |      `32` |
 
 Exposed via `vbaoConstants.ts` as a record:
 
 ```ts
 export const VBAO_QUALITY_TIERS = {
-  fast:     { resolutionScale: 0.5, slices: 2, samples: 6,  sectors: 32 },
-  balanced: { resolutionScale: 0.5, slices: 3, samples: 8,  sectors: 32 },
-  quality:  { resolutionScale: 1.0, slices: 4, samples: 10, sectors: 32 },
+  fast: { resolutionScale: 0.5, slices: 2, samples: 6, sectors: 32 },
+  balanced: { resolutionScale: 0.5, slices: 3, samples: 8, sectors: 32 },
+  quality: { resolutionScale: 1.0, slices: 4, samples: 10, sectors: 32 },
 } as const
 ```
 

@@ -92,3 +92,34 @@ for (const fixture of Object.values(PARITY_SCENES)) {
     expect(pageErrors, `${fixture.key}: no console/page errors`).toEqual([])
   })
 }
+
+test('museum exposes evidence controls for raw, denoised, and full-resolution VBAO', async ({
+  page,
+}) => {
+  await page.goto('/museum')
+
+  const panel = page.locator('.benchmark-panel')
+  await expect(panel).toBeVisible({ timeout: 30_000 })
+
+  await expect(page.locator('[data-mode="vbao"]')).toBeVisible()
+  await expect(page.locator('[data-view="beauty"]')).toBeVisible()
+  await expect(page.locator('[data-view="ao"]')).toBeVisible()
+
+  const denoise = page.locator('[data-denoise]')
+  await expect(denoise).toBeVisible()
+
+  const fullResolution = page.locator('[data-full-resolution]')
+  await expect(fullResolution).toBeVisible()
+  await expect(fullResolution).not.toBeChecked()
+
+  const backend = await page.locator('[data-renderer-backend]').first().getAttribute('data-renderer-backend')
+  if (backend !== 'webgpu') {
+    await expect(denoise).toBeDisabled()
+    await expect(fullResolution).toBeDisabled()
+    return
+  }
+
+  await expect(denoise).toBeChecked()
+  await fullResolution.check()
+  await expect(fullResolution).toBeChecked()
+})

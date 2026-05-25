@@ -8,7 +8,7 @@
  *   - cosine-weighted reduction (production) and popcount (reference ablation).
  *
  * This module has zero external runtime deps. It uses only the Math built-in
- * and the two constants from vbaoConstants (SECTOR_COUNT, VBAO_SECTOR_ANGLES).
+ * and constants from vbaoConstants.
  *
  * Role: parity oracle. Tests assert that the TSL kernel's rendered output
  * matches these functions on a set of fixed depth/normal configurations.
@@ -22,12 +22,19 @@
  * with Visibility Bitmask*. arXiv:2301.11376, 2023.
  */
 
-import { SECTOR_COUNT, VBAO_SECTOR_ANGLES } from './vbaoConstants'
+import {
+  SECTOR_COUNT,
+  VBAO_SECTOR_ANGLES,
+  VBAO_SECTOR_COSINES,
+  VBAO_SECTOR_SINES,
+  VBAO_THETA_MIN,
+  VBAO_THETA_STEP,
+} from './vbaoConstants'
 
 // ─── internal 3-D vector helpers ─────────────────────────────────────────────
 // No external deps in the reference module — these are the only three needed.
 
-type Vec3 = readonly [number, number, number]
+export type Vec3 = readonly [number, number, number]
 
 function dot3(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
@@ -41,20 +48,67 @@ function scale3(v: Vec3, s: number): Vec3 {
   return [v[0] * s, v[1] * s, v[2] * s]
 }
 
+function add3(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+function cross3(a: Vec3, b: Vec3): Vec3 {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+
 function normalize3(v: Vec3): Vec3 {
   const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
   return len < 1e-10 ? [0, 0, 0] : [v[0] / len, v[1] / len, v[2] / len]
 }
 
-// ─── private constants (design.md §3) ────────────────────────────────────────
-
-/** Lower bound of the sector angular range in radians. */
-const THETA_MIN = -Math.PI / 2
-
-/** Angular width of one sector: π / SECTOR_COUNT. */
-const DELTA_THETA = Math.PI / SECTOR_COUNT
+const TAU = Math.PI * 2
 
 // ─── public functions ─────────────────────────────────────────────────────────
+
+export function anyPerpendicular(v: Vec3): Vec3 {
+  const axis: Vec3 = Math.abs(v[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]
+  return normalize3(cross3(v, axis))
+}
+
+export function buildViewLocalFrame(pixelPosition: Vec3): {
+  readonly V: Vec3
+  readonly T0: Vec3
+  readonly T1: Vec3
+} {
+  const V = normalize3(scale3(pixelPosition, -1))
+  const T0 = anyPerpendicular(V)
+  const T1 = normalize3(cross3(V, T0))
+
+  return { V, T0, T1 }
+}
+
+export function sampleUniformSliceDirection(
+  sliceIndex: number,
+  sliceCount: number,
+  rotation: number,
+  T0: Vec3,
+  T1: Vec3,
+): Vec3 {
+  const phi = (TAU * (sliceIndex + rotation)) / sliceCount
+  return normalize3(add3(scale3(T0, Math.cos(phi)), scale3(T1, Math.sin(phi))))
+}
+
+export type Vec2 = readonly [number, number]
+
+/**
+ * Step along a slice direction after it has been projected to screen space.
+ *
+ * GT-VBAO's perspective correction samples along the image-plane projection of
+ * the slice, then reconstructs each sampled depth. Reprojecting a fresh
+ * `P + S * radius * t` point per step bends the path for off-axis pixels.
+ */
+export function stepAlongProjectedSlice(uv: Vec2, projectedEndpoint: Vec2, t: number): Vec2 {
+  const u = Math.max(0, Math.min(1, t))
+  return [
+    uv[0] + (projectedEndpoint[0] - uv[0]) * u,
+    uv[1] + (projectedEndpoint[1] - uv[1]) * u,
+  ]
+}
 
 /**
  * Map a horizon angle θ ∈ [-π/2, π/2] to a sector index in [0, SECTOR_COUNT).
@@ -67,7 +121,7 @@ const DELTA_THETA = Math.PI / SECTOR_COUNT
 export function sectorIndex(theta: number): number {
   return Math.max(
     0,
-    Math.min(SECTOR_COUNT - 1, Math.floor((theta - THETA_MIN) / DELTA_THETA)),
+    Math.min(SECTOR_COUNT - 1, Math.floor((theta - VBAO_THETA_MIN) / VBAO_THETA_STEP)),
   )
 }
 
@@ -119,6 +173,36 @@ export interface SampleMaskContribution {
   readonly thickness: number
 }
 
+export function sampleBlockerInterval(c: SampleMaskContribution): {
+  readonly theta0: number
+  readonly theta1: number
+} {
+  const { samplePosition: S, pixelPosition: P, viewDir: V, sliceDir, thickness } = c
+
+  // Perspective-correct GT-VBAO thickness: the back face recedes along the
+  // sampled point's own view vector, not the shaded pixel's view vector.
+  const sampleViewDir = normalize3(scale3(S, -1))
+  const backPos = sub3(S, scale3(sampleViewDir, thickness))
+
+  const D_front = normalize3(sub3(S, P))
+  const D_back = normalize3(sub3(backPos, P))
+
+  const thetaFront = Math.atan2(dot3(D_front, V), dot3(D_front, sliceDir))
+  const thetaBack = Math.atan2(dot3(D_back, V), dot3(D_back, sliceDir))
+
+  return {
+    theta0: Math.min(thetaFront, thetaBack),
+    theta1: Math.max(thetaFront, thetaBack),
+  }
+}
+
+export function accumulateSampleMask(mask: number, theta0: number, theta1: number): number {
+  const k0 = Math.floor((theta0 - VBAO_THETA_MIN) / VBAO_THETA_STEP)
+  const k1 = Math.ceil((theta1 - VBAO_THETA_MIN) / VBAO_THETA_STEP)
+
+  return (mask | maskRange(k0, k1)) >>> 0
+}
+
 /**
  * Compute the sector mask contribution from one depth sample.
  *
@@ -134,37 +218,15 @@ export interface SampleMaskContribution {
  * @returns  u32-range number — the OR of both-side contributions.
  */
 export function buildSampleMask(c: SampleMaskContribution): number {
-  const { samplePosition: S, pixelPosition: P, viewDir: V, sliceDir, thickness } = c
-
-  // Back-face position: recede the sample by `thickness` along the view direction.
-  const backPos = sub3(S, scale3(V, thickness))
+  const { sliceDir } = c
 
   let mask = 0
 
   for (let sideIdx = 0; sideIdx < 2; sideIdx++) {
     const side = sideIdx === 0 ? 1 : -1
     const S_side = scale3(sliceDir, side)
-
-    // Delta vectors from pixel to front/back of occluder.
-    const D_front = normalize3(sub3(S, P))
-    const D_back = normalize3(sub3(backPos, P))
-
-    // Horizon angles relative to S_side within the slice plane (design.md §4).
-    // atan2(dot·V, dot·S_side): angle from S_side axis toward V (camera).
-    const thetaFront = Math.atan2(dot3(D_front, V), dot3(D_front, S_side))
-    const thetaBack = Math.atan2(dot3(D_back, V), dot3(D_back, S_side))
-
-    // The sector range for this contribution.
-    const t0 = Math.min(thetaFront, thetaBack)
-    const t1 = Math.max(thetaFront, thetaBack)
-
-    // floor/ceil for inclusive-start / exclusive-end discrete indexing.
-    const k0 = Math.floor((t0 - THETA_MIN) / DELTA_THETA)
-    const k1 = Math.ceil((t1 - THETA_MIN) / DELTA_THETA)
-
-    // maskRange clamps k0/k1 to [0, SECTOR_COUNT], so angles outside
-    // [-π/2, π/2] (wrong side of slice axis) contribute nothing.
-    mask = (mask | maskRange(k0, k1)) >>> 0
+    const { theta0, theta1 } = sampleBlockerInterval({ ...c, sliceDir: S_side })
+    mask = accumulateSampleMask(mask, theta0, theta1)
   }
 
   return mask
@@ -180,15 +242,30 @@ export function buildSampleMask(c: SampleMaskContribution): number {
  * the cosine-weighted reduction exclusively.
  */
 export function popcountReduction(mask: number): number {
-  // Brian Kernighan's algorithm: repeatedly clear the lowest set bit.
-  // O(set bits) — adequate for a reference with SECTOR_COUNT = 32.
+  return 1 - popcount32(mask) / SECTOR_COUNT
+}
+
+export function popcount32(mask: number): number {
   let m = mask >>> 0
   let bits = 0
   while (m !== 0) {
     m = (m & (m - 1)) >>> 0
     bits++
   }
-  return 1 - bits / SECTOR_COUNT
+  return bits
+}
+
+export function rotateLeft32(x: number, bits: number): number {
+  const b = bits & 31
+  return ((x << b) | (x >>> ((32 - b) & 31))) >>> 0
+}
+
+export function maskCoverage(mask: number): number {
+  return popcount32(mask) / SECTOR_COUNT
+}
+
+export function maskTransitions(mask: number): number {
+  return popcount32((mask ^ rotateLeft32(mask, 1)) >>> 0) / SECTOR_COUNT
 }
 
 /**
@@ -210,10 +287,12 @@ export function cosineWeightedReduction(mask: number, gammaNorm: number): number
   const m = mask >>> 0
   let numerator = 0
   let denominator = 0
+  const cosGamma = Math.cos(gammaNorm)
+  const sinGamma = Math.sin(gammaNorm)
 
   for (let k = 0; k < SECTOR_COUNT; k++) {
-    // VBAO_SECTOR_ANGLES[k] = (k + 0.5) * Δθ + θ_min (compile-time constant, design.md §3).
-    const w = Math.max(0, Math.cos(VBAO_SECTOR_ANGLES[k]! - gammaNorm))
+    // Equivalent to max(0, cos(VBAO_SECTOR_ANGLES[k] - gammaNorm)).
+    const w = Math.max(0, VBAO_SECTOR_COSINES[k]! * cosGamma + VBAO_SECTOR_SINES[k]! * sinGamma)
     denominator += w
     // (m >>> k) & 1 == 0  →  sector k is OPEN
     if (((m >>> k) & 1) === 0) {

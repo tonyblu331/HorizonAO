@@ -31,6 +31,20 @@ The kernel SHALL compute per-slice accessibility from a 32-sector visibility bit
 - **THEN** the march SHALL iterate `side ∈ {-1, +1}` and project `atan2` against `S_side = side · S_i`
 - **AND** both reference and TSL kernel SHALL produce the same bit-exact mask given identical inputs
 
+#### Scenario: Sample-local thickness is perspective-correct
+
+- **GIVEN** a shaded pixel position `P` and a depth-sampled position `Q`
+- **WHEN** the blocker back face is reconstructed for the mask interval
+- **THEN** the back face SHALL be `Q - thickness * normalize(-Q)`
+- **AND** it SHALL NOT use the shaded pixel view vector `normalize(-P)` for that sample-local offset
+
+#### Scenario: Background samples do not occlude
+
+- **GIVEN** a marched sample UV inside the viewport
+- **WHEN** its sampled depth is at the far plane/background (`depth >= 1`)
+- **THEN** that sample SHALL NOT contribute any sector bits to the per-slice mask
+- **AND** it SHALL NOT be reconstructed as a far-plane blocker
+
 #### Scenario: Count-clamped maskRange avoids UB
 
 - **GIVEN** a sector range `[k0, k1Exclusive)` with `count = clamp(k1 - k0, 0, 32)`
@@ -93,6 +107,13 @@ The kernel SHALL compute per-slice accessibility from a 32-sector visibility bit
 - **GIVEN** a `VBAONodeOptions` argument passed to constructor or factory
 - **WHEN** TypeScript checks the options type
 - **THEN** `sectors` SHALL NOT be a key in `VBAONodeOptions`
+
+#### Scenario: Preset applies locked tier values
+
+- **GIVEN** a `VBAONodeOptions` argument with `preset: "fast" | "balanced" | "quality"`
+- **WHEN** the options are clamped
+- **THEN** the preset SHALL apply the locked `resolutionScale`, `slices`, and `samples` tier values
+- **AND** explicit numeric option overrides SHALL take precedence over preset values
 
 #### Scenario: Constant lives in `vbaoConstants.ts`
 

@@ -1,4 +1,10 @@
 import { defineConfig, devices } from '@playwright/test'
+import { fileURLToPath } from 'node:url'
+
+const testPort = 41737
+const baseURL = `http://127.0.0.1:${testPort}`
+const nodeBin = JSON.stringify(process.execPath)
+const viteBin = JSON.stringify(fileURLToPath(new URL('./node_modules/vite/bin/vite.js', import.meta.url)))
 
 export default defineConfig({
   testDir: './e2e',
@@ -9,13 +15,14 @@ export default defineConfig({
   },
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL,
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'node node_modules/vite/bin/vite.js --host 127.0.0.1',
-    url: 'http://127.0.0.1:5173',
-    reuseExistingServer: true,
+    command: `${nodeBin} ${viteBin} --host 127.0.0.1 --port ${testPort} --strictPort`,
+    url: baseURL,
+    reuseExistingServer: false,
+    gracefulShutdown: { signal: 'SIGINT', timeout: 500 },
     timeout: 120_000,
   },
   projects: [

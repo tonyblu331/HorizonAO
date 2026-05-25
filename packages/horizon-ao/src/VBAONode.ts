@@ -193,12 +193,7 @@ export class VBAONode extends TempNode<'float'> {
    *
    * @throws {TypeError} if `normalNode` is `null` or `undefined`.
    */
-  constructor(
-    depthNode: Node,
-    normalNode: Node,
-    camera: Camera,
-    options: VBAONodeOptions = {},
-  ) {
+  constructor(depthNode: Node, normalNode: Node, camera: Camera, options: VBAONodeOptions = {}) {
     if (normalNode === null || normalNode === undefined) {
       throw new TypeError('VBAONode: normalNode is required')
     }
@@ -328,9 +323,7 @@ export class VBAONode extends TempNode<'float'> {
     // Same 5×5 pattern as GTAONode — deterministic, frame-invariant, AA-agnostic.
 
     const noiseResolution = textureSize(this.noiseNode, 0)
-    const noiseUv = vec2(uvNode.x, uvNode.y.oneMinus()).mul(
-      this.resolution.div(noiseResolution),
-    )
+    const noiseUv = vec2(uvNode.x, uvNode.y.oneMinus()).mul(this.resolution.div(noiseResolution))
     const noiseTexel = this.noiseNode.sample(noiseUv)
     // Recover the angle stored in the noise texture (cos/sin packed in xy).
     const noiseDir = noiseTexel.xy.mul(2.0).sub(1.0)
@@ -347,8 +340,8 @@ export class VBAONode extends TempNode<'float'> {
     // angles (from the wrong side of the slice axis) contribute nothing.
 
     const maskRangeFn = Fn(([k0_in, k1_in]) => {
-      const lo = max(int(0), min(int(SECTOR_COUNT), k0_in))
-      const hi = max(int(0), min(int(SECTOR_COUNT), k1_in))
+      const lo = int(max(float(0), min(float(SECTOR_COUNT), float(k0_in))))
+      const hi = int(max(float(0), min(float(SECTOR_COUNT), float(k1_in))))
       const count = hi.sub(lo) // ∈ [0, SECTOR_COUNT]
       const result = uint(0).toVar('maskRangeResult')
 
@@ -393,7 +386,9 @@ export class VBAONode extends TempNode<'float'> {
       // 3. Stable 2-D basis perpendicular to V (design.md §2).
       //    anyPerpendicular: abs(V.x) < 0.9 avoids degenerate cross products.
       const T0 = normalize(
-        abs(V.x).lessThan(0.9).select(cross(V, vec3(1, 0, 0)), cross(V, vec3(0, 1, 0))),
+        abs(V.x)
+          .lessThan(0.9)
+          .select(cross(V, vec3(1, 0, 0)), cross(V, vec3(0, 1, 0))),
       ).toVar('T0')
       const T1 = normalize(cross(V, T0)).toVar('T1')
 
@@ -436,13 +431,16 @@ export class VBAONode extends TempNode<'float'> {
               },
               ({ j }) => {
                 const stepFrac = float(j).add(1.0).div(float(this.samples))
-                const viewOffset = S_side.mul(this.radius).mul(stepFrac)
-
-                // Project sample position to screen UV.
-                const sampleScreenPos = getScreenPosition(
-                  P.add(viewOffset),
+                // Project the slice endpoint once, then march linearly in screen
+                // space. Reprojecting P + S * radius * t per step bends the
+                // sample path for off-axis pixels under perspective.
+                const sampleScreenEnd = getScreenPosition(
+                  P.add(S_side.mul(this.radius)),
                   this.cameraProjectionMatrix,
-                ).toVar('sampleScreenPos')
+                )
+                const sampleScreenPos = uvNode
+                  .add(sampleScreenEnd.sub(uvNode).mul(stepFrac))
+                  .toVar('sampleScreenPos')
 
                 // Skip samples outside the viewport [0,1]².
                 If(
@@ -452,33 +450,41 @@ export class VBAONode extends TempNode<'float'> {
                     .and(sampleScreenPos.y.greaterThanEqual(float(0)))
                     .and(sampleScreenPos.y.lessThanEqual(float(1))),
                   () => {
-                    // Reconstruct the scene surface at the sample location.
+                    // Reconstruct only real scene surfaces. Background/far-plane
+                    // samples are empty space; treating them as geometry blacks
+                    // out open silhouettes and large exterior views.
                     const sD = sampleDepth(sampleScreenPos)
-                    const samplePos = getViewPosition(
-                      sampleScreenPos,
-                      sD,
-                      this.cameraProjectionMatrixInverse,
-                    ).toVar('samplePos')
+                    If(sD.lessThan(float(1.0)), () => {
+                      const samplePos = getViewPosition(
+                        sampleScreenPos,
+                        sD,
+                        this.cameraProjectionMatrixInverse,
+                      ).toVar('samplePos')
 
-                    // Front face: the sample surface.
-                    const D_front = normalize(samplePos.sub(P))
-                    // Back face: recede by `thickness` along view direction.
-                    const D_back = normalize(samplePos.sub(V.mul(this.thickness)).sub(P))
+                      // Front face: the sample surface.
+                      const D_front = normalize(samplePos.sub(P))
+                      // Back face: recede along the sampled point's view vector.
+                      // Under perspective, using the shaded pixel's V here bends thin blockers.
+                      const sampleViewDir = normalize(samplePos.negate())
+                      const D_back = normalize(
+                        samplePos.sub(sampleViewDir.mul(this.thickness)).sub(P),
+                      )
 
-                    // Horizon angles (design.md §4).
-                    // θ = atan2(D·V, D·S_side) — angle from S_side toward V.
-                    const thetaFront = atan(dot(D_front, V), dot(D_front, S_side))
-                    const thetaBack = atan(dot(D_back, V), dot(D_back, S_side))
+                      // Horizon angles (design.md §4).
+                      // θ = atan2(D·V, D·S_side) — angle from S_side toward V.
+                      const thetaFront = atan(dot(D_front, V), dot(D_front, S_side))
+                      const thetaBack = atan(dot(D_back, V), dot(D_back, S_side))
 
-                    const t0 = min(thetaFront, thetaBack)
-                    const t1 = max(thetaFront, thetaBack)
+                      const t0 = min(thetaFront, thetaBack)
+                      const t1 = max(thetaFront, thetaBack)
 
-                    // Discrete sector indices: floor for inclusive start, ceil for exclusive end.
-                    const k0 = int(floor(t0.sub(THETA_MIN).div(DELTA_THETA)))
-                    const k1 = int(ceil(t1.sub(THETA_MIN).div(DELTA_THETA)))
+                      // Discrete sector indices: floor for inclusive start, ceil for exclusive end.
+                      const k0 = int(floor(t0.sub(THETA_MIN).div(DELTA_THETA)))
+                      const k1 = int(ceil(t1.sub(THETA_MIN).div(DELTA_THETA)))
 
-                    // OR the sample's sector range into the slice mask.
-                    occludedMask.assign(bitOr(occludedMask, maskRangeFn(k0, k1)))
+                      // OR the sample's sector range into the slice mask.
+                      occludedMask.assign(bitOr(occludedMask, maskRangeFn(k0, k1)))
+                    })
                   },
                 )
               },
@@ -490,6 +496,16 @@ export class VBAONode extends TempNode<'float'> {
         //    A_i = Σ_k open(k) · max(0, cos(θ_k − γ)) / Σ_k max(0, cos(θ_k − γ))
         const numerator = float(0).toVar('numerator')
         const denominator = float(0).toVar('denominator')
+        const cosGamma = cos(gammaNorm).toVar('cosGamma')
+        const sinGamma = sin(gammaNorm).toVar('sinGamma')
+        const cosTheta = float(Math.cos(-Math.PI / 2 + Math.PI / (SECTOR_COUNT * 2))).toVar(
+          'cosTheta',
+        )
+        const sinTheta = float(Math.sin(-Math.PI / 2 + Math.PI / (SECTOR_COUNT * 2))).toVar(
+          'sinTheta',
+        )
+        const cosDelta = float(Math.cos(Math.PI / SECTOR_COUNT))
+        const sinDelta = float(Math.sin(Math.PI / SECTOR_COUNT))
 
         Loop(
           {
@@ -500,15 +516,22 @@ export class VBAONode extends TempNode<'float'> {
             name: 'k',
           },
           ({ k }) => {
-            // Sector centre: θ_k = (k + 0.5) · Δθ + θ_min  (design.md §3)
-            const thetaK = float(k).add(float(0.5)).mul(DELTA_THETA).add(THETA_MIN)
-            const w = max(float(0), cos(thetaK.sub(gammaNorm)))
+            // Sector centre: θ_k = (k + 0.5) · Δθ + θ_min (design.md §3).
+            // Use cos(θ_k − γ) = cosθ_k·cosγ + sinθ_k·sinγ to avoid a cosine per sector.
+            const w = max(float(0), cosTheta.mul(cosGamma).add(sinTheta.mul(sinGamma)))
             denominator.addAssign(w)
 
             // Bit k clear → sector k is OPEN; bit k set → sector k is blocked.
             If(shiftRight(occludedMask, uint(k)).bitAnd(uint(1)).equal(uint(0)), () => {
               numerator.addAssign(w)
             })
+
+            const currentCosTheta = cosTheta.toVar('currentCosTheta')
+            const currentSinTheta = sinTheta.toVar('currentSinTheta')
+            const nextCosTheta = currentCosTheta.mul(cosDelta).sub(currentSinTheta.mul(sinDelta))
+            const nextSinTheta = currentSinTheta.mul(cosDelta).add(currentCosTheta.mul(sinDelta))
+            cosTheta.assign(nextCosTheta)
+            sinTheta.assign(nextSinTheta)
           },
         )
 

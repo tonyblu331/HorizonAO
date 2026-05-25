@@ -18,6 +18,11 @@
  */
 export const SECTOR_COUNT = 32 as const
 
+export const VBAO_THETA_MIN = -Math.PI * 0.5
+export const VBAO_THETA_MAX = Math.PI * 0.5
+export const VBAO_THETA_RANGE = Math.PI
+export const VBAO_THETA_STEP = VBAO_THETA_RANGE / SECTOR_COUNT
+
 /**
  * Sector center angles in radians, indexed by sector `k ∈ [0, SECTOR_COUNT)`.
  *
@@ -33,13 +38,29 @@ export const SECTOR_COUNT = 32 as const
  */
 export const VBAO_SECTOR_ANGLES: readonly number[] = (() => {
   const out = new Array<number>(SECTOR_COUNT)
-  const step = Math.PI / SECTOR_COUNT
-  const minTheta = -Math.PI / 2
   for (let k = 0; k < SECTOR_COUNT; k++) {
-    out[k] = (k + 0.5) * step + minTheta
+    out[k] = (k + 0.5) * VBAO_THETA_STEP + VBAO_THETA_MIN
   }
   return Object.freeze(out)
 })()
+
+/**
+ * Cosine and sine tables for {@link VBAO_SECTOR_ANGLES}.
+ *
+ * The reduction still evaluates `max(0, cos(theta_k - gamma))`, but the shader
+ * can use the angle-difference identity:
+ *
+ *   cos(theta_k - gamma) = cos(theta_k) * cos(gamma) + sin(theta_k) * sin(gamma)
+ *
+ * This keeps the production formula intact while avoiding one cosine per sector.
+ */
+export const VBAO_SECTOR_COSINES: readonly number[] = Object.freeze(
+  VBAO_SECTOR_ANGLES.map((theta) => Math.cos(theta)),
+)
+
+export const VBAO_SECTOR_SINES: readonly number[] = Object.freeze(
+  VBAO_SECTOR_ANGLES.map((theta) => Math.sin(theta)),
+)
 
 /**
  * Default values for the public `VBAONode` uniforms.
@@ -94,6 +115,7 @@ export type VBAOQualityPreset = keyof typeof VBAO_QUALITY_TIERS
  * `sectors` is intentionally NOT a key — the value is compile-time in v1.
  */
 export interface VBAONodeOptions {
+  readonly preset?: VBAOQualityPreset
   readonly radius?: number
   readonly thickness?: number
   readonly scale?: number
@@ -108,8 +130,9 @@ export interface VBAONodeOptions {
  */
 export function clampVbaoNodeOptions(
   options: VBAONodeOptions,
-): Required<VBAONodeOptions> {
-  const merged = { ...VBAO_DEFAULTS, ...options }
+): Required<Omit<VBAONodeOptions, 'preset'>> {
+  const preset = options.preset === undefined ? {} : VBAO_QUALITY_TIERS[options.preset]
+  const merged = { ...VBAO_DEFAULTS, ...preset, ...options }
   const clamp = (v: number, range: { min: number; max: number }) =>
     Number.isFinite(v) ? Math.min(range.max, Math.max(range.min, v)) : range.min
 

@@ -1,205 +1,132 @@
-# EVIDENCE — VBAONode
+# EVIDENCE - VBAONode
 
-Per the project's evidence-loop discipline (README §"Evidence Loop"): every
-rendering pass shipped in core must be backed by:
+Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
+This file is the gate for later adaptive thickness, sampling, denoise, or depth
+hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
-1. **Screenshots** — same scene, same camera, same resolution, captured at a
-   pinned camera position from `apps/demo/src/evidence/evidenceCameras.ts`.
-2. **GPU timings** — per-pass milliseconds measured via `renderer.info.render`
-   or `trackTimestamp` on two representative machines.
-3. **A/B comparison** — VBAONode output alongside the GTAONode baseline where
-   the geometry is non-trivial.
+## Required Capture Matrix
 
-No pass is considered "earned" until this file has a committed row for it.
+Capture each required row in both view modes:
 
----
+| Field | Required values |
+| --- | --- |
+| `algorithm` | `gtao`, `vbao`, `n8ao` |
+| `viewMode` | `beauty`, `ao` |
+| `denoise` | `raw`, `denoised` |
+| `resolution` | `1920x1080`, `1280x720` |
+| `failureLabels` | `none`, `noise`, `mud`, `halo`, `thin-gap`, `edge-bleed`, `scale-mismatch` |
 
-## Methodology
+The Museum route is the baseline comparison harness. It exposes raw/denoised
+output and a demo-only `Full-res VBAO` control. That control sets VBAO
+`resolutionScale = 1.0` for evidence without changing `VBAONodeOptions` or the
+locked public quality tiers.
 
-### Camera pins
-
-All captures use the named camera IDs from `evidenceCameras.ts`.  The exact
-`position`, `target`, and `fov` for each ID are defined there; do not
-approximate.
-
-### Resolutions
-
-Every capture is taken at **two resolutions**:
-
-| Alias | Dimensions |
-|-------|-----------|
-| 1080p | 1920 × 1080 |
-| 720p  | 1280 × 720  |
-
-### VBAONode settings at capture time
-
-Settings are logged per row.  Default quality preset at time of capture:
-
-| Parameter        | Value  |
-|-----------------|--------|
-| `radius`        | 1.25   |
-| `thickness`     | 0.25   |
-| `scale`         | 1.0    |
-| `slices`        | 3      |
-| `samples`       | 8      |
-| `sectors`       | 32     |
-| `resolutionScale` | 0.5  |
-
-### Screenshot naming convention
-
-```
-artifacts/<cameraId>__<resolution>__<renderer>__vbao.png
-artifacts/<cameraId>__<resolution>__<renderer>__gtao.png   (A/B reference)
-```
-
-All artifact files live in `artifacts/` (gitignored by default; add
-`!artifacts/*.png` to `.gitignore` when filing the upstream PR).
-
-### GPU timing measurement
-
-With `WebGPURenderer({ trackTimestamp: true })`, read timing after one warm
-frame:
-
-```ts
-await renderer.resolveTimestampAsync()
-const ms = renderer.info.render.timestamp / 1_000_000   // ns → ms
-```
-
-Report the median of 10 frames at steady state.
-
----
-
-## Row schema
+## Row Schema
 
 | Column | Description |
-|--------|-------------|
-| `scene` | Scene name (e.g. `grid`, `sponza`) |
-| `cameraId` | Key from `evidenceCameras.ts` |
-| `resolution` | `1080p` or `720p` |
-| `device` | GPU model (e.g. `RTX 4070`) |
-| `browser` | Browser + version |
+| --- | --- |
+| `scene` | Scene name, for example `museum`, `city`, `sponza`, `bunny` |
+| `cameraId` | Key from `apps/demo/src/evidence/evidenceCameras.ts` |
+| `resolution` | Exact capture dimensions: `1920x1080` or `1280x720` |
+| `algorithm` | `gtao`, `vbao`, or `n8ao` |
+| `viewMode` | `beauty` or `ao` |
+| `denoise` | `raw` or `denoised` |
+| `device` | GPU/device name |
+| `browser` | Browser and version |
 | `renderer` | `webgpu` or `webgl-fallback` |
-| `tier` | `balanced` (default) or `fast` / `quality` |
+| `timingMethod` | `webgpu-timestamp`, `frame-median`, `performance-panel`, or `pending` |
+| `medianTime_ms` | Median of 10 steady-state frames/passes, or `pending` |
 | `radius` | AO radius used |
 | `thickness` | Thickness used |
 | `slices` | Slice count |
 | `samples` | Samples per slice |
-| `sectors` | Always 32 in v1 |
-| `gpuTime_ms` | Median GPU time for VBAONode pass (10 frames) |
-| `screenshotPath` | Path under `artifacts/` |
+| `resolutionScale` | AO render scale, for example `0.5` or `1.0` |
+| `sectors` | `32` for VBAO v1 |
+| `failureLabels` | Comma-separated labels from the required list |
+| `screenshotPath` | Path under `artifacts/`, or `pending` |
 
----
+## Capture Rows
 
-## Captures
+Status: pending manual WebGPU captures. Headless Playwright smoke tests are not
+WebGPU evidence because they may run through fallback paths.
 
-> **Status: pending** — screenshots below are placeholders.
-> Fill in by running `pnpm dev` and navigating to `/vbao` at each pinned
-> camera position, then updating this table.
+Pending blocker: rows stay unfilled until a WebGPU-capable browser session is
+run on an identified device at the required viewport sizes.
 
-### Grid scene — VBAONode
+| scene | cameraId | resolution | algorithm | viewMode | denoise | device | browser | renderer | timingMethod | medianTime_ms | radius | thickness | slices | samples | resolutionScale | sectors | failureLabels | screenshotPath |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| museum | museumBaseline | 1920x1080 | gtao | beauty | raw | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
+| museum | museumBaseline | 1920x1080 | gtao | beauty | denoised | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
+| museum | museumBaseline | 1920x1080 | gtao | ao | raw | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
+| museum | museumBaseline | 1920x1080 | gtao | ao | denoised | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
+| museum | museumBaseline | 1920x1080 | vbao | beauty | raw | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
+| museum | museumBaseline | 1920x1080 | vbao | beauty | denoised | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
+| museum | museumBaseline | 1920x1080 | vbao | ao | raw | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
+| museum | museumBaseline | 1920x1080 | vbao | ao | denoised | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
+| museum | museumBaseline | 1920x1080 | n8ao | beauty | raw | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
+| museum | museumBaseline | 1920x1080 | n8ao | beauty | denoised | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
+| museum | museumBaseline | 1920x1080 | n8ao | ao | raw | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
+| museum | museumBaseline | 1920x1080 | n8ao | ao | denoised | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
+| museum | museumBaseline | 1280x720 | gtao | beauty | raw | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
+| museum | museumBaseline | 1280x720 | gtao | beauty | denoised | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
+| museum | museumBaseline | 1280x720 | gtao | ao | raw | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
+| museum | museumBaseline | 1280x720 | gtao | ao | denoised | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
+| museum | museumBaseline | 1280x720 | vbao | beauty | raw | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
+| museum | museumBaseline | 1280x720 | vbao | beauty | denoised | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
+| museum | museumBaseline | 1280x720 | vbao | ao | raw | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
+| museum | museumBaseline | 1280x720 | vbao | ao | denoised | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
+| museum | museumBaseline | 1280x720 | n8ao | beauty | raw | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
+| museum | museumBaseline | 1280x720 | n8ao | beauty | denoised | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
+| museum | museumBaseline | 1280x720 | n8ao | ao | raw | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
+| museum | museumBaseline | 1280x720 | n8ao | ao | denoised | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
 
-| scene | cameraId | resolution | device | browser | renderer | tier | radius | thickness | slices | samples | sectors | gpuTime_ms | screenshotPath |
-|-------|----------|-----------|--------|---------|----------|------|--------|-----------|--------|---------|---------|-----------|----------------|
-| grid | gridBaseline | 1080p | — | — | — | balanced | 1.25 | 0.25 | 3 | 8 | 32 | — | — |
-| grid | gridBaseline | 720p  | — | — | — | balanced | 1.25 | 0.25 | 3 | 8 | 32 | — | — |
+## Manual WebGPU Capture Steps
 
-### Grid scene — GTAONode baseline (A/B)
+1. Run `pnpm dev`.
+2. Open `/museum` in a WebGPU-capable Chrome/Edge session.
+3. Confirm the page reports `data-renderer-backend="webgpu"`.
+4. Select `4 split` for broad comparisons or `Single` plus one algorithm for
+   isolated captures.
+5. Toggle `Beauty` / `AO only` and `Denoise` for every required row.
+6. Enable `Full-res VBAO` for VBAO evidence rows.
+7. Resize the viewport to `1920x1080`, capture all rows, then repeat at
+   `1280x720`.
+8. Save screenshots under `artifacts/`:
 
-| scene | cameraId | resolution | device | browser | renderer | gpuTime_ms | screenshotPath |
-|-------|----------|-----------|--------|---------|----------|-----------|----------------|
-| grid | gridBaseline | 1080p | — | — | — | — | — |
-| grid | gridBaseline | 720p  | — | — | — | — | — |
+```txt
+artifacts/<scene>__<cameraId>__<resolution>__<algorithm>__<viewMode>__<denoise>.png
+```
 
-### Sponza — thin rail (VBAONode vs GTAONode)
+## GPU Timing
 
-| scene | cameraId | resolution | device | renderer | gpuTime_ms | screenshotPath |
-|-------|----------|-----------|--------|----------|-----------|----------------|
-| sponza | sponzaThinRail | 1080p | — | — | — | — |
-| sponza | sponzaThinRail | 720p  | — | — | — | — |
+Prefer WebGPU timestamps when available:
 
-### Sponza — arches
+```ts
+await renderer.resolveTimestampAsync()
+const ms = renderer.info.render.timestamp / 1_000_000
+```
 
-| scene | cameraId | resolution | device | renderer | gpuTime_ms | screenshotPath |
-|-------|----------|-----------|--------|----------|-----------|----------------|
-| sponza | sponzaArches | 1080p | — | — | — | — |
-| sponza | sponzaArches | 720p  | — | — | — | — |
+If direct timestamp access is unavailable from the app scope, use the panel's
+steady-state frame median or browser Performance panel and set `timingMethod`
+accordingly. Record the median of 10 steady-state frames/passes.
 
-### Sponza — curtains
+## Failure Label Guide
 
-| scene | cameraId | resolution | device | renderer | gpuTime_ms | screenshotPath |
-|-------|----------|-----------|--------|----------|-----------|----------------|
-| sponza | sponzaCurtains | 1080p | — | — | — | — |
-| sponza | sponzaCurtains | 720p  | — | — | — | — |
+| Label | Use when |
+| --- | --- |
+| `none` | No visible failure in the capture |
+| `noise` | Grain, speckle, unstable dithering, or structured sample pattern |
+| `mud` | Broad over-darkening that loses geometric readability |
+| `halo` | Bright/dark outline around silhouettes or contact edges |
+| `thin-gap` | Thin geometry closes gaps that should remain visibly open |
+| `edge-bleed` | Denoise or sampling leaks AO across depth/normal edges |
+| `scale-mismatch` | Radius/thickness looks wrong for the scene scale |
 
-### Stanford Bunny
+## Later Gates
 
-| scene | cameraId | resolution | device | renderer | gpuTime_ms | screenshotPath |
-|-------|----------|-----------|--------|----------|-----------|----------------|
-| bunny | bunnyEars | 1080p | — | — | — | — |
-| bunny | bunnyEars | 720p  | — | — | — | — |
-
-### Suzanne
-
-| scene | cameraId | resolution | device | renderer | gpuTime_ms | screenshotPath |
-|-------|----------|-----------|--------|----------|-----------|----------------|
-| suzanne | suzanneClay | 1080p | — | — | — | — |
-| suzanne | suzanneClay | 720p  | — | — | — | — |
-
----
-
-## Thin-geometry claim
-
-> **Status: pending**
->
-> The headline claim is: VBAONode handles thin geometry (bunny ears, Sponza
-> rails) better than GTAONode because per-sector visibility lets a thin
-> occluder block only the sectors it actually spans, rather than the full
-> half-hemisphere arc that GTAO clamps to.
->
-> **Required evidence to mark this claim as supported:**
-> - Side-by-side screenshots at `bunnyEars` and `sponzaThinRail` showing
->   that VBAONode produces less halo / less over-occlusion on thin features
->   than GTAONode at the same radius and thickness settings.
-> - If the screenshots show no visible difference, the claim is unverified
->   and must be removed from the README until the render path is debugged.
-
----
-
-## Denoise policy
-
-Raw VBAO ships in v1 with **no denoise pass**.  A denoiser is only added
-when EVIDENCE.md contains a row showing specific noise that warrants it.
-See ADR-011.
-
----
-
-## How to fill this in
-
-All VBAO capture routes are live — no additional scene wiring is needed.
-
-| Scene | Route for VBAO capture | Route for GTAONode A/B |
-|-------|------------------------|------------------------|
-| Grid  | `/vbao`               | `/` (GridScene)        |
-| Sponza | `/vbao-sponza`       | `/sponza`              |
-| Bunny  | `/vbao-bunny`        | `/bunny`               |
-| Suzanne | `/vbao-suzanne`     | `/suzanne`             |
-
-**Steps:**
-
-1. `pnpm dev` — start the Vite dev server.
-2. Open each VBAO capture route in Chrome (WebGPU, hardware GPU required).
-3. Navigate to each pinned camera using the coordinates in
-   `apps/demo/src/evidence/evidenceCameras.ts`.
-4. Screenshot at 1080p and 720p (browser DevTools → `…` → More tools →
-   Sensors → Device dimensions, or OS window resize to exact dimensions).
-5. Save to `artifacts/` with the naming convention above.
-6. Read GPU timing from the browser console:
-   ```js
-   // paste in DevTools console after one warm frame:
-   await renderer.resolveTimestampAsync()
-   console.log(renderer.info.render.timestamp / 1_000_000, 'ms')
-   ```
-   (Note: `renderer` must be exposed on `window` — or read from the
-   Performance tab `WebGPU timestamp` entries if the console approach
-   is blocked by bundler scoping.)
-7. Fill in each `—` placeholder in the table above and commit.
+- Adaptive thickness (`IM-01`) needs rows showing `mud` or `thin-gap`.
+- Sampling changes (`IM-03`) need rows showing `noise`.
+- Denoise (`IM-05`) needs rows showing raw noise plus timing that justifies the
+  extra pass against higher raw sample counts.
+- Depth hierarchy (`IM-06`) needs rows showing `scale-mismatch` or distant
+  large-radius instability.
