@@ -49,6 +49,7 @@ import {
   dot,
   float,
   floor,
+  fract,
   Fn,
   getScreenPosition,
   getViewPosition,
@@ -346,7 +347,7 @@ export class VBAONode extends TempNode<'float'> {
     // normalNode is required (ADR-010); constructor already guards null.
     const sampleNormal = (uvCoord) => this.normalNode.sample(uvCoord).rgb.normalize()
 
-    // ── per-pixel rotation + radial scale from deterministic noise ─────────
+    // ── per-pixel rotation + per-step radial seed from deterministic noise ─
 
     const noiseResolution = textureSize(this.noiseNode, 0)
     const noiseUv = vec2(uvNode.x, uvNode.y.oneMinus()).mul(this.resolution.div(noiseResolution))
@@ -355,7 +356,7 @@ export class VBAONode extends TempNode<'float'> {
     const noiseDir = noiseTexel.xy.mul(2.0).sub(1.0)
     // atan2(y, x) ∈ (−π, π], +π → (0, 2π], /2π → (0, 1]
     const rotation = atan(noiseDir.y, noiseDir.x).add(PI).div(PI.mul(2.0))
-    const radialScale = noiseTexel.w.mul(0.5).add(0.5)
+    const radialBase = noiseTexel.w
 
     // ── compile-time constants ──────────────────────────────────────────────
 
@@ -450,9 +451,9 @@ export class VBAONode extends TempNode<'float'> {
             const sideSign = sideIdx.equal(int(0)).select(float(1), float(-1))
             const S_side = S_i.mul(sideSign).toVar('S_side')
 
-            // Uniform step spacing with a deterministic per-pixel radial scale.
-            // This keeps ordering uniform while breaking the screen-space lattice
-            // that made high-sample raw captures add pattern instead of clarity.
+            // Stratified step spacing with deterministic per-slice/per-step
+            // jitter. The old single per-pixel radial scale compressed the
+            // whole ray by the same factor and reinforced a screen lattice.
             Loop(
               {
                 start: int(0),
@@ -462,7 +463,12 @@ export class VBAONode extends TempNode<'float'> {
                 name: 'j',
               },
               ({ j }) => {
-                const stepFrac = float(j).add(1.0).div(float(this.samples)).mul(radialScale)
+                const stepJitter = fract(
+                  radialBase
+                    .add(float(i).mul(0.5698402909980532))
+                    .add(float(j).mul(0.7548776662466927)),
+                ).toVar('stepJitter')
+                const stepFrac = float(j).add(stepJitter).div(float(this.samples))
                 // Project the slice endpoint once, then march linearly in screen
                 // space. Reprojecting P + S * radius * t per step bends the
                 // sample path for off-axis pixels under perspective.
@@ -545,9 +551,14 @@ export class VBAONode extends TempNode<'float'> {
                         },
                         ({ adaptiveScanIdx }) => {
                           const scanStepFrac = float(adaptiveScanIdx)
-                            .add(1.0)
+                            .add(
+                              fract(
+                                radialBase
+                                  .add(float(i).mul(0.5698402909980532))
+                                  .add(float(adaptiveScanIdx).mul(0.7548776662466927)),
+                              ),
+                            )
                             .div(float(this.samples))
-                            .mul(radialScale)
                           const scanScreenPos = uvNode
                             .add(sampleScreenEnd.sub(uvNode).mul(scanStepFrac))
                             .toVar('adaptiveScanScreenPos')

@@ -1,4 +1,5 @@
 import type { Vec3 } from './vbaoReference'
+import type { VbaoEdgeConfidenceMetadata } from './vbaoEdgeConfidence'
 
 export interface VbaoDenoiseSample {
   readonly accessibility: number
@@ -6,6 +7,8 @@ export interface VbaoDenoiseSample {
   readonly normal: Vec3
   readonly valid?: boolean
   readonly kernelWeight?: number
+  readonly confidence?: number
+  readonly metadata?: Pick<VbaoEdgeConfidenceMetadata, 'edgeDepth' | 'edgeNormal' | 'confidence'>
 }
 
 export interface VbaoSpatialDenoiseOptions {
@@ -59,15 +62,22 @@ export function computeVbaoSpatialDenoiseWeight(
   const resolved = resolveOptions(options)
   const centerNormal = normalize3(center.normal)
   const neighborNormal = normalize3(neighbor.normal)
-  const normalDot = Math.max(0, dot3(centerNormal, neighborNormal))
+  const rawNormalDot = Math.max(0, dot3(centerNormal, neighborNormal))
+  const normalDot =
+    neighbor.metadata?.edgeNormal === undefined ? rawNormalDot : clamp01(1 - neighbor.metadata.edgeNormal)
 
   if (normalDot < resolved.minNormalDot) return 0
 
-  const tangentPlaneDistance = Math.abs(dot3(sub3(neighbor.position, center.position), centerNormal))
+  const tangentPlaneDistance =
+    neighbor.metadata?.edgeDepth ??
+    Math.abs(dot3(sub3(neighbor.position, center.position), centerNormal))
   const depthWeight = Math.exp(-tangentPlaneDistance / resolved.depthSigma)
   const normalWeight = Math.pow(normalDot, resolved.normalPower)
 
-  return Math.max(0, neighbor.kernelWeight ?? 1) * depthWeight * normalWeight
+  const confidenceWeight =
+    clamp01(neighbor.confidence ?? 1) * clamp01(neighbor.metadata?.confidence ?? 1)
+
+  return Math.max(0, neighbor.kernelWeight ?? 1) * confidenceWeight * depthWeight * normalWeight
 }
 
 export function denoiseVbaoAccessibility(

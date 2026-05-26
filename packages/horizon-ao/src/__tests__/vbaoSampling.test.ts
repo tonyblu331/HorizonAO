@@ -90,6 +90,20 @@ describe('VBAO sampling schedules', () => {
     }
   })
 
+  it('decorrelates per-step gaps for a fixed pixel instead of scaling the whole ray once', () => {
+    for (const schedule of VBAO_SAMPLING_SCHEDULES) {
+      const fractions = Array.from({ length: baseInput.sampleCount }, (_, sampleIndex) =>
+        sampleVbaoStepFraction(schedule, { ...baseInput, sampleIndex }),
+      )
+      const gaps = fractions.map((fraction, index) =>
+        index === 0 ? fraction : fraction - fractions[index - 1]!,
+      )
+      const roundedUniqueGaps = new Set(gaps.map((gap) => gap.toFixed(5)))
+
+      expect(roundedUniqueGaps.size).toBeGreaterThan(1)
+    }
+  })
+
   it('covers every histogram bin on a 16x16 tile', () => {
     for (const schedule of VBAO_SAMPLING_SCHEDULES) {
       const bins = new Array<number>(8).fill(0)

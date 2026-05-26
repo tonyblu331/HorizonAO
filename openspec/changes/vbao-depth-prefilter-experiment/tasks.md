@@ -17,5 +17,5 @@
 
 - [x] 3.1 Add internal benchmark label for baseline vs prefilter.
 - [x] 3.2 Prototype depth prefilter behind the internal harness only.
-- [ ] 3.3 Capture baseline vs prefilter radius-stress rows.
-- [ ] 3.4 Accept/reject in `EVIDENCE.md`.
+- [x] 3.3 Capture baseline vs prefilter radius-stress rows.
+- [x] 3.4 Accept/reject in `EVIDENCE.md`.

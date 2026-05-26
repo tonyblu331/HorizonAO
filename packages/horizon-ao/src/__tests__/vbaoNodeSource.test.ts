@@ -13,10 +13,12 @@ describe('VBAONode adaptive thickness TSL source contract', () => {
     expect(source).not.toContain('samplePos.sub(sampleViewDir.mul(this.thickness)).sub(P)')
   })
 
-  it('uses a noise alpha radial scale so samples do not march a fixed screen lattice', () => {
-    expect(source).toContain('radialScale')
+  it('uses a per-slice/per-step radial jitter so samples do not march a fixed screen lattice', () => {
+    expect(source).toContain('radialBase')
+    expect(source).toContain('stepJitter')
     expect(source).toContain('noiseTexel.w')
-    expect(source).toContain('float(j).add(1.0).div(float(this.samples)).mul(radialScale)')
+    expect(source).toContain('float(j).add(stepJitter).div(float(this.samples))')
+    expect(source).not.toContain('float(j).add(1.0).div(float(this.samples)).mul(radialScale)')
   })
 
   it('keeps sampling schedules out of constructor options while allowing benchmark injection', () => {

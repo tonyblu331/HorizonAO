@@ -60,6 +60,33 @@ describe('VBAO spatial denoise reference', () => {
     expect(denoiseVbaoAccessibility(center, [sameSurface])).toBeCloseTo(0.6, 12)
   })
 
+  it('scales otherwise valid filter weights by confidence metadata', () => {
+    const lowConfidenceSurface: VbaoDenoiseSample = {
+      accessibility: 1,
+      position: [0.1, 0, 0],
+      normal: [0, 0, 1],
+      confidence: 0.25,
+    }
+
+    expect(computeVbaoSpatialDenoiseWeight(center, lowConfidenceSurface)).toBeCloseTo(0.25, 12)
+  })
+
+  it('uses edge/confidence metadata to suppress geometrically suspicious neighbors', () => {
+    const suspiciousSurface: VbaoDenoiseSample = {
+      accessibility: 1,
+      position: [0.1, 0, 0],
+      normal: [0, 0, 1],
+      metadata: {
+        edgeDepth: 0.4,
+        edgeNormal: 0.75,
+        confidence: 0.2,
+      },
+    }
+
+    expect(computeVbaoSpatialDenoiseWeight(center, suspiciousSurface)).toBeLessThan(0.001)
+    expect(denoiseVbaoAccessibility(center, [suspiciousSurface])).toBeLessThan(0.201)
+  })
+
   it('is deterministic without frame index, history, or temporal jitter input', () => {
     const neighbors: VbaoDenoiseSample[] = [
       { accessibility: 0.6, position: [0.1, 0, 0], normal: [0, 0, 1] },

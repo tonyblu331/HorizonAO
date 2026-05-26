@@ -1,0 +1,75 @@
+{
+  "status": "ok",
+  "generatedAt": "2026-05-26T06:52:40.728Z",
+  "sampleCount": 4096,
+  "rows": [
+    {
+      "id": "flat-open",
+      "label": "Flat plane / fully open hemisphere",
+      "sampleCount": 4096,
+      "accessibility": 1,
+      "expectedMin": 1,
+      "expectedMax": 1,
+      "withinExpectedRange": true,
+      "accepted": true,
+      "failureLabels": []
+    },
+    {
+      "id": "full-hemisphere-blocked",
+      "label": "Full hemisphere occlusion",
+      "sampleCount": 4096,
+      "accessibility": 0,
+      "expectedMin": 0,
+      "expectedMax": 0,
+      "withinExpectedRange": true,
+      "accepted": true,
+      "failureLabels": []
+    },
+    {
+      "id": "two-wall-corner",
+      "label": "Two perpendicular wall corner",
+      "sampleCount": 4096,
+      "accessibility": 0.25,
+      "expectedMin": 0.22,
+      "expectedMax": 0.28,
+      "withinExpectedRange": true,
+      "accepted": true,
+      "failureLabels": []
+    },
+    {
+      "id": "thin-occluder",
+      "label": "Thin vertical occluder",
+      "sampleCount": 4096,
+      "accessibility": 0.981689453125,
+      "expectedMin": 0.9,
+      "expectedMax": 0.99,
+      "withinExpectedRange": true,
+      "accepted": true,
+      "failureLabels": []
+    },
+    {
+      "id": "stair-step-negative",
+      "label": "Stair-step / false-curvature negative control",
+      "sampleCount": 4096,
+      "accessibility": 0.625,
+      "expectedMin": 0.35,
+      "expectedMax": 0.65,
+      "withinExpectedRange": true,
+      "accepted": false,
+      "failureLabels": [
+        "false-curvature"
+      ]
+    },
+    {
+      "id": "museum-scale",
+      "label": "Museum-like mixed scale fixture",
+      "sampleCount": 4096,
+      "accessibility": 0.465087890625,
+      "expectedMin": 0.45,
+      "expectedMax": 0.7,
+      "withinExpectedRange": true,
+      "accepted": true,
+      "failureLabels": []
+    }
+  ]
+}

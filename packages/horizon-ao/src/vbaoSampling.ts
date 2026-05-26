@@ -180,17 +180,29 @@ export function sampleVbaoRadialJitter(
   }
 }
 
+export function sampleVbaoStepJitter(
+  schedule: VbaoSamplingSchedule,
+  input: VbaoSamplingInput,
+): number {
+  const base = sampleVbaoRadialJitter(schedule, input)
+  const stepDecorrelator = input.sampleIndex * 0.7548776662466927
+  const sliceDecorrelator = input.sliceIndex * 0.5698402909980532
+  const jitter = fract(base + stepDecorrelator + sliceDecorrelator)
+
+  return Math.max(1e-6, Math.min(0.999999, jitter))
+}
+
 export function sampleVbaoStepFraction(
   schedule: VbaoSamplingSchedule,
   input: VbaoSamplingInput,
 ): number {
   const sampleCount = Math.max(1, Math.floor(input.sampleCount))
   const sampleIndex = Math.max(0, Math.min(sampleCount - 1, Math.floor(input.sampleIndex)))
-  const radialScale = 0.5 + 0.5 * sampleVbaoRadialJitter(schedule, {
+  const stepJitter = sampleVbaoStepJitter(schedule, {
     ...input,
     sampleCount,
     sampleIndex,
   })
 
-  return ((sampleIndex + 1) / sampleCount) * radialScale
+  return (sampleIndex + stepJitter) / sampleCount
 }
