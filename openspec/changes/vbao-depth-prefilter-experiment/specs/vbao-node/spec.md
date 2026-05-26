@@ -36,3 +36,10 @@ Pareto win against the committed radius-stress baseline.
 - **Then** each row includes a `vbaoDepthPrefilterPreset` label
 - **And** the only accepted initial labels are `baseline` and `prefilter`
 - **And** the label does not imply any public `VBAONodeOptions` knob
+
+#### Scenario: Prefilter labels do not fake evidence
+
+- **Given** the candidate depth prefilter shader path is not implemented
+- **When** the benchmark harness runs
+- **Then** it may publish `baseline` rows with `vbaoDepthPrefilterPreset`
+- **But** it does not publish `prefilter` rows as evidence

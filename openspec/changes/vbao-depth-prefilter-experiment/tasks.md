@@ -15,7 +15,7 @@
 
 ## Phase 3: Harness Experiment
 
-- [ ] 3.1 Add internal benchmark label for baseline vs prefilter.
+- [x] 3.1 Add internal benchmark label for baseline vs prefilter.
 - [ ] 3.2 Prototype depth prefilter behind the internal harness only.
 - [ ] 3.3 Capture baseline vs prefilter radius-stress rows.
 - [ ] 3.4 Accept/reject in `EVIDENCE.md`.

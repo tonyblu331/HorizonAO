@@ -66,6 +66,8 @@ type VbaoDenoiseFilter = 'generic' | 'custom-bilateral'
 type VbaoBenchmarkDenoiseFilter = VbaoDenoiseFilter | 'n/a'
 type VbaoRadiusStressPreset = 'baseline' | 'large-radius'
 type VbaoBenchmarkRadiusStressPreset = VbaoRadiusStressPreset | 'n/a'
+type VbaoDepthPrefilterPreset = 'baseline' | 'prefilter'
+type VbaoBenchmarkDepthPrefilterPreset = VbaoDepthPrefilterPreset | 'n/a'
 type TslIntLoop = (
   params: { readonly start: unknown; readonly end: unknown; readonly type: 'int'; readonly condition: '<' },
   body: (vars: { readonly i: never }) => void,
@@ -93,6 +95,7 @@ interface Stats {
   readonly vbaoSamplePreset: VbaoBenchmarkSamplePreset
   readonly vbaoDenoiseFilter: VbaoBenchmarkDenoiseFilter
   readonly vbaoRadiusStressPreset: VbaoBenchmarkRadiusStressPreset
+  readonly vbaoDepthPrefilterPreset: VbaoBenchmarkDepthPrefilterPreset
   readonly vbaoRadius: number
   readonly vbaoExpectedDepthHierarchyLevel: number
   readonly vbaoSamples: number
@@ -126,6 +129,7 @@ const VBAO_BENCHMARK_SAMPLING_SCHEDULES = [
   'blue-noise',
 ] as const satisfies readonly VbaoSamplingSchedule[]
 const VBAO_PRODUCTION_SAMPLING_SCHEDULE: VbaoSamplingSchedule = 'magic-square'
+const VBAO_DEPTH_PREFILTER_CANDIDATE_ENABLED = false
 const VBAO_SAMPLE_PRESETS = {
   baseline: { samples: 8, slices: 3 },
   'high-sample': { samples: 16, slices: 3 },
@@ -144,6 +148,7 @@ interface AoBenchmarkApi {
   readonly history: Stats[]
   reset: () => void
   setVbaoDenoiseFilter: (filter: VbaoDenoiseFilter) => void
+  setVbaoDepthPrefilterPreset: (preset: VbaoDepthPrefilterPreset) => void
   setVbaoRadiusStressPreset: (preset: VbaoRadiusStressPreset) => void
   setVbaoSamplingSchedule: (schedule: VbaoSamplingSchedule) => void
   setVbaoSamplePreset: (preset: VbaoSamplePreset) => void
@@ -170,6 +175,10 @@ function isVbaoDenoiseFilter(value: string): value is VbaoDenoiseFilter {
 
 function isVbaoRadiusStressPreset(value: string): value is VbaoRadiusStressPreset {
   return value === 'baseline' || value === 'large-radius'
+}
+
+function isVbaoDepthPrefilterPreset(value: string): value is VbaoDepthPrefilterPreset {
+  return value === 'baseline' || value === 'prefilter'
 }
 
 function isVbaoSamplingSchedule(value: string): value is VbaoSamplingSchedule {
@@ -301,6 +310,7 @@ async function runGtaoReferenceScene(
   let vbaoSamplePreset: VbaoSamplePreset = 'baseline'
   let vbaoDenoiseFilter: VbaoDenoiseFilter = 'generic'
   let vbaoRadiusStressPreset: VbaoRadiusStressPreset = 'baseline'
+  let vbaoDepthPrefilterPreset: VbaoDepthPrefilterPreset = 'baseline'
 
   const labels = createSplitLabels(container)
   const panel = createReferencePanel(container, {
@@ -375,6 +385,10 @@ async function runGtaoReferenceScene(
       setVbaoDenoiseFilter: (filter) => {
         vbaoDenoiseFilter = filter
       },
+      setVbaoDepthPrefilterPreset: (preset) => {
+        vbaoDepthPrefilterPreset =
+          preset === 'prefilter' && !VBAO_DEPTH_PREFILTER_CANDIDATE_ENABLED ? 'baseline' : preset
+      },
       setVbaoRadiusStressPreset: (preset) => {
         vbaoRadiusStressPreset = preset
         pipelines?.setVbaoRadiusStressPreset(preset)
@@ -422,6 +436,7 @@ async function runGtaoReferenceScene(
       vbaoSamplePreset: usesVbao ? vbaoSamplePreset : 'n/a',
       vbaoDenoiseFilter: usesVbao && denoiseEnabled ? vbaoDenoiseFilter : 'n/a',
       vbaoRadiusStressPreset: usesVbao ? vbaoRadiusStressPreset : 'n/a',
+      vbaoDepthPrefilterPreset: usesVbao ? vbaoDepthPrefilterPreset : 'n/a',
       vbaoRadius: radiusStress?.radius ?? 0,
       vbaoExpectedDepthHierarchyLevel: radiusStress?.expectedDepthHierarchyLevel ?? 0,
       vbaoSamples: preset?.samples ?? 0,
@@ -1250,6 +1265,7 @@ function createAoBenchmarkPublisher(
   environment: AoBenchmarkEnvironment,
   options: {
     readonly setVbaoDenoiseFilter: (filter: VbaoDenoiseFilter) => void
+    readonly setVbaoDepthPrefilterPreset: (preset: VbaoDepthPrefilterPreset) => void
     readonly setVbaoSamplePreset: (preset: VbaoSamplePreset) => void
     readonly setVbaoSamplingSchedule: (schedule: VbaoSamplingSchedule) => void
     readonly setVbaoRadiusStressPreset: (preset: VbaoRadiusStressPreset) => void
@@ -1276,6 +1292,10 @@ function createAoBenchmarkPublisher(
     setVbaoDenoiseFilter: (filter) => {
       if (!isVbaoDenoiseFilter(filter)) return
       options.setVbaoDenoiseFilter(filter)
+    },
+    setVbaoDepthPrefilterPreset: (preset) => {
+      if (!isVbaoDepthPrefilterPreset(preset)) return
+      options.setVbaoDepthPrefilterPreset(preset)
     },
     setVbaoRadiusStressPreset: (preset) => {
       if (!isVbaoRadiusStressPreset(preset)) return

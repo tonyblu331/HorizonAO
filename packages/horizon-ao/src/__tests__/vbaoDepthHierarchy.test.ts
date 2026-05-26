@@ -88,4 +88,21 @@ describe('VBAO depth hierarchy evidence gate', () => {
       expect(prefilterDesign).toContain(required)
     }
   })
+
+  it('wires benchmark-only depth prefilter labels through the demo harness', () => {
+    expect(benchmarkCollectorSource).toContain('AO_BENCHMARK_VBAO_DEPTH_PREFILTER_MATRIX')
+
+    for (const required of [
+      'vbaoDepthPrefilterPreset',
+      'setVbaoDepthPrefilterPreset',
+      'baseline',
+      'prefilter',
+    ]) {
+      expect(benchmarkCollectorSource).toContain(required)
+      expect(museumSource).toContain(required)
+    }
+
+    expect(indexSource).not.toContain('vbaoDepthPrefilter')
+    expect(optionsSource).not.toContain('depthPrefilter')
+  })
 })

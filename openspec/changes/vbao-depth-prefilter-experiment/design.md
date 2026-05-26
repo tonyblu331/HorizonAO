@@ -48,6 +48,12 @@ These labels are intentionally boring. The point is traceability: every
 screenshot/timing row must say whether it came from the current path or the
 candidate path, otherwise we cannot honestly judge scale-mismatch, mud, or p95.
 
+Phase 3.1 wires the labels through the internal harness but still emits only
+truthful `baseline` rows. The demo clamps requested `prefilter` labels back to
+`baseline` until the candidate shader path is actually wired; otherwise we would
+create fake screenshots that look like evidence but only repeat the current
+path.
+
 ## Acceptance
 
 - Public package exports stay unchanged.
