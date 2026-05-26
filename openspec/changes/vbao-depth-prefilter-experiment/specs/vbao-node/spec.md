@@ -37,9 +37,10 @@ Pareto win against the committed radius-stress baseline.
 - **And** the only accepted initial labels are `baseline` and `prefilter`
 - **And** the label does not imply any public `VBAONodeOptions` knob
 
-#### Scenario: Prefilter labels do not fake evidence
+#### Scenario: Prefilter labels require a real candidate path
 
-- **Given** the candidate depth prefilter shader path is not implemented
-- **When** the benchmark harness runs
-- **Then** it may publish `baseline` rows with `vbaoDepthPrefilterPreset`
-- **But** it does not publish `prefilter` rows as evidence
+- **Given** the benchmark harness publishes `prefilter` rows
+- **When** those rows are collected
+- **Then** the demo uses a real internal `rtt` depth prefilter node
+- **And** the candidate rows run through a separate internal `VBAONode`
+- **And** baseline rows continue to use the original full-resolution depth path

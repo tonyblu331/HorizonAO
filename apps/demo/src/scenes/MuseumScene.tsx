@@ -34,8 +34,11 @@ import {
   Loop,
   mrt,
   normalView,
+  perspectiveDepthToViewZ,
   PI,
   pass,
+  reference,
+  rtt,
   sample,
   sqrt,
   uniform,
@@ -44,6 +47,7 @@ import {
   vec3,
   vec4,
   velocity,
+  viewZToPerspectiveDepth,
 } from 'three/tsl'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
@@ -129,7 +133,7 @@ const VBAO_BENCHMARK_SAMPLING_SCHEDULES = [
   'blue-noise',
 ] as const satisfies readonly VbaoSamplingSchedule[]
 const VBAO_PRODUCTION_SAMPLING_SCHEDULE: VbaoSamplingSchedule = 'magic-square'
-const VBAO_DEPTH_PREFILTER_CANDIDATE_ENABLED = false
+const VBAO_DEPTH_PREFILTER_CANDIDATE_ENABLED = true
 const VBAO_SAMPLE_PRESETS = {
   baseline: { samples: 8, slices: 3 },
   'high-sample': { samples: 16, slices: 3 },
@@ -388,6 +392,7 @@ async function runGtaoReferenceScene(
       setVbaoDepthPrefilterPreset: (preset) => {
         vbaoDepthPrefilterPreset =
           preset === 'prefilter' && !VBAO_DEPTH_PREFILTER_CANDIDATE_ENABLED ? 'baseline' : preset
+        pipelines?.setVbaoDepthPrefilterPreset(vbaoDepthPrefilterPreset)
       },
       setVbaoRadiusStressPreset: (preset) => {
         vbaoRadiusStressPreset = preset
@@ -524,6 +529,102 @@ function createReferencePipelines(
   const prePassDepth = prePass.getTextureNode('depth')
   const normalTexture = prePass.getTexture('output')
   normalTexture.type = UnsignedByteType
+  const vbaoDepthPrefilterResolution = uniform(new Vector2(1, 1))
+
+  function createVbaoDepthPrefilterNode() {
+    const cameraNear = reference('near', 'float', camera)
+    const cameraFar = reference('far', 'float', camera)
+    const farthestDepthTolerance = float(0.1)
+
+    const prefilterDepth = Fn(() => {
+      const centerUv = uv()
+      const centerDepth = prePassDepth.sample(centerUv).r.toVar('vbaoPrefilterCenterDepth')
+      const texelSize = vec2(1, 1)
+        .div(vbaoDepthPrefilterResolution)
+        .toVar('vbaoPrefilterTexelSize')
+      const farthestViewDepth = float(0).toVar('vbaoPrefilterFarthestViewDepth')
+      const supportedViewDepthSum = float(0).toVar('vbaoPrefilterSupportedViewDepthSum')
+      const supportedViewDepthCount = float(0).toVar('vbaoPrefilterSupportedViewDepthCount')
+
+      const centerValid = centerDepth.lessThan(1).and(centerDepth.greaterThanEqual(0))
+      const centerViewDepth = perspectiveDepthToViewZ(
+        centerDepth,
+        cameraNear,
+        cameraFar,
+      ).negate()
+      const fallbackViewDepth = centerValid.select(centerViewDepth, float(1)).toVar(
+        'vbaoPrefilterFallbackViewDepth',
+      )
+
+      const uv00 = centerUv.sub(texelSize.mul(0.5)).toVar('vbaoPrefilterUv00')
+      const uv10 = uv00.add(vec2(texelSize.x, 0)).toVar('vbaoPrefilterUv10')
+      const uv01 = uv00.add(vec2(0, texelSize.y)).toVar('vbaoPrefilterUv01')
+      const uv11 = uv00.add(texelSize).toVar('vbaoPrefilterUv11')
+
+      const visitFarthest = (sampleUv: typeof uv00) => {
+        const inside = sampleUv.x
+          .greaterThanEqual(0)
+          .and(sampleUv.x.lessThanEqual(1))
+          .and(sampleUv.y.greaterThanEqual(0))
+          .and(sampleUv.y.lessThanEqual(1))
+        const sampleDepth = prePassDepth.sample(sampleUv).r.toVar('vbaoPrefilterFarthestDepth')
+        const sampleValid = inside
+          .and(sampleDepth.lessThan(1))
+          .and(sampleDepth.greaterThanEqual(0))
+        const sampleViewDepth = perspectiveDepthToViewZ(
+          sampleDepth,
+          cameraNear,
+          cameraFar,
+        ).negate()
+
+        If(sampleValid, () => {
+          farthestViewDepth.assign(farthestViewDepth.max(sampleViewDepth))
+        })
+      }
+
+      const visitSupport = (sampleUv: typeof uv00) => {
+        const inside = sampleUv.x
+          .greaterThanEqual(0)
+          .and(sampleUv.x.lessThanEqual(1))
+          .and(sampleUv.y.greaterThanEqual(0))
+          .and(sampleUv.y.lessThanEqual(1))
+        const sampleDepth = prePassDepth.sample(sampleUv).r.toVar('vbaoPrefilterSupportDepth')
+        const sampleValid = inside
+          .and(sampleDepth.lessThan(1))
+          .and(sampleDepth.greaterThanEqual(0))
+        const sampleViewDepth = perspectiveDepthToViewZ(
+          sampleDepth,
+          cameraNear,
+          cameraFar,
+        ).negate()
+
+        If(sampleValid.and(farthestViewDepth.sub(sampleViewDepth).lessThanEqual(farthestDepthTolerance)), () => {
+          supportedViewDepthSum.addAssign(sampleViewDepth)
+          supportedViewDepthCount.addAssign(1)
+        })
+      }
+
+      visitFarthest(uv00)
+      visitFarthest(uv10)
+      visitFarthest(uv01)
+      visitFarthest(uv11)
+      visitSupport(uv00)
+      visitSupport(uv10)
+      visitSupport(uv01)
+      visitSupport(uv11)
+
+      const representativeViewDepth = supportedViewDepthCount
+        .greaterThan(0)
+        .select(supportedViewDepthSum.div(supportedViewDepthCount), fallbackViewDepth)
+
+      return centerValid.select(
+        viewZToPerspectiveDepth(representativeViewDepth.negate(), cameraNear, cameraFar),
+        centerDepth,
+      )
+    })()
+
+    return rtt(prefilterDepth)
+  }
 
   const scenePass = pass(scene, camera)
   const sceneColor = scenePass.getTextureNode('output')
@@ -596,6 +697,15 @@ function createReferencePipelines(
     slices: baselineVbaoPreset.slices,
     resolutionScale: 0.5,
   })
+  const vbaoDepthPrefilterNode = createVbaoDepthPrefilterNode()
+  const vbaoPrefilterNode = new VBAONode(vbaoDepthPrefilterNode, prePassNormal, camera, {
+    radius: VBAO_RADIUS_STRESS_PRESETS.baseline.radius,
+    thickness: 0.28,
+    scale: 0.85,
+    samples: baselineVbaoPreset.samples,
+    slices: baselineVbaoPreset.slices,
+    resolutionScale: 0.5,
+  })
 
   const n8aoScenePass = createN8AOScenePass(scene, camera)
   const n8aoNode = new N8AONode({
@@ -628,6 +738,7 @@ function createReferencePipelines(
 
   const gtaoRaw = gtaoNode.getTextureNode()
   const vbaoRaw = vbaoNode.getTextureNode()
+  const vbaoPrefilterRaw = vbaoPrefilterNode.getTextureNode()
   const vbaoCustomDenoiseResolution = uniform(new Vector2(1, 1))
   const ssaoDenoised = denoise(
     vec4(vec3(ssaoRawScalar), float(1)),
@@ -637,15 +748,24 @@ function createReferencePipelines(
   )
   const gtaoDenoised = denoise(vec4(vec3(gtaoRaw.r), float(1)), prePassDepth, prePassNormal, camera)
   const vbaoDenoised = denoise(vec4(vec3(vbaoRaw.r), float(1)), prePassDepth, prePassNormal, camera)
+  const vbaoPrefilterDenoised = denoise(
+    vec4(vec3(vbaoPrefilterRaw.r), float(1)),
+    vbaoDepthPrefilterNode,
+    prePassNormal,
+    camera,
+  )
   ssaoDenoised.radius.value = 4
   gtaoDenoised.radius.value = 4
   vbaoDenoised.radius.value = 4
+  vbaoPrefilterDenoised.radius.value = 4
   ssaoDenoised.depthPhi.value = 3
   gtaoDenoised.depthPhi.value = 3
   vbaoDenoised.depthPhi.value = 3
+  vbaoPrefilterDenoised.depthPhi.value = 3
   ssaoDenoised.normalPhi.value = 8
   gtaoDenoised.normalPhi.value = 8
   vbaoDenoised.normalPhi.value = 8
+  vbaoPrefilterDenoised.normalPhi.value = 8
   const vbaoCustomBilateralScalar = Fn(() => {
     const centerUv = uv()
     const centerDepth = prePassDepth.sample(centerUv).r.toVar()
@@ -703,11 +823,13 @@ function createReferencePipelines(
 
   const gtaoRawScalar = gtaoRaw.r
   const vbaoRawScalar = vbaoRaw.r
+  const vbaoPrefilterRawScalar = vbaoPrefilterRaw.r
   type TslScalar = typeof gtaoRaw.r
   type TslVec3 = typeof sceneColor.rgb
   const ssaoDenoisedScalar = (ssaoDenoised as unknown as typeof gtaoRaw).r
   const gtaoDenoisedScalar = (gtaoDenoised as unknown as typeof gtaoRaw).r
   const vbaoDenoisedScalar = (vbaoDenoised as unknown as typeof vbaoRaw).r
+  const vbaoPrefilterDenoisedScalar = (vbaoPrefilterDenoised as unknown as typeof vbaoRaw).r
   const vbaoCustomDenoisedScalar = vbaoCustomBilateralScalar
   const n8aoTex = n8aoNode.getTextureNode() as unknown as {
     readonly rgb: TslVec3
@@ -747,6 +869,14 @@ function createReferencePipelines(
       aoDenoised: makeAoPipeline(vbaoDenoisedScalar),
       aoCustomDenoised: makeAoPipeline(vbaoCustomDenoisedScalar),
     },
+    vbaoPrefilter: {
+      beautyRaw: makeBeautyPipeline(vbaoPrefilterRawScalar),
+      beautyDenoised: makeBeautyPipeline(vbaoPrefilterDenoisedScalar),
+      beautyCustomDenoised: makeBeautyPipeline(vbaoPrefilterDenoisedScalar),
+      aoRaw: makeAoPipeline(vbaoPrefilterRawScalar),
+      aoDenoised: makeAoPipeline(vbaoPrefilterDenoisedScalar),
+      aoCustomDenoised: makeAoPipeline(vbaoPrefilterDenoisedScalar),
+    },
     n8ao: {
       beautyRaw: new RenderPipeline(renderer, vec4(n8aoTex.rgb, n8aoTex.a)),
       beautyDenoised: new RenderPipeline(renderer, vec4(n8aoTex.rgb, n8aoTex.a)),
@@ -756,9 +886,14 @@ function createReferencePipelines(
   }
 
   const vbaoDenoiseBufferSize = new Vector2()
+  let activeVbaoDepthPrefilterPreset: VbaoDepthPrefilterPreset = 'baseline'
+  const activeVbaoPipelines = () =>
+    activeVbaoDepthPrefilterPreset === 'prefilter' ? pipelines.vbaoPrefilter : pipelines.vbao
   const setVbaoEvidenceResolution = (enabled: boolean) => {
     vbaoNode.resolutionScale = enabled ? 1.0 : 0.5
+    vbaoPrefilterNode.resolutionScale = enabled ? 1.0 : 0.5
     renderer.getDrawingBufferSize(vbaoDenoiseBufferSize)
+    vbaoDepthPrefilterResolution.value.set(vbaoDenoiseBufferSize.width, vbaoDenoiseBufferSize.height)
     vbaoCustomDenoiseResolution.value.set(
       Math.max(1, Math.round(vbaoNode.resolutionScale * vbaoDenoiseBufferSize.width)),
       Math.max(1, Math.round(vbaoNode.resolutionScale * vbaoDenoiseBufferSize.height)),
@@ -767,13 +902,19 @@ function createReferencePipelines(
   const setVbaoSamplePreset = (preset: VbaoSamplePreset) => {
     const config = VBAO_SAMPLE_PRESETS[preset]
     vbaoNode.configure({ samples: config.samples, slices: config.slices })
+    vbaoPrefilterNode.configure({ samples: config.samples, slices: config.slices })
   }
   const setVbaoSamplingSchedule = (schedule: VbaoSamplingSchedule) => {
     vbaoNode.setBenchmarkSamplingSchedule(schedule)
+    vbaoPrefilterNode.setBenchmarkSamplingSchedule(schedule)
   }
   const setVbaoRadiusStressPreset = (preset: VbaoRadiusStressPreset) => {
     const config = VBAO_RADIUS_STRESS_PRESETS[preset]
     vbaoNode.configure({ radius: config.radius })
+    vbaoPrefilterNode.configure({ radius: config.radius })
+  }
+  const setVbaoDepthPrefilterPreset = (preset: VbaoDepthPrefilterPreset) => {
+    activeVbaoDepthPrefilterPreset = preset
   }
   const composeBufferSize = new Vector2()
   let composeBufferWidth = 0
@@ -823,7 +964,11 @@ function createReferencePipelines(
           : 'beautyRaw'
     if (mode === 'vbao' && denoiseEnabled && vbaoDenoiseFilter === 'custom-bilateral') {
       const customKey = viewMode === 'ao' ? 'aoCustomDenoised' : 'beautyCustomDenoised'
-      pipelines.vbao[customKey].render()
+      activeVbaoPipelines()[customKey].render()
+      return
+    }
+    if (mode === 'vbao') {
+      activeVbaoPipelines()[key].render()
       return
     }
     pipelines[mode][key].render()
@@ -831,6 +976,7 @@ function createReferencePipelines(
 
   return {
     renderSingle: renderMode,
+    setVbaoDepthPrefilterPreset,
     setVbaoSamplePreset,
     setVbaoSamplingSchedule,
     setVbaoRadiusStressPreset,
@@ -872,7 +1018,11 @@ function createReferencePipelines(
           if (mode === 'n8ao') n8aoNode.setDisplayMode(viewMode === 'ao' ? 'AO' : 'Combined')
           if (mode === 'vbao' && denoiseEnabled && vbaoDenoiseFilter === 'custom-bilateral') {
             const customKey = viewMode === 'ao' ? 'aoCustomDenoised' : 'beautyCustomDenoised'
-            pipelines.vbao[customKey].render()
+            activeVbaoPipelines()[customKey].render()
+            return
+          }
+          if (mode === 'vbao') {
+            activeVbaoPipelines()[key].render()
             return
           }
           pipelines[mode][key].render()
@@ -895,6 +1045,7 @@ function createReferencePipelines(
       }
       gtaoNode.dispose()
       vbaoNode.dispose()
+      vbaoPrefilterNode.dispose()
       n8aoNode.dispose()
     },
   }

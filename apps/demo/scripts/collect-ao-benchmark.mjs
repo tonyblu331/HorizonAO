@@ -97,16 +97,13 @@ function vbaoDepthPrefilterPresetsFor(mode, denoiseEnabled) {
     !vbaoDepthPrefilterMatrixEnabled ||
     denoiseEnabled ||
     vbaoScheduleMatrixEnabled ||
-    vbaoSampleMatrixEnabled
+    vbaoSampleMatrixEnabled ||
+    !vbaoRadiusStressMatrixEnabled
   ) {
     return [baselineVbaoDepthPrefilterPreset]
   }
 
-  // Phase 3.1 is label plumbing only. Do not emit `prefilter` evidence rows
-  // until the internal candidate path is actually wired; fake rows are worse
-  // than no rows because they would make screenshots/timings lie.
-  void experimentalVbaoDepthPrefilterPreset
-  return [baselineVbaoDepthPrefilterPreset]
+  return [baselineVbaoDepthPrefilterPreset, experimentalVbaoDepthPrefilterPreset]
 }
 
 function vbaoDenoiseFiltersFor(mode, denoiseEnabled) {

@@ -48,11 +48,20 @@ These labels are intentionally boring. The point is traceability: every
 screenshot/timing row must say whether it came from the current path or the
 candidate path, otherwise we cannot honestly judge scale-mismatch, mud, or p95.
 
-Phase 3.1 wires the labels through the internal harness but still emits only
-truthful `baseline` rows. The demo clamps requested `prefilter` labels back to
-`baseline` until the candidate shader path is actually wired; otherwise we would
-create fake screenshots that look like evidence but only repeat the current
-path.
+Phase 3.1 wired the labels through the internal harness without emitting fake
+`prefilter` rows. Phase 3.2 adds the actual candidate path: the demo owns a
+TSL `rtt(...)` depth prefilter node and a second internal `VBAONode` wired to
+that prefiltered depth texture. Baseline rows keep the original `VBAONode`, so
+baseline timings do not pay the prefilter pass cost.
+
+The candidate prefilter is intentionally narrow:
+
+- 2x2 taps around the current UV;
+- convert perspective depth to positive view depth;
+- choose the farthest-supported samples within `0.1` view-depth tolerance;
+- convert the representative view depth back to perspective depth;
+- preserve sky/background by returning the center depth when the center is not
+  valid geometry.
 
 ## Acceptance
 

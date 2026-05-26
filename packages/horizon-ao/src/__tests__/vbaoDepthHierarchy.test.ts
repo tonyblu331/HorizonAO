@@ -105,4 +105,14 @@ describe('VBAO depth hierarchy evidence gate', () => {
     expect(indexSource).not.toContain('vbaoDepthPrefilter')
     expect(optionsSource).not.toContain('depthPrefilter')
   })
+
+  it('keeps the internal prefilter candidate real before emitting prefilter rows', () => {
+    expect(museumSource).toContain('createVbaoDepthPrefilterNode')
+    expect(museumSource).toContain('rtt(')
+    expect(museumSource).toContain('perspectiveDepthToViewZ')
+    expect(museumSource).toContain('VBAO_DEPTH_PREFILTER_CANDIDATE_ENABLED = true')
+    expect(benchmarkCollectorSource).toContain(
+      '[baselineVbaoDepthPrefilterPreset, experimentalVbaoDepthPrefilterPreset]',
+    )
+  })
 })
