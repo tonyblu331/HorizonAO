@@ -10,8 +10,8 @@ import resolveSource from '../VBAOResolveNode.ts?raw'
 import museumSource from '../../../../apps/demo/src/scenes/MuseumScene.tsx?raw'
 import aoCompareSource from '../../../../apps/demo/e2e/ao-compare.spec.ts?raw'
 import benchmarkSource from '../../../../apps/demo/scripts/collect-ao-benchmark.mjs?raw'
-import profilingFailureLabelsSource from '../../../../apps/demo/scripts/profiling/failureLabels.mjs?raw'
-import profilingReportWritersSource from '../../../../apps/demo/scripts/profiling/reportWriters.mjs?raw'
+import profilingBenchmarkHarnessSource from '../../../../apps/demo/scripts/profiling/benchmarkHarness.mjs?raw'
+import profilingProductionReportSource from '../../../../apps/demo/scripts/profiling/productionReport.mjs?raw'
 import profilingScreenshotMetricsSource from '../../../../apps/demo/scripts/profiling/screenshotMetrics.mjs?raw'
 
 const runtimeSources = [museumSource, aoCompareSource, benchmarkSource].join('\n')
@@ -358,36 +358,43 @@ describe('modernized VBAO production source contract', () => {
     expect(benchmarkSource).toContain('analyzeScreenshotQuality')
     expect(benchmarkSource).toContain('qualityMetrics')
     expect(benchmarkSource).toContain("import { analyzeScreenshotQuality } from './profiling/screenshotMetrics.mjs'")
-    expect(benchmarkSource).toContain("import { writeProductionQualityReports } from './profiling/reportWriters.mjs'")
-    expect(benchmarkSource).toContain("'--strictPort'")
     expect(benchmarkSource).toContain('AO_BENCHMARK_BASE_URL')
     expect(benchmarkSource).toContain('AO_BENCHMARK_EXTERNAL_SERVER=1 requires AO_BENCHMARK_BASE_URL')
-    expect(benchmarkSource).toContain('Vite exited before AO benchmark readiness')
-    expect(benchmarkSource).toContain('await server.ready')
-    expect(benchmarkSource).toContain("import { classifyFailureLabels } from './profiling/failureLabels.mjs'")
+    expect(benchmarkSource).toContain(
+      "import { assertWebGpu, launchBenchmarkBrowser, startBenchmarkServer, waitForBenchmark, waitForServer } from './profiling/benchmarkHarness.mjs'",
+    )
+    expect(profilingBenchmarkHarnessSource).toContain('export function startBenchmarkServer')
+    expect(profilingBenchmarkHarnessSource).toContain('export async function waitForServer')
+    expect(profilingBenchmarkHarnessSource).toContain('export async function launchBenchmarkBrowser')
+    expect(profilingBenchmarkHarnessSource).toContain('export async function waitForBenchmark')
+    expect(profilingBenchmarkHarnessSource).toContain('export async function assertWebGpu')
+    expect(profilingBenchmarkHarnessSource).toContain('Vite exited before AO benchmark readiness')
+    expect(profilingBenchmarkHarnessSource).toContain('await server.ready')
+    expect(profilingBenchmarkHarnessSource).toContain("'--strictPort'")
+    expect(benchmarkSource).toContain("import { classifyFailureLabels, writeProductionQualityReports } from './profiling/productionReport.mjs'")
     expect(benchmarkSource).toContain('failureLabels: classifyFailureLabels(row)')
-    expect(profilingFailureLabelsSource).toContain('export const AO_FAILURE_LABELS')
-    expect(profilingFailureLabelsSource).toContain('export function classifyFailureLabels')
-    expect(profilingFailureLabelsSource).toContain("'noise'")
-    expect(profilingFailureLabelsSource).toContain("'mud'")
-    expect(profilingFailureLabelsSource).toContain("'halo'")
-    expect(profilingFailureLabelsSource).toContain("'thin-gap'")
-    expect(profilingFailureLabelsSource).toContain("'edge-bleed'")
-    expect(profilingFailureLabelsSource).toContain("'scale-mismatch'")
-    expect(profilingFailureLabelsSource).toContain("'false-curvature'")
-    expect(profilingFailureLabelsSource).toContain("return ['noise', 'false-curvature', 'scale-mismatch']")
-    expect(profilingFailureLabelsSource).toContain("return ['noise', 'edge-bleed']")
-    expect(profilingFailureLabelsSource).toContain("labels.add('mud')")
-    expect(profilingFailureLabelsSource).toContain("labels.add('thin-gap')")
+    expect(profilingProductionReportSource).toContain('export const AO_FAILURE_LABELS')
+    expect(profilingProductionReportSource).toContain('export function classifyFailureLabels')
+    expect(profilingProductionReportSource).toContain("'noise'")
+    expect(profilingProductionReportSource).toContain("'mud'")
+    expect(profilingProductionReportSource).toContain("'halo'")
+    expect(profilingProductionReportSource).toContain("'thin-gap'")
+    expect(profilingProductionReportSource).toContain("'edge-bleed'")
+    expect(profilingProductionReportSource).toContain("'scale-mismatch'")
+    expect(profilingProductionReportSource).toContain("'false-curvature'")
+    expect(profilingProductionReportSource).toContain("return ['noise', 'false-curvature', 'scale-mismatch']")
+    expect(profilingProductionReportSource).toContain("return ['noise', 'edge-bleed']")
+    expect(profilingProductionReportSource).toContain("labels.add('mud')")
+    expect(profilingProductionReportSource).toContain("labels.add('thin-gap')")
     expect(profilingScreenshotMetricsSource).toContain('export async function analyzeScreenshotQuality')
     expect(profilingScreenshotMetricsSource).toContain('patternNoiseScore')
     expect(profilingScreenshotMetricsSource).toContain('stripeScore')
     expect(profilingScreenshotMetricsSource).toContain('horizontalStripeScore')
     expect(profilingScreenshotMetricsSource).toContain('verticalStripeScore')
-    expect(profilingReportWritersSource).toContain('export async function writeProductionQualityReports')
-    expect(profilingReportWritersSource).toContain('AO Production Screenshot Quality Summary')
-    expect(profilingReportWritersSource).toContain('Pattern/noise ↓')
-    expect(profilingReportWritersSource).toContain('Metric basis:')
+    expect(profilingProductionReportSource).toContain('export async function writeProductionQualityReports')
+    expect(profilingProductionReportSource).toContain('AO Production Screenshot Quality Summary')
+    expect(profilingProductionReportSource).toContain('Pattern/noise ↓')
+    expect(profilingProductionReportSource).toContain('Metric basis:')
   })
 
   it('ships product-first quality presets without platform labels', () => {

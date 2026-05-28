@@ -1,11 +1,9 @@
 #!/usr/bin/env node
-import { spawn } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium } from '@playwright/test'
-import { classifyFailureLabels } from './profiling/failureLabels.mjs'
-import { writeProductionQualityReports } from './profiling/reportWriters.mjs'
+import { assertWebGpu, launchBenchmarkBrowser, startBenchmarkServer, waitForBenchmark, waitForServer } from './profiling/benchmarkHarness.mjs'
+import { classifyFailureLabels, writeProductionQualityReports } from './profiling/productionReport.mjs'
 import { analyzeScreenshotQuality } from './profiling/screenshotMetrics.mjs'
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url))
@@ -36,75 +34,6 @@ const modes = ['off', 'gtao', 'vbao']
 const views = ['beauty', 'ao']
 const denoiseStates = [false, true]
 const vbaoResolutionStates = [false, true]
-
-async function waitForServer(server) {
-  if (server !== undefined) await server.ready
-
-  const deadline = Date.now() + 30_000
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(baseUrl)
-      if (response.ok) return
-    } catch {
-      // Retry until Vite is ready.
-    }
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 250))
-  }
-  throw new Error(`Timed out waiting for AO benchmark demo server at ${baseUrl}`)
-}
-
-function startServer() {
-  if (externalServer) return undefined
-
-  const viteBin = path.resolve(appRoot, 'node_modules/vite/bin/vite.js')
-  const child = spawn(
-    process.execPath,
-    [viteBin, '--host', '127.0.0.1', '--port', String(benchmarkPort), '--strictPort'],
-    {
-      cwd: appRoot,
-      env: { ...process.env, FORCE_COLOR: '0' },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  )
-
-  let settled = false
-  let output = ''
-  let resolveReady
-  let rejectReady
-  const ready = new Promise((resolve, reject) => {
-    resolveReady = resolve
-    rejectReady = reject
-  })
-  const observeStartup = (chunk, log) => {
-    const text = String(chunk)
-    output += text
-    log(text.trim())
-    if (!settled && /ready in|Local:/i.test(text)) {
-      settled = true
-      resolveReady()
-    }
-  }
-
-  child.stdout?.on('data', (chunk) => observeStartup(chunk, console.log))
-  child.stderr?.on('data', (chunk) => observeStartup(chunk, console.error))
-  child.once('exit', (code, signal) => {
-    if (settled) return
-    settled = true
-    rejectReady(
-      new Error(
-        `Vite exited before AO benchmark readiness while --strictPort was active (code ${code ?? 'null'}, signal ${signal ?? 'null'}). Refusing stale-server capture at ${baseUrl}.\n${output.trim()}`,
-      ),
-    )
-  })
-
-  return { child, ready }
-}
-
-async function waitForBenchmark(page) {
-  await page.waitForFunction(() => window.__aoBenchmark?.latest !== undefined, undefined, {
-    timeout: 30_000,
-  })
-}
 
 async function setMode(page, mode) {
   await page.evaluate((nextMode) => {
@@ -143,13 +72,6 @@ async function readSnapshot(page) {
   return page.evaluate(() => window.__aoBenchmark?.snapshot())
 }
 
-async function assertWebGpu(page) {
-  const environment = await page.evaluate(() => window.__aoBenchmark?.environment)
-  if (requireWebGpu && environment?.rendererBackend !== 'webgpu') {
-    throw new Error(`AO benchmark requires WebGPU; got ${environment?.rendererBackend ?? 'unknown'}`)
-  }
-}
-
 async function resetBenchmark(page) {
   await page.evaluate(() => window.__aoBenchmark?.reset())
 }
@@ -177,28 +99,19 @@ function shouldSkip(mode, denoiseEnabled) {
 }
 
 await mkdir(screenshotRoot, { recursive: true })
-const server = startServer()
+const server = startBenchmarkServer({ externalServer, appRoot, benchmarkPort, baseUrl })
 let browser
 const rows = []
 try {
-  await waitForServer(server)
-  browser = await chromium.launch({
-    channel: process.env.PLAYWRIGHT_CHROME_CHANNEL ?? 'chrome',
-    headless: true,
-    args: [
-      '--enable-unsafe-webgpu',
-      '--ignore-gpu-blocklist',
-      '--enable-features=WebGPUDeveloperFeatures,Vulkan',
-      '--use-angle=d3d11',
-    ],
-  })
+  await waitForServer({ server, baseUrl })
+  browser = await launchBenchmarkBrowser()
 
   for (const viewport of resolutions) {
     const page = await browser.newPage({ viewport, deviceScaleFactor: 1 })
     try {
       await page.goto(`${baseUrl}/museum`, { waitUntil: 'domcontentloaded' })
       await waitForBenchmark(page)
-      await assertWebGpu(page)
+      await assertWebGpu(page, { requireWebGpu })
 
       for (const mode of modes) {
         for (const view of views) {

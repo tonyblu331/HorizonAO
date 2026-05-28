@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AO_FAILURE_LABELS, classifyFailureLabels } from '../../../../apps/demo/scripts/profiling/failureLabels.mjs'
+import { AO_FAILURE_LABELS, classifyFailureLabels } from '../../../../apps/demo/scripts/profiling/productionReport.mjs'
 
 describe('VBAO profiling failure labels', () => {
   it('keeps the evidence label vocabulary explicit', () => {
