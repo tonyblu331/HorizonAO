@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { EVIDENCE_FAILURE_LABELS, EVIDENCE_ROW_SCHEMA } from './evidenceCameras'
 
 describe('evidence row contract', () => {
-  it('includes comparison fields for raw and denoised AO evidence', () => {
+  it('includes comparison fields for raw-debug and product AO evidence', () => {
     expect(EVIDENCE_ROW_SCHEMA).toEqual([
       'scene',
       'cameraId',
@@ -35,6 +35,7 @@ describe('evidence row contract', () => {
       'thin-gap',
       'edge-bleed',
       'scale-mismatch',
+      'false-curvature',
     ])
   })
 })

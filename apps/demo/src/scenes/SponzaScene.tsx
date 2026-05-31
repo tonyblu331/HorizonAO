@@ -10,7 +10,6 @@ export function SponzaScene() {
     <ScenePage
       title="Sponza"
       subtitle="Large architectural interior from Khronos glTF Sample Assets, useful for lighting and occlusion stress."
-      fixture={PARITY_SCENES.sponza}
       camera={PARITY_SCENES.sponza.camera}
       controls={{
         target: PARITY_SCENES.sponza.camera.target,

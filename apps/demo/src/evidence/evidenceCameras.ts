@@ -104,6 +104,7 @@ export const EVIDENCE_FAILURE_LABELS = [
   'thin-gap',
   'edge-bleed',
   'scale-mismatch',
+  'false-curvature',
 ] as const
 
 export type EvidenceFailureLabel = (typeof EVIDENCE_FAILURE_LABELS)[number]

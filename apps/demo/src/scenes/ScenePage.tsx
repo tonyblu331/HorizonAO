@@ -20,8 +20,6 @@ interface ScenePageProps {
     readonly maxPolarAngle?: number
   }
   readonly children: ReactNode
-  // kept for backward compat during PR-04 wiring — unused until VbaoScene ships
-  readonly fixture?: unknown
 }
 
 export function ScenePage({ title, subtitle, camera, controls, children }: ScenePageProps) {

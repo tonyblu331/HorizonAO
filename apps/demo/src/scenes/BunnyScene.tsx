@@ -10,7 +10,6 @@ export function BunnyScene() {
     <ScenePage
       title="Stanford Bunny"
       subtitle="Classic geometry benchmark. The source is Stanford; the browser runtime path uses a CC0 GLB mirror."
-      fixture={PARITY_SCENES.bunny}
       camera={PARITY_SCENES.bunny.camera}
       controls={{ target: PARITY_SCENES.bunny.camera.target, minDistance: 0.55, maxDistance: 3.8 }}
     >

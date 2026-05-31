@@ -140,8 +140,15 @@ for (const fixture of Object.values(PARITY_SCENES).filter((scene) => scene.key !
   test(`${fixture.key}: AO buttons fit and modes produce captures`, async ({ page }, testInfo) => {
     const pageErrors: string[] = []
     page.on('pageerror', (err) => pageErrors.push(err.message))
+    page.on('response', (response) => {
+      if (response.status() >= 400 && !response.url().endsWith('/favicon.ico')) {
+        pageErrors.push(`${response.status()} ${response.url()}`)
+      }
+    })
     page.on('console', (msg) => {
-      if (msg.type() === 'error') pageErrors.push(msg.text())
+      if (msg.type() !== 'error') return
+      if (msg.text() === 'Failed to load resource: the server responded with a status of 404 (Not Found)') return
+      pageErrors.push(msg.text())
     })
 
     await page.goto(fixture.route)
@@ -211,7 +218,7 @@ for (const fixture of Object.values(PARITY_SCENES).filter((scene) => scene.key !
   })
 }
 
-test('museum exposes evidence controls for raw, denoised, and full-resolution VBAO', async ({
+test('museum exposes evidence controls for raw/product output and full-resolution VBAO', async ({
   page,
 }) => {
   await page.goto('/museum')
@@ -228,7 +235,7 @@ test('museum exposes evidence controls for raw, denoised, and full-resolution VB
 
   const fullResolution = page.locator('[data-full-resolution]')
   await expect(fullResolution).toBeVisible()
-  await expect(fullResolution).not.toBeChecked()
+  await expect(fullResolution).toBeChecked()
 
   const backend = await page.locator('[data-renderer-backend]').first().getAttribute('data-renderer-backend')
   if (backend !== 'webgpu') {
@@ -306,7 +313,7 @@ test('museum publishes machine-readable benchmark snapshots for single and split
     renderMode: 'single',
     mode: 'vbao',
     composeModes: [],
-    vbaoSamplingSchedule: 'magic-square',
+    vbaoSamplingSchedule: 'phase-atlas-stable-hash',
   })
   expect(single?.fps).toBeGreaterThan(0)
   expect(single?.reportIndex).toBeGreaterThan(initialReportIndex)
@@ -329,7 +336,7 @@ test('museum publishes machine-readable benchmark snapshots for single and split
     rendererBackend: 'webgpu',
     renderMode: 'compose',
     mode: 'compose',
-    vbaoSamplingSchedule: 'magic-square',
+    vbaoSamplingSchedule: 'phase-atlas-stable-hash',
   })
   expect(split?.composeModes).toEqual(expect.arrayContaining(['gtao', 'vbao']))
   expect(split?.fps).toBeGreaterThan(0)
@@ -356,29 +363,14 @@ test('museum split composer renders visible pixels for every selected segment', 
   })
 })
 
-test('museum exposes an internal high-sample VBAO benchmark preset', async ({ page }) => {
+test('museum reports the single production VBAO sampling scheme', async ({ page }) => {
   await page.goto('/museum')
 
   await expect(page.locator('.benchmark-panel')).toBeVisible({ timeout: 30_000 })
   const backend = await page.locator('[data-renderer-backend]').first().getAttribute('data-renderer-backend')
-  test.skip(backend !== 'webgpu', 'VBAO sample preset benchmark requires the WebGPU AO path')
+  test.skip(backend !== 'webgpu', 'VBAO sampling scheme smoke requires the WebGPU AO path')
 
-  const presetChanged = await page.evaluate(() => {
-    const benchmark = (
-      window as unknown as {
-        __aoBenchmark?: {
-          readonly latest?: { readonly reportIndex: number }
-          reset: () => void
-          setVbaoSamplePreset?: (preset: 'baseline' | 'high-sample') => void
-        }
-      }
-    ).__aoBenchmark
-    if (benchmark?.setVbaoSamplePreset === undefined) return false
-    benchmark.setVbaoSamplePreset('high-sample')
-    benchmark.reset()
-    return true
-  })
-  expect(presetChanged).toBe(true)
+  await page.evaluate(() => window.__aoBenchmark?.reset())
 
   await page.locator('[data-compose-debug]').uncheck()
   await page.locator('[data-mode="vbao"]').click()
@@ -390,9 +382,7 @@ test('museum exposes an internal high-sample VBAO benchmark preset', async ({ pa
   await page.waitForFunction(
     () =>
       window.__aoBenchmark?.latest?.mode === 'vbao' &&
-      window.__aoBenchmark.latest.vbaoSamplePreset === 'high-sample' &&
-      window.__aoBenchmark.latest.vbaoSamples === 16 &&
-      window.__aoBenchmark.latest.vbaoSlices === 3 &&
+      window.__aoBenchmark.latest.vbaoSamplingSchedule === 'phase-atlas-stable-hash' &&
       window.__aoBenchmark.latest.fullResolutionVbao === true &&
       window.__aoBenchmark.latest.reportIndex > 0,
   )
@@ -404,109 +394,6 @@ test('museum exposes an internal high-sample VBAO benchmark preset', async ({ pa
     viewMode: 'ao',
     denoiseEnabled: false,
     fullResolutionVbao: true,
-    vbaoSamplePreset: 'high-sample',
-    vbaoSamples: 16,
-    vbaoSlices: 3,
-  })
-})
-
-test('museum exposes internal VBAO sampling schedules for benchmark captures', async ({ page }) => {
-  await page.goto('/museum')
-
-  await expect(page.locator('.benchmark-panel')).toBeVisible({ timeout: 30_000 })
-  const backend = await page.locator('[data-renderer-backend]').first().getAttribute('data-renderer-backend')
-  test.skip(backend !== 'webgpu', 'VBAO sampling schedule benchmark requires the WebGPU AO path')
-
-  const scheduleChanged = await page.evaluate(() => {
-    const benchmark = (
-      window as unknown as {
-        __aoBenchmark?: {
-          reset: () => void
-          setVbaoSamplingSchedule?: (schedule: 'magic-square' | 'r2' | 'hilbert' | 'blue-noise') => void
-        }
-      }
-    ).__aoBenchmark
-    if (benchmark?.setVbaoSamplingSchedule === undefined) return false
-    benchmark.setVbaoSamplingSchedule('r2')
-    benchmark.reset()
-    return true
-  })
-  expect(scheduleChanged).toBe(true)
-
-  await page.locator('[data-compose-debug]').uncheck()
-  await page.locator('[data-mode="vbao"]').click()
-  await page.locator('[data-view="ao"]').click()
-  await page.locator('[data-denoise]').uncheck()
-  await page.locator('[data-full-resolution]').check()
-  await page.evaluate(() => window.__aoBenchmark?.reset())
-
-  await page.waitForFunction(
-    () =>
-      window.__aoBenchmark?.latest?.mode === 'vbao' &&
-      window.__aoBenchmark.latest.vbaoSamplingSchedule === 'r2' &&
-      window.__aoBenchmark.latest.fullResolutionVbao === true &&
-      window.__aoBenchmark.latest.reportIndex > 0,
-  )
-
-  const latest = await page.evaluate(() => window.__aoBenchmark?.latest)
-  expect(latest).toMatchObject({
-    renderMode: 'single',
-    mode: 'vbao',
-    viewMode: 'ao',
-    denoiseEnabled: false,
-    fullResolutionVbao: true,
-    vbaoSamplingSchedule: 'r2',
-  })
-})
-
-test('museum exposes internal VBAO denoise filter candidates for benchmark captures', async ({
-  page,
-}) => {
-  await page.goto('/museum')
-
-  await expect(page.locator('.benchmark-panel')).toBeVisible({ timeout: 30_000 })
-  const backend = await page.locator('[data-renderer-backend]').first().getAttribute('data-renderer-backend')
-  test.skip(backend !== 'webgpu', 'VBAO denoise filter benchmark requires the WebGPU AO path')
-
-  const filterChanged = await page.evaluate(() => {
-    const benchmark = (
-      window as unknown as {
-        __aoBenchmark?: {
-          reset: () => void
-          setVbaoDenoiseFilter?: (filter: 'generic' | 'custom-bilateral') => void
-        }
-      }
-    ).__aoBenchmark
-    if (benchmark?.setVbaoDenoiseFilter === undefined) return false
-    benchmark.setVbaoDenoiseFilter('custom-bilateral')
-    benchmark.reset()
-    return true
-  })
-  expect(filterChanged).toBe(true)
-
-  await page.locator('[data-compose-debug]').uncheck()
-  await page.locator('[data-mode="vbao"]').click()
-  await page.locator('[data-view="ao"]').click()
-  await page.locator('[data-denoise]').check()
-  await page.locator('[data-full-resolution]').check()
-  await page.evaluate(() => window.__aoBenchmark?.reset())
-
-  await page.waitForFunction(
-    () =>
-      window.__aoBenchmark?.latest?.mode === 'vbao' &&
-      window.__aoBenchmark.latest.denoiseEnabled === true &&
-      window.__aoBenchmark.latest.vbaoDenoiseFilter === 'custom-bilateral' &&
-      window.__aoBenchmark.latest.fullResolutionVbao === true &&
-      window.__aoBenchmark.latest.reportIndex > 0,
-  )
-
-  const latest = await page.evaluate(() => window.__aoBenchmark?.latest)
-  expect(latest).toMatchObject({
-    renderMode: 'single',
-    mode: 'vbao',
-    viewMode: 'ao',
-    denoiseEnabled: true,
-    fullResolutionVbao: true,
-    vbaoDenoiseFilter: 'custom-bilateral',
+    vbaoSamplingSchedule: 'phase-atlas-stable-hash',
   })
 })

@@ -18,7 +18,6 @@ export function GridScene() {
         </>
       }
       subtitle="VBAO — Visibility Bitmask Ambient Occlusion for TSL/WebGPU. Primitive grid stress-test."
-      fixture={PARITY_SCENES.grid}
       camera={PARITY_SCENES.grid.camera}
       controls={{ target: PARITY_SCENES.grid.camera.target }}
     >

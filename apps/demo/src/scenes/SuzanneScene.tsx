@@ -12,7 +12,6 @@ export function SuzanneScene() {
     <ScenePage
       title="Suzanne"
       subtitle="Blender's classic monkey mesh in neutral clay material, tuned for shadow and AO readability."
-      fixture={PARITY_SCENES.suzanne}
       camera={PARITY_SCENES.suzanne.camera}
       controls={{ target: PARITY_SCENES.suzanne.camera.target, minDistance: 1.8, maxDistance: 9 }}
     >

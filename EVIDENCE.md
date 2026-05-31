@@ -4,99 +4,1142 @@ Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
 This file is the gate for later adaptive thickness, sampling, denoise, or depth
 hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
-## Required Capture Matrix
 
-Capture each required row in both view modes:
+## Current VBAO State - 2026-05-27
+
+Status: **architecture corrected; local screenshots refreshed; no formal timing promotion claimed by this section**.
+
+Current production boundary:
+
+- `VBAONode` is the single public visibility-bitmask AO product node with selected GT-VBAO corrections; `getTextureNode()` returns final product AO and `getRawTextureNode()` is debug/readback only.
+- Cleanup, JBU resolve, and full-resolution polish are internal pass-elided reconstruction stages. Full-resolution raw output bypasses low-resolution resolve.
+- There is no public `VBAODenoiseNode` toolkit or hidden external blur in the package API; `softness` controls optional internal polish.
+- Production sampling is single-scheme `phase-atlas-stable-hash` with live shader x² near-biased spacing.
+- Slices are uniformly averaged after cosine-measure sectorization; projected-normal length is used to frame the CDF, not to weight slices.
+- `normalNode` remains required.
+- Runtime Museum/E2E/benchmark paths no longer expose the old research candidate controls.
+- `denoiseRadius`/generic denoiser controls are intentionally not public; `softness` is the single artist-facing polish control.
+- Production build was not run.
+
+Local capture note:
+
+- The latest architecture pass used local screenshot/benchmark artifacts only as
+  throwaway verification. Those files live under ignored `artifacts/` paths and
+  are intentionally not referenced here as committed evidence.
+- Formal evidence promotion still requires curated JSON rows and screenshots to
+  be committed alongside this file.
+- Expected labels for the next curated run include Off/Beauty, VBAO Raw
+  Debug/Beauty, VBAO Product/Beauty, VBAO Raw Debug/AO, VBAO Product/AO, and
+  GTAO comparison rows.
+
+Note: This section records architectural verification only. It does not assert a Pareto visual-quality or performance win.
+
+## Historical VBAO State - 2026-05-26
+
+Status: **stabilized for the next evidence gate; no production behavior changed
+by this section**.
+
+Historical production boundary at that time:
+
+- Production VBAO remained the cosine-weighted reduction path.
+- Production sampling remained `magic-square`.
+- Production radius/thickness remains the Museum `museum-baseline`.
+- `normalNode` remains required.
+- No public `VBAONodeOptions` expansion and no new `@horizonao/core` export are
+  accepted by the current evidence.
+- Production build was not run for this stabilization pass.
+
+Accepted infrastructure:
+
+- `/vbao-parity` is the hardened internal GPU/scalar parity route.
+- The parity fixture matrix now includes:
+  - `flat-plane`
+  - `two-wall-corner`
+  - `two-wall-corner-true-normal`
+  - `thin-occluder`
+  - `thin-gap-parallel-planes`
+  - `large-flat-floor-no-curvature`
+  - `small-contact-object-on-plane`
+  - `grazing-wall-corner`
+  - `subpixel-thin-occluder`
+- Artifact labels are the gate language for new candidates: `noise`, `mud`,
+  `edge-bleed`, `thin-gap`, `false-curvature`, and `scale-mismatch`.
+
+Rejected or diagnostic-only candidates:
+
+| Candidate / track | Current disposition | Why it is not promoted |
+| --- | --- | --- |
+| SSILVB/reference formula ablation | Diagnostic only | Improves some contact readability but keeps or introduces blocking `mud`, `false-curvature`, and `scale-mismatch`; no promoted live GPU formula replacement exists. |
+| Metadata-aware filter v1 | Rejected | Spatial filter did not remove the key raw-signal artifacts. |
+| GTVBAO++ / SmartDenoiser / per-tap metadata | Architecturally useful, visually insufficient | Per-tap metadata is useful evidence, but reviewed rows still show `noise`, `false-curvature`, and `scale-mismatch`. |
+| Sampling schedules `r2`, `hilbert`, `blue-noise` | Diagnostic only | No non-production schedule beat `magic-square` across the fixture labels. |
+| Radius/thickness presets `thin-gap-conservative`, `small-contact-tight`, `large-radius` | Diagnostic only | No non-baseline preset beat `museum-baseline` across the fixture labels. |
+| Depth hierarchy / depth prefilter | Diagnostic only | Not yet a CACAO/XeGTAO-grade production pipeline; current evidence can add `false-curvature` or scale artifacts. |
+
+Next gate rule:
+
+- Pick **one** raw-signal candidate at a time.
+- Compare current raw VBAO against the candidate on the expanded `/vbao-parity`
+  fixture matrix before any Museum beauty claim.
+- Acceptance requires at least one targeted artifact label to improve and none
+  to worsen.
+- Museum evidence (`1920x1080` and `1280x720`) comes only after the fixture gate
+  passes.
+
+## 2026-05-26 — VBAO Adaptive Radius/Thickness Candidate Gate
+
+Status: **internal candidate contract added; ready for GPU fixture comparison;
+production behavior not changed**.
+
+Candidate: `fixture-adaptive-v1`.
+
+What changed:
+
+- Added an internal adaptive radius/thickness decision model for the expanded
+  artifact fixture matrix.
+- The candidate derives fixture-specific radius/thickness decisions for:
+  - `thin-gap-parallel-planes`
+  - `large-flat-floor-no-curvature`
+  - `small-contact-object-on-plane`
+  - `grazing-wall-corner`
+  - `subpixel-thin-occluder`
+- The gate compares candidate labels against current `museum-baseline` labels.
+  It can advance only when at least one targeted label improves and no new label
+  appears.
+
+Internal label-model result:
+
+- verdict: `ready-for-gpu-fixture-comparison`
+- production preset: `museum-baseline`
+- candidate: `fixture-adaptive-v1`
+- production promotion: `false`
+- improved labels include `thin-gap`, `edge-bleed`, `false-curvature`, and
+  `scale-mismatch`
+- worsened labels: none
+
+Decision:
+
+- This is **not** a production radius/thickness change.
+- This is **not** a public `VBAONodeOptions` change.
+- This is **not** Museum visual evidence.
+- Next required gate is targeted GPU fixture comparison on `/vbao-parity`.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoRadiusThicknessScaleGate.test.ts
+# 1 file / 8 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoRadiusThicknessScaleGate.test.ts packages/horizon-ao/src/__tests__/vbaoUpstreamSignalCorrection.test.ts packages/horizon-ao/src/__tests__/vbaoOracleFixtures.test.ts packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts
+# 4 files / 34 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 23 files / 190 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+```
+
+Production build was not run.
+
+## 2026-05-26 — VBAO Adaptive Radius/Thickness GPU Fixture Gate
+
+Status: **route contract wired; candidate remains internal; production behavior
+not changed**.
+
+What changed:
+
+- `/vbao-parity` now exposes
+  `window.__vbaoParity.adaptiveRadiusThicknessCandidate`.
+- The route renders current raw VBAO fixture readbacks and
+  `fixture-adaptive-v1` candidate readbacks.
+- Candidate radius/thickness is fixture-specific for the upstream artifact
+  fixtures and baseline-compatible for the historical parity fixtures.
+- The gate rejects if either baseline or candidate GPU/scalar parity fails.
+
+Gate result expected from the route contract:
+
+- candidate: `fixture-adaptive-v1`
+- verdict: `ready-for-museum-matrix`
+- production promotion: `false`
+- baseline fixture parity: required passing
+- candidate fixture parity: required passing
+- label model: at least one improved label and no worsened labels
+
+Decision:
+
+- This is still **not** Museum visual evidence.
+- This is still **not** a public API or production preset promotion.
+- If targeted WebGPU route evidence passes, the next gate is the Museum matrix.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts
+# 1 file / 22 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts packages/horizon-ao/src/__tests__/vbaoRadiusThicknessScaleGate.test.ts packages/horizon-ao/src/__tests__/vbaoUpstreamSignalCorrection.test.ts packages/horizon-ao/src/__tests__/vbaoOracleFixtures.test.ts
+# 4 files / 37 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 23 files / 193 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41783'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --project=chromium --grep "all fixture reports pass|adaptive radius/thickness candidate passes fixture gate|matches fixed scalar" --reporter=list --timeout=120000
+# 3 tests passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+```
+
+Production build was not run.
+
+## 2026-05-26 — VBAO Adaptive Radius/Thickness Museum Matrix
+
+Status: **benchmark-only Museum matrix wired; candidate remains internal; visual
+review pending until screenshots are captured and labeled**.
+
+Matrix mode:
+
+- env: `AO_BENCHMARK_VBAO_ADAPTIVE_RADIUS_MATRIX=1`
+- rows: raw single-mode only
+- modes: GTAO, baseline VBAO, `fixture-adaptive-v1` VBAO, N8AO
+- views: `beauty`, `ao`
+- resolutions: `1920x1080`, `1280x720`
+
+Candidate projection:
+
+- `fixture-adaptive-v1` is represented in the Museum harness as an internal
+  conservative radius/thickness candidate: radius `0.22`, thickness `0.06`.
+- This is not a public `VBAONodeOptions` preset and not a production promotion.
+- Production remains `museum-baseline`.
+
+Capture status:
+
+- pending
+
+Production build was not run.
+
+## 2026-05-26 — VBAO Support-Bitmask Visibility Math Spec
+
+Status: **internal math candidate specified with scalar contracts; production
+shader behavior not changed**.
+
+Candidate: `support-bitmask-v1`.
+
+Problem:
+
+- The current binary visibility OR lets a one-tap depth/normal discontinuity
+  fully own a sector.
+- That is WGPU-fast, but mathematically too brittle for the current artifact
+  set: `noise`, `false-curvature`, and some `mud` can be born before filtering
+  has any chance to help.
+
+Candidate math:
+
+```text
+H1 = sectors hit by at least one sample interval
+H2 = sectors with repeated support OR broad single-interval support
+
+broad <- sampleMask when countOneBits(sampleMask) >= 6, otherwise 0
+H2 <- H2 OR (H1 AND sampleMask) OR broad
+H1 <- H1 OR sampleMask
+
+visibility(k) = 0       when H2[k] = 1
+              = 1 - λ   when H1[k] = 1 and H2[k] = 0
+              = 1       otherwise
+```
+
+The slice reduction keeps the production cosine weights:
+
+```text
+A_i = Σ visibility(k) max(0, cos(theta_k - gamma_i))
+      ------------------------------------------------
+      Σ               max(0, cos(theta_k - gamma_i))
+```
+
+Initial scalar contract values:
+
+- single-hit confidence: `λ = 0.45`
+- broad self-support threshold: `8` sectors
+
+Revision note:
+
+- The first draft used repeated support only.
+- That was partially refuted: a broad one-sample interval can represent a real
+  near/thick blocker, not a speckle.
+- The revised candidate self-supports broad intervals so real contact is not
+  erased while narrow one-hit sectors remain uncertain.
+
+Why this candidate is worth testing:
+
+- It maps to two `u32` masks and bitwise operations in WGSL/WebGPU.
+- Coherent blockers converge to the existing binary visibility result.
+- Broad single intervals preserve near/thick blockers.
+- Isolated single-hit sectors remain visible as partial evidence instead of
+  becoming full occlusion.
+
+Hard promotion blockers:
+
+- It may underweight true subpixel occluders.
+- It may not solve actual radius-scale mismatch.
+- Therefore it cannot advance without the expanded `/vbao-parity` fixture
+  labels, especially `subpixel-thin-occluder` and
+  `thin-gap-parallel-planes`.
+
+Decision:
+
+- This is **not** a production shader change.
+- This is **not** a public API change.
+- This is **not** Museum evidence.
+- Next required gate is RED GPU fixture tests and a live internal shader
+  candidate only if the team chooses to implement it.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts
+# 1 file / 8 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoReference.test.ts packages/horizon-ao/src/__tests__/vbaoRadiusThicknessScaleGate.test.ts packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts
+# 4 files / 102 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 24 files / 202 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+```
+
+Production build was not run.
+
+## 2026-05-27 — VBAO WGPU Precision/Memory Envelope
+
+Status: **internal guardrail contract added; production shader behavior not
+changed**.
+
+Why this exists:
+
+- WebGPU portability does not mean bit-identical images across devices.
+- VBAO is especially sensitive because the live path combines floating-point
+  horizon math, byte-quantized render targets, packed normals, texture readback
+  layout, and discontinuous `atan -> floor/ceil -> bit` decisions.
+- Scalar tests remain useful, but they are not promotion evidence by
+  themselves.
+
+Guardrail contract:
+
+- Current AO readback evidence is byte-quantized: expected AO values are rounded
+  to `1 / 255`, and the parity tolerance is one byte plus epsilon.
+- WebGPU readback memory must account for `256`-byte row alignment before
+  interpreting pixels.
+- Sector-boundary anchors are labeled `boundary-risk`; promotion anchors must
+  sit away from sector and silhouette discontinuities.
+- `u32` bitmask operations are exact only after the float-derived angular
+  interval has already become a mask.
+- Normal/depth evidence formats must be documented. The current Museum prepass
+  normal path uses `UnsignedByteType` packing.
+
+Candidate gate:
+
+```text
+scalar contracts
+AND GPU fixture contracts
+AND quantized readback tolerance
+AND row-padding handling
+AND boundary-safe anchors
+AND normal/depth format notes
+=> ready for precision-aware GPU fixture gate
+```
+
+Decision:
+
+- This is **not** a production shader change.
+- This is **not** a public API change.
+- This does **not** validate `support-bitmask-v1` visually.
+- It prevents the next shader candidate from pretending CPU scalar math is
+  enough.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 1 file / 5 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts
+# 3 files / 35 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 25 files / 207 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+```
+
+Production build was not run.
+
+## 2026-05-27 — VBAO Support-Bitmask Live Parity Route
+
+Status: **live internal route wired; local WebGPU evidence rejects label review;
+production shader behavior remains binary by default**.
+
+What changed:
+
+- `VBAONode` now has an internal benchmark visibility hook:
+  `setBenchmarkVisibilityMode('support-bitmask-v1')`.
+- The hook is not part of `VBAONodeOptions`; production defaults to binary
+  visibility.
+- `/vbao-parity` renders a separate `support-bitmask-v1` fixture matrix and
+  exposes `window.__vbaoParity.supportBitmaskCandidate`.
+- The scalar parity mirror can compute support-bitmask expected rows under the
+  WGPU precision envelope.
+
+Local WebGPU route result:
+
+- Baseline fixture matrix: passed.
+- `support-bitmask-v1` candidate matrix: rejected.
+- Blocking reason: `support-bitmask-v1 GPU/scalar parity failed`.
+- Follow-up fixture stabilization found that `subpixel-thin-left-upper-receiver`
+  and `subpixel-thin-left-lower-receiver` were accidentally sampling the same
+  pixel. The lower anchor is now distinct and baseline-stable.
+- Current observed candidate drift: `subpixel-thin-left-upper-receiver` at
+  pixel `[27, 33]` drifts by `0.023529` AO, roughly six 8-bit AO steps
+  (`gpu=0.905882`, scalar expected `0.929412`).
+
+Decision:
+
+- This is **good gate behavior**: the candidate is live enough to measure, and
+  the precision-aware fixture matrix caught a real GPU/scalar mismatch.
+- This is **not** a production shader promotion.
+- This is **not** a Museum visual claim.
+- Next work should investigate whether the remaining upper-anchor drift comes
+  from sector-boundary
+  float differences, support-mask broad/repeated classification, or fixture
+  anchor instability before any label review.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts
+# 2 files / 28 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 25 files / 209 tests passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41845'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --grep "support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 3 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts
+# 4 files / 42 tests passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41847'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --grep "support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 3 tests passed after distinct lower-anchor stabilization
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+```
+
+Production build was not run.
+
+## 2026-05-27 — VBAO GT-VBAO Attribution Gate
+
+Status: **internal scalar attribution added; production behavior unchanged**.
+
+Target:
+
+- fixture: `subpixel-thin-occluder`
+- anchor: `subpixel-thin-left-upper-receiver`
+- pixel: `[27, 33]`
+- current WebGPU candidate drift: `0.023529` AO
+
+What changed:
+
+- Added `vbao-gt-vbao-attribution-gate` as an internal scalar report.
+- The support-bitmask parity result now carries an `attribution` payload for the
+  failing upper anchor.
+- The support-bitmask parity result now also carries an
+  `attributionGpuCorrelation` payload so the live WebGPU drift is compared
+  against the same target row instead of being diagnosed by eyeballing the
+  route dump.
+- The report includes rows for:
+  - `baseline-current`
+  - `point-sample-quantized-mask`
+  - `perspective-sample-view-thickness`
+  - `acos-free-angle-path`
+  - `support-bitmask-attribution`
+- Each row exposes slice masks, sample mask popcounts, `hitMask`,
+  `supportedMask`, broad interval counts, and boundary-risk flags.
+
+Original correlation before scalar frontmost-depth parity fix:
+
+- matched target: `subpixel-thin-occluder` /
+  `subpixel-thin-left-upper-receiver`
+- scalar support-bitmask lift over baseline: approximately `0.074510` AO
+- observed GPU support-bitmask lift over baseline: approximately `0.050980` AO
+- unresolved support lift: approximately `0.023529` AO (`6/255`)
+- correlation verdict: `partial-support-mask-divergence`
+
+Continuation task:
+
+- Added a shader accumulation guard for the internal `support-bitmask-v1` path:
+  the live TSL shader now snapshots `previousHitMask`, computes
+  `broadSupportMask`, then assigns explicit `nextSupportedMask` and
+  `nextHitMask`.
+- Reason: remove any ambiguity around reading a mutable hit mask while assigning
+  support/hit masks in the same WGSL generation block.
+- Scope: internal rejected candidate only; production binary/cosine VBAO,
+  `magic-square`, `museum-baseline`, public options, and package exports remain
+  unchanged.
+- Targeted WebGPU after this guard still reports the same target drift:
+  `gpu=0.905882`, `expected=0.929412`, unresolved lift `0.023529`.
+  So the guard is correct architecture hygiene, but it does **not** resolve the
+  underlying parity gap. Next work should inspect sample-mask generation /
+  sector-boundary classification, not accumulation order.
+
+Sample-mask attribution continuation:
+
+- Added scalar per-sample mask details to the internal attribution rows:
+  slice/side/sample index, theta interval, raw/clamped sector interval, mask,
+  popcount, sectors, and boundary-risk flags.
+- The target high-sector contributors are now explicit:
+  - slice `0`, side `1`, sample `3`: sectors `[28, 29]`, `rawK0=28`,
+    `rawK1Exclusive=30`, popcount `2`, theta boundary risk.
+  - slice `1`, side `0`, sample `2`: sector `[29]`, `rawK0=29`,
+    `rawK1Exclusive=30`, popcount `1`.
+- This narrows the next investigation to high-angle `atan`/`floor`/`ceil` mask
+  generation around sectors `28/29`; it still does **not** promote
+  `support-bitmask-v1`.
+
+Boundary-sector perturbation continuation:
+
+- Refuted the blunt hypothesis that all high-sector single-hit sectors `[28,29]`
+  should be promoted to supported: it yields `0.854902`, i.e. the baseline
+  quantized value, not the live GPU value.
+- Added a closest-subset hypothesis. Promoting only sector `28` from
+  slice `0`, side `1`, sample `3` yields `0.905882`, matching the known live
+  WebGPU target and explaining the `6/255` gap.
+- Current diagnosis: the remaining drift is consistent with a one-sector
+  boundary classification mismatch for the interval
+  `theta0=1.276090982663153`, `theta1=1.2852648789144832`,
+  `rawK0=28`, `rawK1Exclusive=30`.
+- This is still scalar-only diagnostic evidence; `support-bitmask-v1` remains
+  rejected and unpromoted.
+
+Sector precision-envelope continuation:
+
+- Added `evaluateVbaoSectorIntervalPrecision` to classify the known interval.
+- f64 and simulated f32 sector index paths both produce `[28, 30)`.
+- The interval is still `boundary-risk`: `theta0` is only about `0.001844`
+  sector units below boundary `29`, and sectors `[28, 29]` are
+  boundary-adjacent.
+- Updated diagnosis: plain f64-vs-f32 constant precision alone does not explain
+  the drift. The next useful diagnostic is live shader-side `theta/k0/k1`
+  readback/debug for that sample.
+
+Live shader diagnostic continuation:
+
+- Added an internal `/vbao-parity` live shader-side diagnostic for the exact
+  target sample: `subpixel-thin-occluder` /
+  `subpixel-thin-left-upper-receiver`, pixel `[27,33]`, slice `0`, side `1`,
+  sample `3`.
+- The route re-renders the support-bitmask fixture through temporary float
+  diagnostic fields and reconstructs high u32 masks from 16-bit halves.
+- Observed live WebGPU diagnostic:
+  - `thetaFront=1.28526771068573`
+  - `thetaBack=1.2579689025878906`
+  - `k0=28`, `k1=30`
+  - `sampleMask=0x30000000`
+  - `hitMask=0x3001ff80`
+  - `supportedMask=0x2001ff80`
+  - `quantizedAo=0.905882`
+- This rules out a different shader sector interval or sample mask for the
+  target sample: live WGSL still emits `[28,30)` and sectors `[28,29]`.
+- The mismatch is therefore still unresolved, but the next branch is narrower:
+  compare live/scalar accumulated mask state and slice reduction, not basic
+  `k0/k1/sampleMask` generation.
+
+Live slice diagnostic continuation:
+
+- Added an internal `/vbao-parity` live shader-side slice diagnostic for the
+  same target, reading per-slice `hitMask`, `supportedMask`, `gammaNorm`,
+  numerator, denominator, accessibility, and quantized AO.
+- Observed live/scalar slice comparison:
+  - live quantized AO: `0.905882`
+  - scalar support-bitmask expected AO: `0.929412`
+  - unresolved delta: `0.023529` (`6/255`)
+  - slice `0` live: `hitMask=0x3001ff80`,
+    `supportedMask=0x2001ff80`, accessibility approximately `0.857427`
+  - slice `0` scalar: `hitMask=0x3001ff80`,
+    `supportedMask=0x0001ff80`, accessibility approximately `0.907302`
+  - slice `1` live/scalar masks match:
+    `hitMask=0x2001fff0`, `supportedMask=0x0001fff0`, accessibility
+    approximately `0.952347`
+- Classification update: the remaining gap is **not** interval generation.
+  The live shader and scalar mirror agree on the target sample's `[28,30)`
+  interval, `sampleMask`, and slice `0` `hitMask`. They diverge in slice `0`
+  accumulated `supportedMask`: live includes high sector `0x20000000`, scalar
+  does not.
+- Next branch: fix or reject the internal candidate based on support-mask
+  accumulation/reduction semantics. No denoise/filter work and no production
+  promotion are justified by this evidence.
+
+Live transition diagnostic continuation:
+
+- Added an internal `/vbao-parity` transition diagnostic for the same target
+  sample's support-mask update.
+- Observed live/scalar transition comparison:
+  - `sampleMask=0x30000000`
+  - live `previousHitMask=0x2001ff80`
+  - scalar `previousHitMask=0x0001ff80`
+  - live/scalar `previousSupportedMask=0x0001ff80`
+  - live `repeatedSupportMask=0x20000000`
+  - scalar `repeatedSupportMask=0x00000000`
+  - live/scalar `broadSupportMask=0x00000000`
+  - live/scalar `nextHitMask=0x3001ff80`
+  - live `nextSupportedMask=0x2001ff80`
+  - scalar `nextSupportedMask=0x0001ff80`
+- Classification update: the live shader is not taking a broad-interval
+  self-support path for the target sample. It is taking the repeated-support
+  path because sector `29` (`0x20000000`) is already present in live
+  `previousHitMask` before slice `0`, side `1`, sample `3`. The scalar mirror
+  does not have that prior high sector.
+- Next branch: identify which earlier live sample contributes sector `29`, or
+  reject `support-bitmask-v1` as unstable for the subpixel-thin target.
+
+Live prior-sample trace continuation:
+
+- Added an internal `/vbao-parity` prior-sample trace for the seven samples
+  before the target transition in slice `0`.
+- Observed contributor:
+  - live contributing sample orders: `[6]`
+  - sample order `6` maps to slice `0`, side `1`, sample `2`
+  - live sample order `6` `sampleMask=0x20000000`
+  - scalar sample order `6` `sampleMask=0x0001f000`
+  - live `nextHitMask=0x2001ff80`
+  - scalar `nextHitMask=0x0001ff80`
+- Classification update: the prior-hit divergence is caused by live slice `0`,
+  side `1`, sample `2` becoming a high-sector-only interval at sector `29`.
+  The target sample then repeats sector `29` and promotes it to supported.
+- Next branch: inspect live/scalar view position, depth, adaptive thickness, and
+  angle terms for slice `0`, side `1`, sample `2`. If that mismatch cannot be
+  justified/fixed internally, `support-bitmask-v1` stays rejected.
+
+Live prior-sample geometric detail continuation:
+
+- Added an internal `/vbao-parity` geometric/math detail readback for the
+  identified contributor sample: slice `0`, side `1`, sample `2`.
+- Observed detail:
+  - live/scalar sample screen coordinates match:
+    - live `[0.4889061749, 0.5469606519]`
+    - scalar `[0.4889061705, 0.5469606252]`
+  - live sample position: `[-0.03100023, -0.13122533, -2.41999364]`
+  - scalar sample position: `[-0.04099216, -0.17352147, -3.2]`
+  - live adaptive thickness: `0.05701448`
+  - scalar adaptive thickness: `0.1`
+  - live theta interval: `[1.32906914, 1.35077512]`,
+    `k0=29`, `k1=30`, `sampleMask=0x20000000`
+  - scalar theta interval: `[-0.33511940, 0.06527196]`,
+    `k0=12`, `k1=17`, `sampleMask=0x0001f000`
+- Classification update: this is not a sample-jitter mismatch; live and scalar
+  walk to the same screen coordinate. The mismatch is geometry/depth selection:
+  live hits the thin foreground occluder at about `z=-2.42`, while the scalar
+  fixture mirror selects the rear plane at `z=-3.2`.
+- Next branch: fix fixture scene frontmost-depth parity in the scalar mirror, or
+  reject `support-bitmask-v1` for this subpixel-thin case if the candidate is
+  inherently unstable. No production promotion is justified.
+
+Scalar frontmost-depth parity continuation:
+
+- Added a RED scalar fixture sampler test for the exact known live contributor
+  screen coordinate `[0.4889061705, 0.5469606252]`.
+- Root cause: the scalar fixture mirror selected the frontmost surface by view
+  depth correctly, but the subpixel foreground occluder was rejected by exact
+  analytic rectangle bounds. The live depth path sees that occluder through
+  raster/sample coverage at the pixel footprint.
+- Fix: added an internal `scalarCoveragePaddingPixels` field on
+  `VbaoParityFrontalRectSurface` and applied a narrow `0.5px` coverage padding
+  only to the `subpixel-thin-occluder` foreground blocker. This is fixture
+  mirror parity only; it is not a production shader/API/default change.
+- Updated scalar/live facts:
+  - scalar sample order `6` now hits the foreground occluder at `z=-2.42`
+    instead of the rear plane at `z=-3.2`.
+  - scalar sample order `6` now emits `sampleMask=0x20000000`,
+    `k0=29`, `k1=30`, matching the live high-sector contributor.
+  - scalar slice `0` now has `hitMask=0x3001ff80`,
+    `supportedMask=0x2001ff80`, matching live.
+  - scalar support-bitmask expected AO for the target is now `0.905882`
+    (`231/255`), matching live WebGPU; unresolved delta is `0`.
+  - `attributionGpuCorrelation.verdict` is now `no-candidate-gpu-drift`.
+  - `support-bitmask-v1` verdict is now `ready-for-label-review`, with
+    `promoteProduction=false` and empty blocking reasons.
+- Classification update: the previously observed `6/255` gap was caused by
+  scalar fixture frontmost/depth coverage mismatch for the subpixel-thin
+  occluder, not by the target sample sector interval, WGSL-vs-JS precision, or
+  support-mask accumulation semantics.
+
+Support-bitmask label-review gate continuation:
+
+- Added an internal label-review gate for `support-bitmask-v1`.
+- Required fixture label rows:
+  - `thin-gap-parallel-planes`
+  - `large-flat-floor-no-curvature`
+  - `small-contact-object-on-plane`
+  - `grazing-wall-corner`
+  - `subpixel-thin-occluder`
+- Required variants per fixture:
+  - `baseline-current`
+  - `support-bitmask-v1`
+- The gate blocks on missing rows, `pending-review`, any worsened fixture label,
+  no improved label, or missing hardened GPU/scalar parity.
+- `/vbao-parity` now emits a pending review template instead of an empty row
+  set, so reviewers can see the exact fixture/variant rows that need labels.
+- Current live `/vbao-parity` payload after the parity fix:
+  - support-bitmask candidate verdict: `ready-for-label-review`
+  - `labelGate.verdict=requires-label-review`
+  - `labelGate.gpuParityPassed=true`
+  - `labelGate.rows` contains `10` explicit `pending-review` rows
+  - `promoteProduction=false`
+- Classification update: the candidate is mathematically/parity-ready for
+  label review, but label evidence has **not** been supplied. That means no
+  Museum matrix, no production promotion, and no “looks better” claim yet.
+- Reviewed label rows can now be passed into the internal GPU fixture comparison
+  result. If the supplied rows improve at least one label, worsen none, and GPU
+  parity remains green, the result advances to `ready-for-museum-matrix` while
+  still keeping `promoteProduction=false`.
+- The live route still uses the pending-review template by default; no labels
+  were invented in this pass.
+- Recorded the pending review handoff artifact at
+  `artifacts/analysis/vbao_support_bitmask_label_review_decision.json`. It
+  mirrors the 10 required `pending-review` rows and intentionally does not claim
+  reviewed visual-quality labels.
+- Added `apps/demo/scripts/collect-vbao-support-bitmask-label-review.mjs` to
+  generate a live `/vbao-parity` support-bitmask label-review packet and HTML
+  contact sheet. The script keeps all labels as `pending-review`; reviewers must
+  replace them manually from the generated evidence before the gate can advance.
+- Latest generated review packet:
+  `artifacts/analysis/vbao-support-bitmask-label-review-latest.json`.
+- Latest generated contact sheet:
+  `artifacts/analysis/vbao_support_bitmask_label_review_contact_sheet.html`.
+
+Decision:
+
+- This moves `support-bitmask-v1` from rejected to **ready for label review** in
+  the internal `/vbao-parity` gate only.
+- This does **not** promote `support-bitmask-v1` to production.
+- This does **not** add a public API.
+- This does **not** add denoise/filter work.
+- The next valid step is label review / fixture review, not Museum beauty work
+  or production shader promotion.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts --reporter=verbose
+# 1 file / 27 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 3 files / 40 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41850'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --grep "support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 3 tests passed
+
+# Continuation after adding attributionGpuCorrelation:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts --reporter=verbose
+# 1 file / 27 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 3 files / 40 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:5174'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --grep "support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 3 tests passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+
+# Continuation after shader accumulation guard:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts --reporter=verbose
+# 1 file / 6 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 46 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41853'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --grep "support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 3 tests passed
+
+# Continuation after sample-mask attribution and boundary-sector hypotheses:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts --reporter=verbose
+# 1 file / 29 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 49 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41854'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --grep "support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 3 tests passed
+
+# Continuation after sector-interval precision envelope:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts --reporter=verbose
+# 1 file / 6 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 49 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41855'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --grep "support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 3 tests passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+
+# Continuation after live shader-side support-bitmask sample diagnostic:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts --reporter=verbose
+# RED first: failed on missing diagnostic target/helper and missing /vbao-parity wiring
+# GREEN: 1 file / 30 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 50 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41856'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --project=chromium --grep "support-bitmask live shader diagnostic|support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 4 tests passed
+
+# Continuation after live shader-side support-bitmask slice diagnostic:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts --reporter=verbose
+# RED first: failed while the scalar slice diagnostic helper/source contract
+# and /vbao-parity readback wiring were missing
+# GREEN: 1 file / 32 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 52 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41856'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --project=chromium --grep "support-bitmask slice diagnostic|support-bitmask live shader diagnostic|support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 5 tests passed
+
+# Continuation after live shader-side support-bitmask transition diagnostic:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts --reporter=verbose
+# RED first: failed on missing computeVbaoSupportBitmaskTransitionDiagnosticReference
+# GREEN: 1 file / 33 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 53 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41856'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --project=chromium --grep "support-bitmask transition diagnostic|support-bitmask slice diagnostic|support-bitmask live shader diagnostic|support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 6 tests passed
+
+# Continuation after live shader-side support-bitmask prior-sample trace:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts --reporter=verbose
+# RED first: failed on missing computeVbaoSupportBitmaskPriorSampleTraceReference
+# GREEN: 1 file / 34 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 54 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41856'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --project=chromium --grep "support-bitmask transition diagnostic|support-bitmask slice diagnostic|support-bitmask live shader diagnostic|support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 6 tests passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+
+# Continuation after live shader-side support-bitmask prior-sample detail:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts --reporter=verbose
+# RED first: failed on missing computeVbaoSupportBitmaskPriorSampleDetailReference
+# GREEN: 1 file / 35 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 55 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41856'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --project=chromium --grep "support-bitmask transition diagnostic|support-bitmask slice diagnostic|support-bitmask live shader diagnostic|support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 6 tests passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+
+# Continuation after scalar fixture frontmost-depth parity fix:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts --reporter=verbose
+# RED first: failed while the known contributor screen coordinate sampled the rear plane at z=-3.2
+# GREEN: 1 file / 36 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 56 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41856'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --project=chromium --grep "support-bitmask transition diagnostic|support-bitmask slice diagnostic|support-bitmask live shader diagnostic|support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 6 tests passed
+
+# Continuation after adding support-bitmask label-review gate:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts --reporter=verbose
+# RED first: failed on missing ../vbaoSupportBitmaskLabelGate
+# GREEN: 1 file / 39 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 59 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41856'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --project=chromium --grep "support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 3 tests passed
+
+# Continuation after adding explicit pending-review label template:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts --reporter=verbose
+# RED first: failed because createVbaoSupportBitmaskLabelReviewTemplate was not implemented
+# GREEN: 1 file / 40 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 60 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41856'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --project=chromium --grep "support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 3 tests passed
+
+# Continuation after adding reviewed label-row ingestion:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts --reporter=verbose
+# RED first: failed because reviewed label rows were ignored by the GPU fixture comparison result
+# GREEN: 1 file / 41 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 61 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+
+cd apps/demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41856'; node node_modules/@playwright/test/cli.js test e2e/vbao-parity.spec.ts --project=chromium --grep "support-bitmask candidate|all fixture reports pass|matches fixed scalar" --reporter=list --timeout=120000
+# 3 tests passed
+
+# Continuation after adding pending label-review decision artifact:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts --reporter=verbose
+# RED first: failed because artifacts/analysis/vbao_support_bitmask_label_review_decision.json did not exist
+# GREEN: 1 file / 42 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 62 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+
+# Continuation after adding support-bitmask label-review capture packet script:
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts --reporter=verbose
+# RED first: failed because apps/demo/scripts/collect-vbao-support-bitmask-label-review.mjs did not exist
+# GREEN: 1 file / 43 tests passed
+
+node apps/demo/scripts/collect-vbao-support-bitmask-label-review.mjs
+# failed: default Chromium fell back to WebGL2 and /vbao-parity did not reach ready; not counted as evidence
+
+$env:VBAO_LABEL_REVIEW_BROWSER_CHANNEL='chrome'; node apps/demo/scripts/collect-vbao-support-bitmask-label-review.mjs
+# wrote artifacts/analysis/vbao-support-bitmask-label-review-latest.json
+# wrote artifacts/analysis/vbao_support_bitmask_label_review_contact_sheet.html
+
+node --check apps/demo/scripts/collect-vbao-support-bitmask-label-review.mjs
+# passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoParity.test.ts packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoWgpuPrecisionEnvelope.test.ts
+# 4 files / 63 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+```
+
+Production build was not run.
+
+## Required Production Capture Matrix (Current)
+
+The current production capture script is intentionally narrow and honest: it captures
+`off`, `gtao`, and `vbao` only. N8AO remains available in the live Museum UI, but it
+is not emitted as raw/denoised production evidence because the node exposes an
+internally filtered output rather than a true raw/filtered pair.
 
 | Field | Required values |
 | --- | --- |
-| `algorithm` | `gtao`, `vbao`, `n8ao` |
+| `algorithm` | `off`, `gtao`, `vbao` |
 | `viewMode` | `beauty`, `ao` |
-| `denoise` | `raw`, `denoised` |
-| `vbaoSamplingSchedule` | `magic-square`, `r2`, `hilbert`, `blue-noise`, or `n/a` |
-| `vbaoRadiusStressPreset` | `baseline`, `large-radius`, or `n/a` |
+| `denoise` | `raw`/`denoised` for GTAO; `raw-debug`/`product` semantics for VBAO via the same demo toggle; off is raw-only. For VBAO this toggles raw debug AO vs final product AO, not a public denoiser node. |
+| `vbaoSamplingSchedule` | `phase-atlas-stable-hash` or `n/a` |
 | `resolution` | `1920x1080`, `1280x720` |
 | `failureLabels` | `none`, `noise`, `mud`, `halo`, `thin-gap`, `edge-bleed`, `scale-mismatch`, `false-curvature` |
 
-The Museum route is the baseline comparison harness. It exposes raw/denoised
-output and a demo-only `Full-res VBAO` control. That control sets VBAO
-`resolutionScale = 1.0` for evidence without changing `VBAONodeOptions` or the
-locked public quality tiers.
+The Museum route is the baseline comparison harness. For VBAO it exposes raw debug
+AO versus final product AO and a demo-only `Full-res VBAO` control. That control
+sets VBAO `resolutionScale = 1.0` for evidence without changing `VBAONodeOptions`
+or the locked public quality tiers.
 
-## Row Schema
+## Current Row Schema
 
 | Column | Description |
 | --- | --- |
-| `scene` | Scene name, for example `museum`, `city`, `sponza`, `bunny` |
-| `cameraId` | Key from `apps/demo/src/evidence/evidenceCameras.ts` |
+| `scene` | `museum` |
 | `resolution` | Exact capture dimensions: `1920x1080` or `1280x720` |
-| `algorithm` | `gtao`, `vbao`, or `n8ao` |
-| `viewMode` | `beauty` or `ao` |
-| `denoise` | `raw` or `denoised` |
-| `device` | GPU/device name |
-| `browser` | Browser and version |
-| `renderer` | `webgpu` or `webgl-fallback` |
-| `timingMethod` | `webgpu-timestamp`, `frame-median`, `performance-panel`, or `pending` |
-| `medianTime_ms` | Median of 10 steady-state frames/passes, or `pending` |
-| `radius` | AO radius used |
-| `vbaoRadiusStressPreset` | Radius stress label for depth hierarchy evidence, or `n/a` |
-| `vbaoExpectedDepthHierarchyLevel` | Reference-only expected depth hierarchy level for the radius stress row |
-| `thickness` | Thickness used |
-| `slices` | Slice count |
-| `samples` | Samples per slice |
-| `resolutionScale` | AO render scale, for example `0.5` or `1.0` |
-| `sectors` | `32` for VBAO v1 |
-| `failureLabels` | Comma-separated labels from the required list |
-| `screenshotPath` | Path under `artifacts/`, or `pending` |
+| `mode` | `off`, `gtao`, or `vbao` |
+| `view` / `viewMode` | `beauty` or `ao` |
+| `denoise` / `denoiseEnabled` | Demo output toggle state; for VBAO this means raw debug AO vs final product AO |
+| `productOutputContract` | For VBAO, either `VBAONode.getRawTextureNode() raw debug AO` or `VBAONode.getTextureNode() final product AO with internal reconstruction/polish` |
+| `sampling` / `vbaoSamplingSchedule` | `phase-atlas-stable-hash` for VBAO, otherwise `n/a` |
+| `backend` / `rendererBackend` | Must be `webgpu` for production rows |
+| `latest` | Full `window.__aoBenchmark.latest` stats snapshot matched to the requested mode/view/denoise row |
+| `screenshotPath` | Path under a committed curated artifact directory when formal evidence is promoted |
 
-## Capture Rows
+## Current Capture Rows
 
-Status: automated headless WebGPU captures exist for the Museum baseline.
-Manual on-device captures remain useful for final review, but the benchmark
-collector now records `rendererBackend: "webgpu"` and refuses fallback sessions
-when `AO_BENCHMARK_REQUIRE_WEBGPU=1` is set.
+Status: **not promoted**. Current architecture rows have not been committed as
+formal evidence because the latest local artifacts are ignored by `.gitignore`.
+Run the production collector and commit curated JSON/screenshots before adding
+new current rows here.
 
-Pending blocker: rows stay unfilled until a WebGPU-capable browser session is
-run on an identified device at the required viewport sizes.
-
-| scene | cameraId | resolution | algorithm | viewMode | denoise | device | browser | renderer | timingMethod | medianTime_ms | radius | thickness | slices | samples | resolutionScale | sectors | failureLabels | screenshotPath |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| museum | museumBaseline | 1920x1080 | gtao | beauty | raw | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
-| museum | museumBaseline | 1920x1080 | gtao | beauty | denoised | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
-| museum | museumBaseline | 1920x1080 | gtao | ao | raw | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
-| museum | museumBaseline | 1920x1080 | gtao | ao | denoised | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
-| museum | museumBaseline | 1920x1080 | vbao | beauty | raw | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
-| museum | museumBaseline | 1920x1080 | vbao | beauty | denoised | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
-| museum | museumBaseline | 1920x1080 | vbao | ao | raw | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
-| museum | museumBaseline | 1920x1080 | vbao | ao | denoised | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
-| museum | museumBaseline | 1920x1080 | n8ao | beauty | raw | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
-| museum | museumBaseline | 1920x1080 | n8ao | beauty | denoised | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
-| museum | museumBaseline | 1920x1080 | n8ao | ao | raw | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
-| museum | museumBaseline | 1920x1080 | n8ao | ao | denoised | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
-| museum | museumBaseline | 1280x720 | gtao | beauty | raw | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
-| museum | museumBaseline | 1280x720 | gtao | beauty | denoised | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
-| museum | museumBaseline | 1280x720 | gtao | ao | raw | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
-| museum | museumBaseline | 1280x720 | gtao | ao | denoised | pending | pending | webgpu | pending | pending | 0.25 | 1.0 | n/a | 16 | 0.5 | n/a | pending | pending |
-| museum | museumBaseline | 1280x720 | vbao | beauty | raw | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
-| museum | museumBaseline | 1280x720 | vbao | beauty | denoised | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
-| museum | museumBaseline | 1280x720 | vbao | ao | raw | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
-| museum | museumBaseline | 1280x720 | vbao | ao | denoised | pending | pending | webgpu | pending | pending | 0.35 | 0.28 | 3 | 8 | 1.0 | 32 | pending | pending |
-| museum | museumBaseline | 1280x720 | n8ao | beauty | raw | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
-| museum | museumBaseline | 1280x720 | n8ao | beauty | denoised | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
-| museum | museumBaseline | 1280x720 | n8ao | ao | raw | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
-| museum | museumBaseline | 1280x720 | n8ao | ao | denoised | pending | pending | webgpu | pending | pending | 32 screen px | 1.0 falloff | n/a | Medium | 1.0 | n/a | pending | pending |
+## Archived Legacy Capture Rows
 
 ## Benchmark Policy
 
-First-pass benchmark scope is WebGPU apples-to-apples only: Three `GTAONode`,
-`n8ao-webgpu`, and `VBAONode` running inside the Museum route. Native XeGTAO
-and AMD CACAO are design references, not direct FPS competitors in this repo
-until they are actually ported to the same browser/WebGPU harness.
+First-pass benchmark scope is WebGPU apples-to-apples only: Three `GTAONode` and
+`VBAONode` running inside the Museum route. Native XeGTAO, AMD CACAO, and N8AO are
+design/comparison references, not current raw-vs-denoised production evidence rows.
+Curated output files must be committed explicitly when promoted.
 
 VBAO only "wins" when it is a Pareto improvement: equal or faster at comparable
-visual quality, or visibly better at comparable cost. Do not claim a benchmark
-win from FPS alone when the capture has worse `noise`, `mud`, `halo`,
-`thin-gap`, `edge-bleed`, or `scale-mismatch`.
+visual quality, or visibly better at comparable cost. Do not claim a benchmark win
+from FPS alone when the capture has worse `noise`, `mud`, `halo`, `thin-gap`,
+`edge-bleed`, `false-curvature`, or `scale-mismatch`.
 
 The Museum route publishes machine-readable rolling stats on
 `window.__aoBenchmark.latest`:
@@ -110,16 +1153,11 @@ The Museum route publishes machine-readable rolling stats on
 | `composeModes` | Algorithms rendered side-by-side when `renderMode=compose` |
 | `viewMode` | `beauty` or `ao` |
 | `denoiseEnabled` | Whether the denoise toggle was enabled |
-| `denoiseNote` | Explains rows where a third-party node has internal denoise semantics |
 | `fullResolutionVbao` | Whether the demo-only full-res VBAO toggle was enabled |
-| `vbaoSamplingSchedule` | Current VBAO sampling label; `magic-square`, `r2`, `hilbert`, `blue-noise`, or `n/a` |
-| `vbaoSamplePreset` | `baseline`, `high-sample`, or `n/a` for non-VBAO rows |
-| `vbaoDenoiseFilter` | `generic`, `custom-bilateral`, or `n/a` |
-| `vbaoRadiusStressPreset` | `baseline`, `large-radius`, or `n/a` for non-VBAO rows |
-| `vbaoDepthPrefilterPreset` | `baseline`, `prefilter`, or `n/a` for depth-prefilter experiment rows |
-| `vbaoMetadataDebugView` | `none`, `edge-depth`, `edge-normal`, `confidence`, or `n/a`; internal debug only |
-| `vbaoRadius` | Active VBAO radius for stress rows, or `0` for non-VBAO rows |
-| `vbaoExpectedDepthHierarchyLevel` | Reference-only depth hierarchy level predicted by the radius stress preset |
+| `vbaoSamplingSchedule` | Current VBAO sampling label; `phase-atlas-stable-hash` or `n/a` |
+| `vbaoSamplePreset` | `baseline` for active VBAO rows, or `n/a` for non-VBAO rows. Historical `high-sample` rows below are rejected legacy evidence, not a current runtime/product control. |
+| `vbaoRadius` | Active VBAO radius, or `0` for non-VBAO rows |
+| `vbaoThickness` | Active VBAO thickness, or `0` for non-VBAO rows |
 | `vbaoSamples` | Active VBAO samples per slice, or `0` for non-VBAO rows |
 | `vbaoSlices` | Active VBAO slice count, or `0` for non-VBAO rows |
 | `fps` | `1000 / avgFrameMs` for the latest reporting window |
@@ -131,45 +1169,16 @@ The Museum route publishes machine-readable rolling stats on
 | `viewport` | CSS viewport width and height |
 | `devicePixelRatio` | Browser device pixel ratio |
 
-`window.__aoBenchmark.snapshot()` also returns an `environment` object:
-
-| Field | Description |
-| --- | --- |
-| `rendererBackend` | Actual renderer backend: `webgpu` or `webgl` |
-| `aoAvailable` | Whether AO comparison controls are usable in this session |
-| `navigatorGpu` | Whether `navigator.gpu` exists in the browser |
-| `requiredBackend` | Always `webgpu` for apples-to-apples benchmark rows |
-| `userAgent` | Browser user agent for audit/debugging |
-
-## Benchmark Rows
-
-Status: pending manual WebGPU benchmark captures. Use the visible FPS panel for
-live sanity checks, but record data from `window.__aoBenchmark.snapshot()` so
-rows are not copied by eye.
-
-Automated capture command:
-
-```sh
-pnpm --dir apps/demo benchmark:ao
-```
-
-The script writes `artifacts/benchmarks/ao-benchmark-latest.json`. By default it
-uses Playwright's `chromium` channel, which opts into the full new-headless
-Chromium path rather than the legacy headless shell. Useful environment overrides:
+`window.__aoBenchmark.snapshot()` also returns an `environment` object. The current
+collector enforces WebGPU by default and exits non-zero on fallback unless
+`AO_BENCHMARK_REQUIRE_WEBGPU=0` is set.
 
 | Env var | Purpose |
 | --- | --- |
-| `AO_BENCHMARK_BROWSER_CHANNEL=chrome\|msedge\|chromium\|bundled` | Pick a branded/full browser channel when installed |
-| `AO_BENCHMARK_HEADED=1` | Run a headed browser for driver/GPU debugging |
-| `AO_BENCHMARK_BROWSER_ARGS="..."` | Append extra Chrome flags for a specific machine |
-| `AO_BENCHMARK_SCREENSHOTS=1` | Capture screenshots into `artifacts/benchmarks/screenshots` |
-| `AO_BENCHMARK_DENOISE_MATRIX=1` | Capture raw/denoised rows for both Beauty and AO-only views |
-| `AO_BENCHMARK_VBAO_SAMPLE_MATRIX=1` | Add raw baseline/high-sample VBAO rows for single and compose comparisons |
-| `AO_BENCHMARK_VBAO_SCHEDULE_MATRIX=1` | Add raw VBAO schedule rows for `magic-square`, `r2`, `hilbert`, and `blue-noise`; disables the high-sample expansion for that run |
-| `AO_BENCHMARK_VBAO_RADIUS_STRESS_MATRIX=1` | Add raw baseline/large-radius VBAO rows for the depth hierarchy gate; disables high-sample expansion for that run |
-| `AO_BENCHMARK_VBAO_METADATA_DEBUG_MATRIX=1` | Capture internal VBAO metadata debug views: `edge-depth`, `edge-normal`, and `confidence` |
-| `AO_BENCHMARK_REQUIRE_WEBGPU=1` | Exit non-zero if the session falls back to WebGL |
-| `AO_BENCHMARK_EXTERNAL_SERVER=1` | Reuse an already-running demo server |
+| `PLAYWRIGHT_BASE_URL` | Reuse an already-running demo server |
+| `PLAYWRIGHT_CHROME_CHANNEL` | Browser channel; defaults to `chrome` |
+| `AO_BENCHMARK_REQUIRE_WEBGPU=0` | Allow fallback sessions for debugging only |
+| `AO_BENCHMARK_WIDTH` / `AO_BENCHMARK_HEIGHT` | Override the default two-resolution matrix for a local debug run |
 
 Local automation note on 2026-05-26: the default Playwright headless shell path
 reported `webgl` and disabled AO comparison controls. Switching the collector to
@@ -203,8 +1212,8 @@ magic-square pattern and increases broad darkening in AO-only views. Timings in
 that run are useful only as rough medians/p95s because some rows have small
 sample windows and startup spikes.
 
-The rows below are one local automated WebGPU timing capture with screenshot
-review labels. They are not a quality/perf victory claim: VBAO is fast in this
+The rows below are archived legacy local WebGPU timing captures from the pre-product-output contract with screenshot
+review labels. They are not current production rows and not a quality/perf victory claim: VBAO is fast in this
 scene, but the screenshots still show named failures that must be fixed before
 claiming a Pareto win.
 
@@ -383,7 +1392,9 @@ metadata and the ground-truth oracle before another denoise/sampling candidate i
 allowed to claim improvement. Faster timing does not beat `noise`, `mud`,
 `edge-bleed`, or `false-curvature`.
 
-## VBAO Edge/Confidence + Oracle Reference Gate
+## VBAO Edge/Confidence + Oracle Reference Gate (historical/rejected)
+
+Status: **legacy internal evidence only**. The referenced edge/confidence, oracle, and denoise reference helpers are not part of the current runtime package contract; stale OpenSpec changes are archived under `openspec/changes/archive/2026-05-28-vbao-p0-rejected-research/`.
 
 Artifacts:
 
@@ -391,8 +1402,8 @@ Artifacts:
 - Oracle reference: `packages/horizon-ao/src/vbaoGroundTruth.ts`.
 - Reference filter: `packages/horizon-ao/src/vbaoSpatialDenoise.ts`.
 - OpenSpec progress:
-  - `openspec/changes/vbao-edge-confidence-metadata/apply-progress.md`
-  - `openspec/changes/vbao-groundtruth-quality-oracle/apply-progress.md`
+  - `openspec/changes/archive/2026-05-28-vbao-p0-rejected-research/vbao-edge-confidence-metadata/apply-progress.md`
+  - `openspec/changes/archive/2026-05-28-vbao-p0-rejected-research/vbao-groundtruth-quality-oracle/apply-progress.md`
 
 Command:
 
@@ -495,7 +1506,9 @@ the metadata needed for a bitmask-aware filter review. The edge-depth view also
 shows why we need discipline: if it is used blindly it can become another
 `false-curvature` source.
 
-## VBAO Denoise Gate Comparison
+## VBAO Denoise Gate Comparison (historical/rejected)
+
+Status: **legacy evidence only**. These rows rejected high-sample and demo denoise/filter candidates; they are not current runtime/product controls and do not define a public denoiser toolkit.
 
 Artifact: `artifacts/benchmarks/ao-vbao-denoise-gate-latest.json`.
 
@@ -651,6 +1664,725 @@ metadata, or (b) implement a bitmask-aware sampling/denoise path that emits
 enough confidence/edge data to filter without mud. Both require screenshots,
 timings, and a ground-truth or analytic reference comparison before promotion.
 
+## VBAO Production-Readiness Audit + Temporal-Free Roadmap Gate
+
+Status: internal correctness scaffolding only. This gate does **not** promote
+VBAO quality, denoise, depth hierarchy, or any public `VBAONodeOptions` surface.
+
+What changed:
+
+- Added `packages/horizon-ao/src/vbaoPaperReference.ts`, a paper/GLSL-aligned
+  scalar reference path that captures normal-centered slice shift, normalized
+  front/back horizon intervals, constant thickness behavior, and popcount
+  accessibility. It exists beside the current cosine-weighted reference so we
+  can compare variants instead of pretending they are the same formula.
+- Added `resolveVbaoDepthMipCandidate(...)` to
+  `packages/horizon-ao/src/vbaoDepthHierarchy.ts`. A footprint-selected coarse
+  depth is now accepted only when metadata says the neighborhood is stable;
+  high edge depth, high edge normal, low confidence, or a large coarse/base
+  depth delta falls back to base depth.
+- Added `denoiseVbaoTemporalFreeAccessibility(...)` to
+  `packages/horizon-ao/src/vbaoSpatialDenoise.ts`. This is a reference report
+  for a single-frame, edge-aware candidate filter: `temporalFramesUsed` is
+  always `0`, and suspicious neighbors are rejected by depth, normal,
+  confidence, and mask-coverage metadata before they can smear AO.
+
+Candid decision: still **not production-ready**. This improves the audit and
+unit-gate foundation, but it does not satisfy GPU readback parity or visual
+promotion. The current ratings remain conservative:
+
+| Dimension | Current rating | Why |
+| --- | --- | --- |
+| Paper fidelity | 5/10 | We now have a paper/GLSL scalar reference for comparison, but the live shader still uses the current cosine-weighted variant and is not proven GPU-parity-equivalent. |
+| Visual quality vs claim | 4/10 | Previous Museum evidence still shows `noise`, `mud`, `edge-bleed`, `scale-mismatch`, and `false-curvature`. |
+| Production discipline vs XeGTAO/CACAO | 3/10 | Real depth MIPs, edge channels, GPU parity, and visual acceptance gates are still not complete. |
+| Testing/evidence rigor | 6/10 | CPU reference coverage improved; GPU readback parity remains the missing gate. |
+
+Validation for this gate:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoPaperReference.test.ts packages/horizon-ao/src/__tests__/vbaoDepthHierarchy.test.ts packages/horizon-ao/src/__tests__/vbaoSpatialDenoise.test.ts
+# 3 files / 24 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 15 files / 134 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# packages/horizon-ao passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# apps/demo passed
+```
+
+Production build was not run.
+
+## 2026-05-26 — VBAO Upstream Signal Correction Gate
+
+Status: **started; artifact-specific oracle fixtures added; no candidate promoted**.
+
+Why this gate exists:
+
+- SSILVB/reference formula promotion was rejected.
+- `metadata-aware` v1 was rejected.
+- `gtvbao++` per-tap metadata was rejected.
+- The common issue is upstream: raw VBAO still carries `noise`,
+  `false-curvature`, and `scale-mismatch`.
+
+What changed:
+
+- Added internal oracle fixture targets for:
+  - `thin-gap-parallel-planes`
+  - `large-flat-floor-no-curvature`
+  - `small-contact-object-on-plane`
+  - `grazing-wall-corner`
+  - `subpixel-thin-occluder`
+- Each fixture records the failure labels it is meant to catch before any new
+  filter or formula work can claim improvement.
+- Added OpenSpec change:
+  `G:\RWY37\horizon-ao\openspec\changes\vbao-upstream-signal-correction\`.
+
+Decision:
+
+- No new filter tuning in this gate.
+- Next implementation work should target either sampling distribution or
+  radius/thickness scale against these fixtures first.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoOracleFixtures.test.ts packages/horizon-ao/src/__tests__/vbaoUpstreamSignalCorrection.test.ts
+# 2 files / 7 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 21 files / 176 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+```
+
+Production build was not run.
+
+## 2026-05-26 — VBAO Sampling Distribution Gate
+
+Status: **internal decision contract added; no sampling schedule promoted**.
+
+What changed:
+
+- Added an internal sampling distribution gate that evaluates current schedules
+  against the artifact-specific fixtures added by the upstream signal correction
+  gate.
+- Schedules considered:
+  - `magic-square`
+  - `r2`
+  - `hilbert`
+  - `blue-noise`
+- The production schedule remains `magic-square` until a non-production schedule
+  clears all targeted fixture labels.
+
+Decision:
+
+- verdict: `keep-production-sampling`
+- promoted schedule: `magic-square`
+- reason: no schedule currently reduces all targeted fixture labels.
+
+No new filter tuning was added.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoSamplingDistributionGate.test.ts packages/horizon-ao/src/__tests__/vbaoUpstreamSignalCorrection.test.ts packages/horizon-ao/src/__tests__/vbaoOracleFixtures.test.ts
+# 3 files / 11 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 22 files / 180 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+```
+
+## 2026-05-26 — VBAO Radius/Thickness Scale Gate
+
+Status: **internal decision contract added; no radius/thickness preset promoted**.
+
+What changed:
+
+- Added an internal radius/thickness scale gate that evaluates candidate presets
+  against the same artifact-specific fixtures used by the upstream signal
+  correction gate.
+- Presets considered:
+  - `museum-baseline` — radius `0.35`, thickness `0.28`
+  - `thin-gap-conservative` — radius `0.25`, thickness `0.06`
+  - `small-contact-tight` — radius `0.18`, thickness `0.05`
+  - `large-radius` — radius `0.7`, thickness `0.28`
+
+Decision:
+
+- verdict: `keep-radius-thickness`
+- promoted preset: `museum-baseline`
+- reason: no radius/thickness preset clears all targeted fixture labels.
+
+No new filter tuning was added.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoRadiusThicknessScaleGate.test.ts packages/horizon-ao/src/__tests__/vbaoSamplingDistributionGate.test.ts packages/horizon-ao/src/__tests__/vbaoUpstreamSignalCorrection.test.ts packages/horizon-ao/src/__tests__/vbaoOracleFixtures.test.ts
+# 4 files / 15 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 23 files / 184 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+```
+
+## 2026-05-26 — VBAO Upstream GPU Fixture Evidence Matrix
+
+Status: **internal parity scene contracts added; no candidate promoted**.
+
+What changed:
+
+- Extended the internal `/vbao-parity` GPU/scalar matrix to include the
+  artifact-specific upstream fixtures:
+  - `thin-gap-parallel-planes`
+  - `large-flat-floor-no-curvature`
+  - `small-contact-object-on-plane`
+  - `grazing-wall-corner`
+  - `subpixel-thin-occluder`
+- Added accepted scalar anchors away from silhouette/coverage discontinuities
+  for each upstream fixture.
+- Kept the fixture semantics explicit:
+  - the flat-floor fixture is a single receiver only;
+  - the grazing-corner fixture includes true non-frontal normals;
+  - the subpixel-thin-occluder fixture uses a subpixel-width occluder.
+
+Decision:
+
+- This is parity/evidence infrastructure only.
+- No sampling schedule, radius/thickness preset, formula, denoise filter, or
+  public API is promoted by this change.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts
+# 1 file / 19 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts packages/horizon-ao/src/__tests__/vbaoUpstreamSignalCorrection.test.ts packages/horizon-ao/src/__tests__/vbaoOracleFixtures.test.ts
+# 3 files / 26 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 23 files / 186 tests passed
+
+cd G:\RWY37\horizon-ao\apps\demo
+$env:E2E_WEBGPU_PARITY='1'; $env:PLAYWRIGHT_EXTERNAL_SERVER='1'; $env:PLAYWRIGHT_BASE_URL='http://127.0.0.1:41737'; .\node_modules\.bin\playwright.ps1 test vbao-parity.spec.ts --project=chromium --grep "all fixture reports pass|matches fixed scalar" --reporter=list --timeout=90000
+# 2 tests passed
+
+cd G:\RWY37\horizon-ao\packages\horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd G:\RWY37\horizon-ao\apps\demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+```
+
+Peer-review note: the first RED/green unit implementation was not enough.
+Targeted WebGPU `/vbao-parity` initially failed on `thin-gap-parallel-planes`,
+`grazing-wall-corner`, and `subpixel-thin-occluder`. The anchors/surfaces were
+tightened to stable rasterized regions before accepting the evidence route.
+
+## 2026-05-26 — GTVBAO++ Per-Tap Bitmask Metadata Gate (historical/rejected)
+
+Status: **implemented and captured as internal evidence candidate only; not promoted**.
+
+What changed after the first `gtvbao++` pass:
+
+- Added an internal sampleable bitmask metadata texture in
+  `G:\RWY37\horizon-ao\apps\demo\src\scenes\MuseumScene.tsx`.
+- Rewired `vbaoGtVbaoPlusPlusSmartDenoiserScalar` so center and neighbor taps
+  sample metadata independently instead of reusing center-pixel
+  `maskCoverage` / `maskPopcount` / `paperPopcount` for every tap.
+- The pass still consumes raw VBAO directly and remains temporal-free. It does
+  not consume generic denoise output, `metadata-aware` v1 output, velocity,
+  history, frame index, or accumulation.
+- No public `VBAONodeOptions` or `@horizonao/core` export was added.
+
+Evidence:
+
+- JSON: `G:\RWY37\horizon-ao\artifacts\benchmarks\ao-vbao-gtvbao-plus-plus-per-tap-metadata-latest.json`
+- Screenshots: `G:\RWY37\horizon-ao\artifacts\benchmarks\screenshots-vbao-gtvbao-plus-plus-per-tap-metadata\`
+- Contact sheet: `G:\RWY37\horizon-ao\artifacts\analysis\vbao_gtvbao_plus_plus_per_tap_metadata_contact_sheet.png`
+- OpenSpec: `G:\RWY37\horizon-ao\openspec\changes\archive\2026-05-28-vbao-p0-rejected-research\vbao-gtvbao-plus-plus-smartdenoiser\`
+
+WebGPU run:
+
+```sh
+AO_BENCHMARK_EXTERNAL_SERVER=1 AO_BENCHMARK_BASE_URL=http://127.0.0.1:41775 AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_HEADED=1 AO_BENCHMARK_BROWSER_CHANNEL=chrome AO_BENCHMARK_DENOISE_MATRIX=1 AO_BENCHMARK_VBAO_DENOISE_FILTER_MATRIX=1 AO_BENCHMARK_SCREENSHOTS=1 AO_BENCHMARK_OUT=artifacts/benchmarks/ao-vbao-gtvbao-plus-plus-per-tap-metadata-latest.json AO_BENCHMARK_SCREENSHOT_DIR=artifacts/benchmarks/screenshots-vbao-gtvbao-plus-plus-per-tap-metadata node apps/demo/scripts/collect-ao-benchmark.mjs
+# status ok / WebGPU / 56 rows / screenshots captured
+```
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 17 files / 156 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+```
+
+Candid review: this is the correct architectural direction because taps now
+carry their own bitmask metadata. But this still does **not** prove promotion.
+The single-row 1920 beauty `gtvbao++` p95 in this run includes a shader/startup
+outlier (`125.1ms`), while the 1920 AO row is stable (`p95 1.1ms`) and compose
+rows are in normal range. Visually, the pass is stricter and less legacy-layered,
+but it still depends on the current cosine-production VBAO signal; the next
+decision gate remains SSILVB/reference formula ablation / formula choice, not
+blind tuning. There is no verified live GPU SSILVB/reference implementation in
+this repo.
+
+Production build was not run.
+
+
+
+## 2026-05-26 — GTVBAO++ Per-Tap Filter Decision Gate
+
+Status: **decision recorded; candidate not promoted**.
+
+Artifact:
+
+- `G:\RWY37\horizon-ao\artifacts\analysis\vbao_gtvbao_plus_plus_per_tap_decision.json`
+
+Decision result:
+
+- verdict: `reject-candidate`
+- candidate: `gtvbao++`
+- `promoteCandidate`: `false`
+- public API changes: none
+- production build: not run
+
+Candid visual read from the per-tap contact sheet:
+
+- The per-tap metadata architecture is the right direction; center-only metadata
+  was conceptually weak and now the neighbor taps can carry their own bitmask
+  signals.
+- But the output is still too close to raw VBAO. It retains `noise`,
+  `false-curvature`, and `scale-mismatch` in the same Museum areas.
+- That means this is a good diagnostic/architecture gate, not a production
+  filter. No shortcuts: a filter that does not reduce the named artifact is not
+  a filter we promote.
+
+Gate rule now enforced by internal tests:
+
+- Required raw/candidate rows with `pending-review` block promotion.
+- If raw VBAO has `noise` and the candidate still has `noise`, promotion is
+  rejected.
+- Candidate rows with `mud`, `halo`, `thin-gap`, `edge-bleed`,
+  `false-curvature`, or `scale-mismatch` are rejected.
+
+Next move:
+
+- Stop blind filter-weight tuning.
+- The next useful gate is earlier in the signal: sampling/radius-thickness
+  correction or fixture-driven per-tap metadata thresholds with artifact-specific
+  oracles.
+## VBAO GPU Readback Parity Contract
+
+Status: quantitative fixture contract wired and passing on the local WebGPU
+Playwright route.
+
+What changed:
+
+- Added `packages/horizon-ao/src/vbaoGpuReadbackParity.ts`, an internal scalar
+  mirror for the `/vbao-parity` flat-plane scene. It evaluates named pixels:
+  `flat-plane-center`, `flat-plane-left-quarter`, and `flat-plane-upper-right`.
+- The scalar expected value is quantized to the byte-format render target before
+  comparison: `round(expected * 255) / 255`, with tolerance `1 / 255 + ε`.
+- `apps/demo/src/scenes/VbaoParityPage.tsx` now exposes one canonical
+  `window.__vbaoParity.fixtures` matrix plus `fixturePixels` diagnostics.
+- `apps/demo/e2e/vbao-parity.spec.ts` now fails the WebGPU parity run when any
+  named fixture row exceeds tolerance.
+- Added OpenSpec artifacts in
+  `openspec/changes/vbao-gpu-readback-parity/`.
+
+Candid decision: this is a **better correctness tripwire**, not visual
+promotion. Peer review found two important harness bugs before the passing run:
+the scalar mirror was not following Three's WebGPU Y-flip helpers, and the
+readback normalizer treated the WebGPU 256-byte row-padded buffer as a tightly
+packed image. Both were fixed before accepting the E2E result. The parity claim
+is still scoped: fixed flat-plane fixture pixels only, not corners/thin occluders
+yet.
+
+Validation for the contract:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts
+# 1 file / 9 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 15 files / 137 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# packages/horizon-ao passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# apps/demo passed
+```
+
+Local WebGPU E2E:
+
+```sh
+E2E_WEBGPU_PARITY=1 PLAYWRIGHT_EXTERNAL_SERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:41782 node ..\..\node_modules\.pnpm\@playwright+test@1.60.0\node_modules\@playwright\test\cli.js test vbao-parity.spec.ts --reporter=list --timeout=60000
+# 5 tests passed
+```
+
+Production build was not run.
+
+## VBAO Multi-Fixture GPU Parity Matrix
+
+Status: expanded `/vbao-parity` from the flat-plane readback tripwire into an
+internal three-fixture matrix:
+
+- `flat-plane`
+- `two-wall-corner`
+- `thin-occluder`
+
+What changed:
+
+- `packages/horizon-ao/src/vbaoGpuReadbackParity.ts` now exposes internal matrix
+  helpers for stable scene IDs, scalar fixture rows, per-fixture reports, and
+  matrix-level pass/fail aggregation.
+- `apps/demo/src/scenes/VbaoParityPage.tsx` renders each fixture in sequence,
+  reads back its VBAO render target, and exposes
+  `window.__vbaoParity.fixtures`.
+- `apps/demo/e2e/vbao-parity.spec.ts` now asserts that every fixture report and
+  every named row passes.
+- `openspec/changes/archive/2026-05-28-vbao-p0-rejected-research/vbao-parity-fixture-expansion/` records the historical SDD proposal,
+  design, tasks, spec, and ultraplan.
+
+Candid scope: this is **still internal correctness tooling**, not visual
+promotion. The first matrix uses deterministic frontal-rect analytic fixtures:
+flat plane, an L-shaped depth-band corner proxy, and a frontal thin occluder
+over a receiver plane. That makes the GPU/scalar plumbing debuggable and proves
+the matrix runner works. It does **not** yet replace the hardening gate for true
+perpendicular-wall normals.
+
+Peer-review finding during E2E: the first thin-occluder left-gap anchor landed
+too close to the coverage-ambiguous silhouette. GPU rasterization saw more thin
+blocker coverage than the analytic scalar edge, producing a `0.0431` absolute
+error. The anchor was moved off the silhouette before accepting the matrix.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts
+# 1 file / 13 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 15 files / 141 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# packages/horizon-ao passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# apps/demo passed
+```
+
+Local WebGPU E2E:
+
+```sh
+E2E_WEBGPU_PARITY=1 PLAYWRIGHT_EXTERNAL_SERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:41737 node .\node_modules\@playwright\test\cli.js test e2e/vbao-parity.spec.ts --reporter=list
+# 6 tests passed
+```
+
+Screenshot / analysis artifacts:
+
+- `artifacts/analysis/vbao_parity_matrix_screenshot.png`
+- `artifacts/analysis/vbao_parity_matrix_latest.json`
+- `artifacts/analysis/vbao_next_steps_literature_contrast.png`
+- `artifacts/analysis/vbao_next_steps_literature_contrast.html`
+- `openspec/changes/archive/2026-05-28-vbao-p0-rejected-research/vbao-parity-fixture-expansion/next-steps-literature-contrast.md`
+
+Literature grounding added:
+
+- SSILVB/VBAO: visibility bitmask and thin-surface light-passing semantics.
+- XeGTAO: depth prefilter, edge info, spatial denoise, and reference tuning.
+- CACAO: de-interleaved depth/normal buffers, depth MIPs, edge values,
+  importance maps, edge-aware blur, and bilateral upsampling.
+- NRD: guided denoise discipline via normal/roughness/viewZ/motion-vector
+  guides and explicit noisy-signal packing.
+- Filter-adapted sampling: sampling pattern must be co-designed with the filter
+  that consumes it.
+
+Production build was not run.
+
+## VBAO Hardened Oracle Gate: True-Normal Corner + Formula Labels
+
+Status: **accepted as internal correctness tooling; next gate is filter
+comparison**.
+
+What changed after the first matrix:
+
+- `packages/horizon-ao/src/vbaoGpuReadbackParity.ts` now includes the
+  `two-wall-corner-true-normal` fixture with non-`+Z` wall normals, internal
+  anchor validation metadata, and per-row formula comparison labels.
+- `apps/demo/src/scenes/VbaoParityPage.tsx` orients the WebGPU fixture planes
+  from their declared scalar normals instead of assuming every anchor surface is
+  frontal, and exposes internal normal/fixture readback diagnostics on
+  `/vbao-parity`.
+- `apps/demo/e2e/vbao-parity.spec.ts` now requires the hardened fixture to be
+  present on `/vbao-parity`.
+- `openspec/changes/archive/2026-05-28-vbao-p0-rejected-research/vbao-parity-fixture-expansion/` records the historical hardened oracle
+  contract and the `paper-matches-gpu`, `cosine-matches-gpu`, `both-drift`, and
+  `visual-choice-required` formula labels.
+
+Candid gate result: the first non-frontal wall anchor choices were not stable
+enough. They exposed `both-drift` rows, but the normal readback diagnostic
+proved the MRT normals themselves matched the scalar fixture normals
+(`+X` for the left wall and `-Y` for the top wall). The fixed anchors were moved
+to stable interior wall pixels that pass the same silhouette guard and the same
+one-byte render-target tolerance.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts
+# 1 file / 16 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 15 files / 144 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# packages/horizon-ao passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# apps/demo passed
+```
+
+Local WebGPU E2E:
+
+```sh
+E2E_WEBGPU_PARITY=1 PLAYWRIGHT_EXTERNAL_SERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:41737 node .\node_modules\@playwright\test\cli.js test e2e/vbao-parity.spec.ts --reporter=list
+# 6 tests passed
+```
+
+Initial rejected anchor evidence:
+
+| Fixture | Anchor | GPU | Cosine scalar | Paper scalar | Abs error vs cosine | Label |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| `two-wall-corner-true-normal` | `true-corner-left-wall` | `0.862745` | `0.905882` | `0.827451` | `0.043137` | `both-drift` |
+| `two-wall-corner-true-normal` | `true-corner-top-wall` | `0.647059` | `0.560784` | `0.576471` | `0.086275` | `both-drift` |
+
+Decision: **do not treat the first frontal proxy matrix as production parity**.
+The hardened `two-wall-corner-true-normal` fixture is now part of the live gate,
+and the route fails loudly if its named rows drift. The next work may proceed to
+metadata-aware temporal-free filter comparison, but only as an internal candidate
+until the visual evidence gate passes.
+
+Production build was not run.
+
+## VBAO Temporal-Free Metadata-Aware Filter Gate
+
+Status: **implemented as internal demo/benchmark candidate only; not
+promoted**.
+
+What changed:
+
+- `apps/demo/src/scenes/MuseumScene.tsx` now exposes internal
+  `metadata-aware` as a Museum-only `VbaoDenoiseFilter` value.
+- The candidate is spatial-only and uses raw VBAO plus depth, normal,
+  edge-depth, edge-normal, and confidence metadata to reject high-edge or
+  low-confidence taps before blending.
+- `apps/demo/scripts/collect-ao-benchmark.mjs` now includes
+  `metadata-aware` in `AO_BENCHMARK_VBAO_DENOISE_FILTER_MATRIX=1` captures.
+- `apps/demo/e2e/ao-compare.spec.ts` verifies
+  `window.__aoBenchmark.setVbaoDenoiseFilter('metadata-aware')` and benchmark
+  snapshot reporting.
+- `openspec/changes/archive/2026-05-28-vbao-p0-rejected-research/vbao-temporal-free-metadata-filter/` records the historical
+  evidence-first contract.
+
+Important boundary: this is **not** a public API. `VBAONodeOptions` and
+`@horizonao/core` exports are unchanged. This is also **not** claimed as
+bitmask-aware filtering yet; GPU-visible mask coverage/popcount remains a later
+gate.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoMetadataAwareFilter.test.ts
+# 1 file / 5 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 16 files / 149 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# packages/horizon-ao passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# apps/demo passed
+```
+
+Targeted Playwright route coverage:
+
+```sh
+PLAYWRIGHT_EXTERNAL_SERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:41759 node .\node_modules\@playwright\test\cli.js test e2e/ao-compare.spec.ts --grep "denoise filter candidates|metadata-aware filter" --reporter=list --workers=1
+# 2 tests passed
+```
+
+WebGPU benchmark evidence:
+
+```sh
+AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_DENOISE_MATRIX=1 AO_BENCHMARK_VBAO_DENOISE_FILTER_MATRIX=1 AO_BENCHMARK_SCREENSHOTS=1 AO_BENCHMARK_OUT=artifacts/benchmarks/ao-vbao-metadata-aware-filter-latest.json AO_BENCHMARK_SCREENSHOT_DIR=artifacts/benchmarks/screenshots-vbao-metadata-aware-filter node apps/demo/scripts/collect-ao-benchmark.mjs
+# status ok / 48 rows / 48 screenshots
+```
+
+Artifacts:
+
+- `artifacts/benchmarks/ao-vbao-metadata-aware-filter-latest.json`
+- `artifacts/benchmarks/screenshots-vbao-metadata-aware-filter/`
+- `artifacts/analysis/vbao_metadata_aware_filter_contact_sheet.png`
+
+1920x1080 AO single-view timings from the matrix:
+
+| Mode | Denoise | VBAO filter | Median ms | p95 ms | Labels |
+| --- | --- | --- | ---: | ---: | --- |
+| `gtao` | `raw` | `n/a` | 1.0 | 1.9 | `none` |
+| `vbao` | `raw` | `n/a` | 0.9 | 1.5 | `noise,false-curvature,scale-mismatch` |
+| `n8ao` | `raw` | `n/a` | 1.5 | 1.8 | `none` |
+| `gtao` | `denoised` | `n/a` | 1.3 | 2.0 | `none` |
+| `vbao` | `denoised` | `generic` | 1.0 | 1.3 | `noise,mud,false-curvature,scale-mismatch` |
+| `vbao` | `denoised` | `custom-bilateral` | 0.7 | 1.0 | `noise,false-curvature,scale-mismatch` |
+| `vbao` | `denoised` | `metadata-aware` | 0.7 | 1.1 | `noise,false-curvature,scale-mismatch` |
+| `n8ao` | `denoised` | `n/a` | 0.8 | 1.4 | `none` |
+
+1280x720 AO single-view timings from the matrix:
+
+| Mode | Denoise | VBAO filter | Median ms | p95 ms | Labels |
+| --- | --- | --- | ---: | ---: | --- |
+| `gtao` | `raw` | `n/a` | 0.7 | 1.1 | `none` |
+| `vbao` | `raw` | `n/a` | 0.6 | 0.9 | `noise,false-curvature,scale-mismatch` |
+| `n8ao` | `raw` | `n/a` | 0.8 | 1.3 | `none` |
+| `gtao` | `denoised` | `n/a` | 1.0 | 2.1 | `none` |
+| `vbao` | `denoised` | `generic` | 0.7 | 0.9 | `noise,mud,false-curvature,scale-mismatch` |
+| `vbao` | `denoised` | `custom-bilateral` | 0.8 | 0.9 | `noise,false-curvature,scale-mismatch` |
+| `vbao` | `denoised` | `metadata-aware` | 0.7 | 1.1 | `noise,false-curvature,scale-mismatch` |
+| `n8ao` | `denoised` | `n/a` | 0.8 | 1.3 | `none` |
+
+Candid visual decision: **reject `metadata-aware` promotion**. Implementation
+and capture are green, but the screenshot review shows that metadata-aware v1
+still carries raw VBAO hatch/noise plus broad `false-curvature` and
+`scale-mismatch` bands. Generic denoise additionally trends toward `mud`.
+Therefore the next gate is **GPU-visible mask coverage/popcount metadata**, not
+blindly tuning bilateral weights.
+
+Follow-up OpenSpec change:
+
+- `openspec/changes/archive/2026-05-28-vbao-p0-rejected-research/vbao-mask-coverage-popcount-metadata/`
+- `openspec/changes/archive/2026-05-28-vbao-p0-rejected-research/vbao-mask-coverage-popcount-metadata/roadmap.md`
+  records the revised roundtable roadmap, current ratings, architecture slice,
+  task order, semantic contract, and stop conditions.
+
+Production build was not run.
+
+## VBAO Mask Coverage / Popcount Metadata Debug Gate
+
+Status: **accepted as internal debug metadata only; filter v2 is not implemented
+yet**.
+
+What changed:
+
+- `apps/demo/src/scenes/MuseumScene.tsx` now exposes three additional internal
+  VBAO metadata debug views:
+  - `mask-coverage`
+  - `mask-popcount`
+- Follow-up: `paper-popcount` is now exposed as a demo-only SSILVB-style
+  normal-shift/popcount diagnostic. It is not a production formula switch.
+- These views are generated from an internal GPU-side visibility mask
+  construction path using `occludedMask`, `bitOr(maskRange)`, and
+  `countOneBits(occludedMask)`. They are **not** derived from final AO output.
+  `paper-popcount` uses a separate `vbaoPaperReferenceOccludedMask` path with
+  projected-normal shift and constant view-direction thickness.
+- `apps/demo/scripts/collect-ao-benchmark.mjs` includes the new views in
+  `AO_BENCHMARK_VBAO_METADATA_DEBUG_MATRIX=1`.
+- `packages/horizon-ao/src/__tests__/vbaoMaskMetadataGate.test.ts` now asserts
+  the debug views, source-level mask construction, benchmark wiring, and public
+  API boundary.
+
+Boundary: this does **not** add public `VBAONodeOptions`, does **not** export a
+new package API, and does **not** promote a new filter. The mask metadata is
+demo/evidence plumbing for the next mask-aware spatial filter candidate.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoMaskMetadataGate.test.ts
+# 1 file / 4 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 17 files / 153 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# packages/horizon-ao passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# apps/demo passed
+```
+
+WebGPU metadata debug matrix:
+
+```sh
+AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_VBAO_METADATA_DEBUG_MATRIX=1 AO_BENCHMARK_SCREENSHOTS=1 AO_BENCHMARK_OUT=artifacts/benchmarks/ao-vbao-mask-metadata-debug-latest.json AO_BENCHMARK_SCREENSHOT_DIR=artifacts/benchmarks/screenshots-vbao-mask-metadata-debug node apps/demo/scripts/collect-ao-benchmark.mjs
+# status ok / 10 rows / 10 screenshots
+```
+
+Follow-up paper/reference debug matrix:
+
+```sh
+AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_VBAO_METADATA_DEBUG_MATRIX=1 AO_BENCHMARK_SCREENSHOTS=1 AO_BENCHMARK_OUT=artifacts/benchmarks/ao-vbao-paper-reference-debug-latest.json AO_BENCHMARK_SCREENSHOT_DIR=artifacts/benchmarks/screenshots-vbao-paper-reference-debug node apps/demo/scripts/collect-ao-benchmark.mjs
+# status ok / 12 rows / 12 screenshots
+```
+
+Artifacts:
+
+- `artifacts/benchmarks/ao-vbao-mask-metadata-debug-latest.json`
+- `artifacts/benchmarks/screenshots-vbao-mask-metadata-debug/`
+- `artifacts/analysis/vbao_mask_metadata_debug_contact_sheet.png`
+- `artifacts/benchmarks/ao-vbao-paper-reference-debug-latest.json`
+- `artifacts/benchmarks/screenshots-vbao-paper-reference-debug/`
+- `artifacts/analysis/vbao_actual_paper_popcount_contact_sheet.png`
+
+Candid decision: this is a useful diagnostic layer, but it is not the final
+answer. `mask-coverage` currently highlights saturated broad mask regions, and
+`mask-popcount` shows smoother average mask load. The next gate is to feed these
+signals into a **mask-aware temporal-free filter v2** and prove it reduces
+`noise` without adding `mud`, `edge-bleed`, `halo`, `thin-gap`,
+`false-curvature`, or `scale-mismatch`.
+
+Production build was not run.
+
 ## Manual WebGPU Capture Steps
 
 1. Run `pnpm dev`.
@@ -702,3 +2434,287 @@ accordingly. Record the median of 10 steady-state frames/passes.
   extra pass against higher raw sample counts.
 - Depth hierarchy (`IM-06`) needs rows showing `scale-mismatch` or distant
   large-radius instability.
+
+## 2026-05-26 — VBAO GT/Reference Alignment Gate
+
+Decision: accepted as an internal correctness/reporting hardening pass only. No production formula promotion and no public API expansion.
+
+What changed:
+
+- `G:\RWY37\horizon-ao\packages\horizon-ao\src\vbaoGpuReadbackParity.ts` now computes paper/GT reference rows from paper-aligned masks instead of applying a popcount reducer to production masks.
+- `G:\RWY37\horizon-ao\packages\horizon-ao\src\__tests__\vbaoGpuReadbackParity.test.ts` now requires separate production and paper/reference mask metadata.
+- `G:\RWY37\horizon-ao\openspec\changes\vbao-gt-vbao-alignment\` records the SDD contract.
+
+Candid status:
+
+- Production VBAO remains the cosine-weighted shader path.
+- GT/reference VBAO is now an independent scalar comparison path: normal shift + constant view-direction thickness + popcount reduction.
+- Formula labels are more honest now: disagreement means real mask/reducer disagreement, not just reducer disagreement over the same mask.
+
+Validation captured so far:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts
+# 1 file / 17 tests passed
+
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 17 files / 154 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# packages/horizon-ao passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# apps/demo passed
+
+git diff --check
+# clean except expected LF→CRLF warnings
+```
+
+Attempted targeted Playwright `/vbao-parity` validation via the local Playwright
+CLI, but the run timed out before reporting. The hanging Playwright/Vite
+processes from that attempt were stopped; this is not counted as passing
+evidence.
+
+No production build run.
+
+### Peer review screenshot
+
+- `G:\RWY37\horizon-ao\artifacts\analysis\vbao_gt_alignment_peer_review.png`
+- `G:\RWY37\horizon-ao\openspec\changes\vbao-gt-vbao-alignment\peer-review.md`
+
+Peer review verdict: accepted with caveats as internal correctness/reporting hardening. The main remaining blocker is refreshed `/vbao-parity` WebGPU route evidence; the targeted Playwright attempt timed out in this session and is not counted as passing.
+
+## 2026-05-26 — Actual VBAO WebGPU Run + Research-Audit Correction
+
+Correction: when referencing the "paper" gate, use the actual SSILVB/VBAO paper and implementation literature, not a generic paper-inspired claim.
+
+Actual WebGPU Museum screenshots captured with `AO_BENCHMARK_REQUIRE_WEBGPU=1`:
+
+- Raw VBAO AO, 1920x1080: `G:\RWY37\horizon-ao\artifacts\benchmarks\screenshots-vbao-actual-run-denoise-matrix\museum__museumBaseline__1920x1080__single__vbao__single__ao__raw__magic-square.png`
+- Denoised VBAO beauty, 1920x1080: `G:\RWY37\horizon-ao\artifacts\benchmarks\screenshots-vbao-actual-run\museum__museumBaseline__1920x1080__single__vbao__single__beauty__denoised__magic-square__generic.png`
+- Paper-popcount debug, 1920x1080: `G:\RWY37\horizon-ao\artifacts\benchmarks\screenshots-vbao-paper-reference-debug\museum__museumBaseline__1920x1080__single__vbao__single__beauty__raw__magic-square__paper-popcount.png`
+- Contact sheet: `G:\RWY37\horizon-ao\artifacts\analysis\vbao_actual_paper_popcount_contact_sheet.png`
+- Matrix JSON: `G:\RWY37\horizon-ao\artifacts\benchmarks\ao-vbao-actual-run-denoise-matrix-latest.json`
+- Paper debug JSON: `G:\RWY37\horizon-ao\artifacts\benchmarks\ao-vbao-paper-reference-debug-latest.json`
+- Research audit: `G:\RWY37\horizon-ao\openspec\changes\vbao-gt-vbao-alignment\research-audit.md`
+
+Result: WebGPU renderer confirmed. Labels are now assigned:
+
+- raw VBAO AO: `noise,false-curvature,scale-mismatch`
+- generic-denoised VBAO beauty: `noise,mud,false-curvature,scale-mismatch`
+- production mask-popcount debug: `diagnostic-only,production-mask-popcount,formula-choice-required`
+- paper-popcount debug: `diagnostic-only,paper-popcount,formula-choice-required`
+
+Decision: **not promoted**. The new `paper-popcount` view is an internal
+research/debug diagnostic that makes the SSILVB-style normal-shift/popcount path
+visible in the actual Museum pipeline. It does not change `VBAONodeOptions`, does
+not export a public API, and does not replace the production cosine-weighted
+path until GPU parity and screenshot evidence justify that move.
+
+Attempted targeted Playwright `/vbao-parity` validation after this debug pass,
+but the run timed out before reporting and is **not** counted as passing
+evidence. The next gate still needs a reliable GPU readback parity run.
+
+Follow-up `/vbao-parity` route validation:
+
+```sh
+# Direct WebGPU route probe against Vite dev server, no production build
+# route: http://127.0.0.1:41771/vbao-parity
+# browser channel: chromium
+# result: ready
+# fixtures.passed: true
+# maxAbsError: 0
+```
+
+Artifacts:
+
+- `G:\RWY37\horizon-ao\artifacts\analysis\vbao_parity_route_latest.json`
+- `G:\RWY37\horizon-ao\artifacts\analysis\vbao_parity_route_latest.png`
+
+Targeted Playwright tests against the already-running external dev server:
+
+```sh
+PLAYWRIGHT_EXTERNAL_SERVER=1 PLAYWRIGHT_BASE_URL=http://127.0.0.1:41771 E2E_WEBGPU_PARITY=1 node node_modules\@playwright\test\cli.js test e2e/vbao-parity.spec.ts --project=chromium --grep "all fixture reports pass|matches fixed scalar" --reporter=line
+# 2 passed
+```
+
+Formula comparison result from the route artifact: all 12 hardened fixture
+anchors report `cosine-matches-gpu`. That means the current GPU shader matches
+the current cosine-weighted scalar oracle, while the SSILVB-style
+`paper-popcount` reference is a real disagreement, not a hidden implementation
+of the same formula. Candidly: this improves correctness discipline, but it
+does **not** make production VBAO paper-faithful yet.
+
+## 2026-05-26 — GTVBAO++ SmartDenoiser Internal Candidate (historical/rejected)
+
+Status: **implemented as internal evidence candidate only; not promoted**.
+
+What changed:
+
+- Added demo/benchmark-only `vbaoDenoiseFilter: "gtvbao++"`.
+- Added `vbaoGtVbaoPlusPlusSmartDenoiserScalar` in
+  `G:\RWY37\horizon-ao\apps\demo\src\scenes\MuseumScene.tsx`.
+- The pass runs after raw VBAO and before AO/beauty composition. It consumes raw
+  VBAO, depth, normals, edge-depth, edge-normal, confidence, `maskCoverage`,
+  production `maskPopcount`, and paper/reference `paperPopcount`.
+- It does **not** consume generic denoise output, does **not** wrap
+  `metadata-aware` v1, and does **not** use history/velocity/frame accumulation.
+- Added reference helper:
+  `denoiseVbaoGtVbaoPlusPlusSmartAccessibility` in
+  `G:\RWY37\horizon-ao\packages\horizon-ao\src\vbaoSpatialDenoise.ts`.
+
+Evidence:
+
+- JSON: `G:\RWY37\horizon-ao\artifacts\benchmarks\ao-vbao-gtvbao-plus-plus-smartdenoiser-latest.json`
+- Screenshots: `G:\RWY37\horizon-ao\artifacts\benchmarks\screenshots-vbao-gtvbao-plus-plus-smartdenoiser\`
+- Contact sheet: `G:\RWY37\horizon-ao\artifacts\analysis\vbao_gtvbao_plus_plus_smartdenoiser_contact_sheet.png`
+- OpenSpec: `G:\RWY37\horizon-ao\openspec\changes\archive\2026-05-28-vbao-p0-rejected-research\vbao-gtvbao-plus-plus-smartdenoiser\`
+
+WebGPU run:
+
+```sh
+AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_DENOISE_MATRIX=1 AO_BENCHMARK_VBAO_DENOISE_FILTER_MATRIX=1 AO_BENCHMARK_SCREENSHOTS=1 AO_BENCHMARK_OUT=artifacts/benchmarks/ao-vbao-gtvbao-plus-plus-smartdenoiser-latest.json AO_BENCHMARK_SCREENSHOT_DIR=artifacts/benchmarks/screenshots-vbao-gtvbao-plus-plus-smartdenoiser node apps/demo/scripts/collect-ao-benchmark.mjs
+# status ok / WebGPU / screenshots captured
+```
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 17 files / 156 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+```
+
+Candid review: `gtvbao++` is architecturally cleaner than `metadata-aware` v1
+because it is not layered over legacy denoise and it lets SSILVB bitmask metadata
+participate in the resolve pass. But the actual Museum AO screenshot still shows
+structured VBAO noise and broad `false-curvature` / `scale-mismatch`, so this is
+**not promotion evidence**. If we want a real next jump, the next gate is a
+proper per-tap bitmask metadata texture/channel or an internal SSILVB/reference
+formula ablation, not more blind weight tuning. There is no verified "paper
+shader" variant in this repo.
+
+Production build was not run.
+
+## 2026-05-26 — SSILVB/reference Formula Ablation Gate
+
+Status: **implemented and captured as internal diagnostic evidence only; not promoted**.
+
+What changed:
+
+- Added demo/benchmark-only formula variants:
+  `production-cosine` and `ssilvb-reference`.
+- Added benchmark matrix env:
+  `AO_BENCHMARK_VBAO_FORMULA_ABLATION_MATRIX=1`.
+- The `ssilvb-reference` row renders from the internal SSILVB/reference
+  accessibility scalar. It is not a public shader claim, not a denoise layer,
+  and not a `VBAONodeOptions` change.
+- Removed the wrong framing: this is **not** a promoted GPU implementation of
+  the SSILVB formula; it is a formula-ablation gate against the production
+  cosine path.
+
+Evidence:
+
+- JSON: `G:\RWY37\horizon-ao\artifacts\benchmarks\ao-vbao-ssilvb-reference-formula-ablation-latest.json`
+- Screenshots: `G:\RWY37\horizon-ao\artifacts\benchmarks\screenshots-vbao-ssilvb-reference-formula-ablation\`
+- Contact sheet: `G:\RWY37\horizon-ao\artifacts\analysis\vbao_ssilvb_reference_formula_ablation_contact_sheet.png`
+- OpenSpec: `G:\RWY37\horizon-ao\openspec\changes\vbao-ssilvb-reference-formula-ablation\`
+
+WebGPU run:
+
+```sh
+AO_BENCHMARK_EXTERNAL_SERVER=1 AO_BENCHMARK_BASE_URL=http://127.0.0.1:41776 AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_HEADED=1 AO_BENCHMARK_BROWSER_CHANNEL=chrome AO_BENCHMARK_VBAO_FORMULA_ABLATION_MATRIX=1 AO_BENCHMARK_SCREENSHOTS=1 AO_BENCHMARK_OUT=artifacts/benchmarks/ao-vbao-ssilvb-reference-formula-ablation-latest.json AO_BENCHMARK_SCREENSHOT_DIR=artifacts/benchmarks/screenshots-vbao-ssilvb-reference-formula-ablation node apps/demo/scripts/collect-ao-benchmark.mjs
+# status ok / WebGPU / 8 rows / screenshots captured
+```
+
+Captured rows:
+
+- 1920x1080 beauty, production-cosine: p95 `45.1ms`
+- 1920x1080 beauty, SSILVB/reference: p95 `1.7ms`
+- 1920x1080 AO, production-cosine: p95 `2.2ms`
+- 1920x1080 AO, SSILVB/reference: p95 `1.1ms`
+- 1280x720 beauty, production-cosine: p95 `41.5ms`
+- 1280x720 beauty, SSILVB/reference: p95 `1.4ms`
+- 1280x720 AO, production-cosine: p95 `1.6ms`
+- 1280x720 AO, SSILVB/reference: p95 `1.1ms`
+
+Decision:
+
+- The gate is useful because the actual Museum pipeline can now compare the
+  current production cosine formula against a visible SSILVB/reference formula
+  candidate.
+- The production cosine formula remains the production path. Promotion still
+  requires fixture parity and visual evidence proving the replacement improves
+  quality without increasing `noise`, `mud`, `edge-bleed`, `halo`, `thin-gap`,
+  `false-curvature`, or `scale-mismatch`.
+- The 1920x1080 and 1280x720 production beauty p95 rows are treated as
+  startup/outlier rows, not as performance claims. AO rows are the better signal
+  for this ablation.
+
+Validation:
+
+```sh
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__
+# 18 files / 162 tests passed
+
+cd packages/horizon-ao && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+cd apps/demo && node ..\..\node_modules\typescript\bin\tsc --noEmit
+# passed
+
+node --check apps/demo/scripts/collect-ao-benchmark.mjs
+# passed
+
+git diff --check
+# clean except expected LF->CRLF warnings
+```
+
+Production build was not run.
+
+
+## 2026-05-26 — SSILVB/reference Formula Decision Gate
+
+Status: **decision recorded; production formula not changed**.
+
+Artifact:
+
+- `G:\RWY37\horizon-ao\artifacts\analysis\vbao_ssilvb_reference_formula_ablation_decision.json`
+
+Decision result:
+
+- verdict: `keep-production-cosine`
+- `promoteSsilvbReference`: `false`
+- public API changes: none
+- production build: not run
+
+Candid visual read from the contact sheet:
+
+- `production-cosine` still has `noise`, `false-curvature`, and
+  `scale-mismatch`.
+- `ssilvb-reference` gives a more legible contact field in some spots, but it
+  also introduces broad floor/wall darkening that reads as `mud`,
+  `false-curvature`, and `scale-mismatch`.
+- That is not a production win. Come on: if the replacement fixes one problem
+  by making a larger field artifact, it is not a promotion candidate yet.
+
+Gate rule now enforced by internal tests:
+
+- Required formula rows must be reviewed; `pending-review` blocks a decision.
+- SSILVB/reference rows with `mud`, `halo`, `thin-gap`, `edge-bleed`,
+  `false-curvature`, or `scale-mismatch` keep production on
+  `production-cosine`.
+- Even clean SSILVB/reference screenshots still require explicit hardened GPU
+  parity before promotion.
+
+Next move:
+
+- Do **not** tune the formula blindly.
+- Either add a hardened GPU parity route for a live SSILVB/reference production
+  candidate, or continue with the mask-aware/per-tap metadata temporal-free
+  filter gate.

@@ -78,12 +78,6 @@ const museumRoute = createRoute({
   component: MuseumScene,
 })
 
-const gtaoReferenceRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/gtao-reference',
-  component: MuseumScene,
-})
-
 const suzanneRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/suzanne',
@@ -107,7 +101,6 @@ const routeTree = rootRoute.addChildren([
   labRoute,
   cityRoute,
   museumRoute,
-  gtaoReferenceRoute,
   sponzaRoute,
   suzanneRoute,
   bunnyRoute,
