@@ -66,15 +66,20 @@ ${output.trim()}`,
   return { child, ready }
 }
 
-export async function launchBenchmarkBrowser() {
+export async function launchBenchmarkBrowser({
+  channel = process.env.PLAYWRIGHT_CHROME_CHANNEL ?? 'chrome',
+  headless = true,
+  extraArgs = [],
+} = {}) {
   return chromium.launch({
-    channel: process.env.PLAYWRIGHT_CHROME_CHANNEL ?? 'chrome',
-    headless: true,
+    channel,
+    headless,
     args: [
       '--enable-unsafe-webgpu',
       '--ignore-gpu-blocklist',
       '--enable-features=WebGPUDeveloperFeatures,Vulkan',
       '--use-angle=d3d11',
+      ...extraArgs,
     ],
   })
 }

@@ -3,7 +3,7 @@ import http from 'node:http'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { chromium } from '@playwright/test'
+import { launchBenchmarkBrowser } from './profiling/benchmarkHarness.mjs'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const artifactRoot = path.join(repoRoot, 'artifacts', 'benchmarks')
@@ -304,10 +304,10 @@ async function collectGpuReadback(page) {
 const { server, url } = await serveBlankPage()
 let browser
 try {
-  browser = await chromium.launch({
+  browser = await launchBenchmarkBrowser({
     channel: browserChannel,
     headless,
-    args: ['--enable-unsafe-webgpu', '--disable-gpu-sandbox'],
+    extraArgs: ['--disable-gpu-sandbox'],
   })
   const page = await browser.newPage()
   await page.goto(url, { waitUntil: 'domcontentloaded' })

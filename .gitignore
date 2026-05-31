@@ -9,3 +9,18 @@ playwright-report/
 .claude/settings.local.json
 *.tsbuildinfo
 apps/demo/src/routeTree.gen.ts
+
+# Generated review/evidence artifacts are intentionally opt-in. Use `git add -f`
+# for curated screenshots/timings that are promoted in EVIDENCE.md.
+*.log
+*.pid
+*.zip
+/artifacts/share/
+/artifacts/analysis/
+/artifacts/benchmarks/*.html
+/artifacts/benchmarks/*.png
+/artifacts/benchmarks/*.mjs
+/artifacts/benchmarks/*-latest.json
+/artifacts/benchmarks/*-summary.md
+/artifacts/benchmarks/debug-*/
+/artifacts/benchmarks/screenshots-*/
