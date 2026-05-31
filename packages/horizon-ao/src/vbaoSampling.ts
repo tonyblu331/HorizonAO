@@ -1,11 +1,15 @@
-export const VBAO_SAMPLING_SCHEDULES = [
-  'magic-square',
-  'r2',
-  'hilbert',
-  'blue-noise',
-] as const
+export const VBAO_SAMPLING_SCHEME = 'phase-atlas-stable-hash' as const
+export const VBAO_PHASE_ATLAS_PHASES = 64 as const
+export const VBAO_PHASE_ATLAS_COLUMNS = 8 as const
+export const VBAO_PHASE_ATLAS_ROWS = VBAO_PHASE_ATLAS_PHASES / VBAO_PHASE_ATLAS_COLUMNS
+export const VBAO_PHASE_STRIDE = 16 as const
 
-export type VbaoSamplingSchedule = (typeof VBAO_SAMPLING_SCHEDULES)[number]
+export type VbaoSamplingScheme = typeof VBAO_SAMPLING_SCHEME
+
+export interface VbaoPhaseSamplingInput {
+  readonly pixel: readonly [number, number]
+  readonly phaseIndex: number
+}
 
 export interface VbaoSamplingInput {
   readonly pixel: readonly [number, number]
@@ -16,175 +20,101 @@ export interface VbaoSamplingInput {
   readonly sampleCount: number
 }
 
-const MAGIC_SQUARE_5 = Object.freeze([
-  9, 3, 22, 16, 15,
-  2, 21, 20, 14, 8,
-  25, 19, 13, 7, 1,
-  18, 12, 6, 5, 24,
-  11, 10, 4, 23, 17,
-] as const)
-
-const BLUE_NOISE_TILE_8 = Object.freeze([
-  0, 48, 12, 60, 3, 51, 15, 63,
-  32, 16, 44, 28, 35, 19, 47, 31,
-  8, 56, 4, 52, 11, 59, 7, 55,
-  40, 24, 36, 20, 43, 27, 39, 23,
-  2, 50, 14, 62, 1, 49, 13, 61,
-  34, 18, 46, 30, 33, 17, 45, 29,
-  10, 58, 6, 54, 9, 57, 5, 53,
-  42, 26, 38, 22, 41, 25, 37, 21,
-] as const)
-
-function fract(v: number): number {
-  return v - Math.floor(v)
+export interface VbaoPhaseChannels {
+  readonly rotation: number
+  readonly radialJitter: number
+  readonly subsectorThreshold: number
+  readonly polishRotation: number
 }
 
-function positiveModulo(value: number, modulo: number): number {
-  return ((value % modulo) + modulo) % modulo
+function fract(value: number): number {
+  return value - Math.floor(value)
 }
 
-function integerPixel(input: VbaoSamplingInput): readonly [number, number] {
+function integerPixel(input: VbaoPhaseSamplingInput | VbaoSamplingInput): readonly [number, number] {
   return [Math.floor(input.pixel[0]), Math.floor(input.pixel[1])]
 }
 
-function rotationFromShaderPackedAngle(angle: number): number {
-  return fract((Math.atan2(Math.sin(angle), Math.cos(angle)) + Math.PI) / (Math.PI * 2))
-}
+function resolvePhaseIndex(input: VbaoPhaseSamplingInput | VbaoSamplingInput): number {
+  if ('phaseIndex' in input) return Math.floor(input.phaseIndex)
 
-function magicSquareRotation(input: VbaoSamplingInput): number {
-  const [x, y] = integerPixel(input)
-  const tileX = positiveModulo(x, 5)
-  const tileY = positiveModulo(y, 5)
-  const value = MAGIC_SQUARE_5[tileY * 5 + tileX]!
-
-  return rotationFromShaderPackedAngle((Math.PI * 2 * value) / MAGIC_SQUARE_5.length)
-}
-
-function magicSquareValue(input: VbaoSamplingInput): number {
-  const [x, y] = integerPixel(input)
-  const tileX = positiveModulo(x, 5)
-  const tileY = positiveModulo(y, 5)
-
-  return MAGIC_SQUARE_5[tileY * 5 + tileX]!
-}
-
-function r2Rotation(input: VbaoSamplingInput): number {
-  const [x, y] = integerPixel(input)
-
-  return fract(
-    0.5 +
-      x * 0.7548776662466927 +
-      y * 0.5698402909980532 +
-      input.sliceIndex * 0.438013370189827 +
-      input.sampleIndex * 0.19947114020071635,
+  return (
+    Math.floor(input.sliceIndex) * VBAO_PHASE_STRIDE +
+    Math.floor(input.sampleIndex)
   )
 }
 
-function r2RadialJitter(input: VbaoSamplingInput): number {
-  const [x, y] = integerPixel(input)
+function hashUnit(x: number, y: number, seed: number): number {
+  let h = Math.imul(x | 0, 0x1e35a7bd)
+  h ^= Math.imul(y | 0, 0x8f1bbcdc)
+  h ^= Math.imul(seed | 0, 0x94d049bb)
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d)
+  h = Math.imul(h ^ (h >>> 12), 0x297a2d39)
+  return ((h ^ (h >>> 15)) >>> 0) / 0x100000000
+}
 
-  return fract(
-    0.5 +
-      x * 0.5698402909980532 +
-      y * 0.7548776662466927 +
-      input.sliceIndex * 0.19947114020071635,
+/**
+ * Stable phase-atlas hash rotation for production VBAO.
+ *
+ * The inputs are intentionally frame-free: no temporal index, no runtime
+ * schedule injection, and no debug sampling mode. Neighboring pixels and
+ * slice/sample phases are hash-decorrelated instead of sharing one scalar base.
+ */
+export function sampleVbaoRotation(input: VbaoPhaseSamplingInput | VbaoSamplingInput): number {
+  return sampleVbaoPhaseChannels(input).rotation
+}
+
+export function sampleVbaoRadialJitter(input: VbaoPhaseSamplingInput | VbaoSamplingInput): number {
+  return sampleVbaoPhaseChannels(input).radialJitter
+}
+
+export function sampleVbaoSubsectorThreshold(
+  input: VbaoPhaseSamplingInput | VbaoSamplingInput,
+): number {
+  return sampleVbaoPhaseChannels(input).subsectorThreshold
+}
+
+export function sampleVbaoPhaseChannels(
+  input: VbaoPhaseSamplingInput | VbaoSamplingInput,
+): VbaoPhaseChannels {
+  const [x, y] = integerPixel(input)
+  const phase = resolvePhaseIndex(input) & (VBAO_PHASE_ATLAS_PHASES - 1)
+  const phaseX = phase % VBAO_PHASE_ATLAS_COLUMNS
+  const phaseY = Math.floor(phase / VBAO_PHASE_ATLAS_COLUMNS)
+  const phaseSeed = phaseX * 409 + phaseY * 811
+  const sliceIndex = 'sliceIndex' in input ? input.sliceIndex : Math.floor(phase / VBAO_PHASE_STRIDE)
+  const sampleIndex = 'sampleIndex' in input ? input.sampleIndex : phase % VBAO_PHASE_STRIDE
+
+  const rotation = fract(
+    hashUnit(x + phaseX * 131, y + phaseY * 197, 17 + phaseSeed) * 0.63 +
+      hashUnit(x + sliceIndex * 131, y + sampleIndex * 197, 29 + phaseSeed) * 0.37 +
+      sliceIndex * 0.438013370189827 +
+      sampleIndex * 0.19947114020071635,
   )
-}
+  const radialJitter = fract(
+    hashUnit(x + phaseX * 173, y + phaseY * 113, 53 + phaseSeed) * 0.71 +
+      hashUnit(x + sampleIndex * 173, y + sliceIndex * 113, 71 + phaseSeed) * 0.29 +
+      sliceIndex * 0.19947114020071635,
+  )
+  const subsectorThreshold = fract(
+    hashUnit(x + phaseX * 59, y + phaseY * 149, 97 + phaseSeed) * 0.67 +
+      hashUnit(x + sampleIndex * 31, y + sliceIndex * 47, 131 + phaseSeed) * 0.33,
+  )
+  const polishRotation = fract(
+    hashUnit(x + phaseX * 191, y + phaseY * 223, 173 + phaseSeed) * 0.73 +
+      rotation * 0.27,
+  )
 
-function hilbertRotate(n: number, x: number, y: number, rx: number, ry: number): readonly [number, number] {
-  if (ry !== 0) return [x, y]
-
-  const nextX = rx === 1 ? n - 1 - x : x
-  const nextY = rx === 1 ? n - 1 - y : y
-
-  return [nextY, nextX]
-}
-
-function hilbertIndex(order: number, x: number, y: number): number {
-  let index = 0
-  let px = positiveModulo(x, order)
-  let py = positiveModulo(y, order)
-
-  for (let scale = order / 2; scale > 0; scale = Math.floor(scale / 2)) {
-    const rx = (px & scale) > 0 ? 1 : 0
-    const ry = (py & scale) > 0 ? 1 : 0
-    index += scale * scale * ((3 * rx) ^ ry)
-    ;[px, py] = hilbertRotate(scale, px, py, rx, ry)
-  }
-
-  return index
-}
-
-function hilbertRotation(input: VbaoSamplingInput): number {
-  const [x, y] = integerPixel(input)
-  const order = 16
-  const index = hilbertIndex(order, x, y)
-
-  return fract((index + 0.5) / (order * order) + input.sliceIndex / Math.max(1, input.sliceCount))
-}
-
-function hilbertRadialJitter(input: VbaoSamplingInput): number {
-  const [x, y] = integerPixel(input)
-  const order = 16
-  const index = hilbertIndex(order, x, y)
-
-  return fract((index + 0.5) / (order * order) + input.sliceIndex * 0.3819660112501051)
-}
-
-function blueNoiseRotation(input: VbaoSamplingInput): number {
-  const [x, y] = integerPixel(input)
-  const tileX = positiveModulo(x, 8)
-  const tileY = positiveModulo(y, 8)
-  const value = BLUE_NOISE_TILE_8[tileY * 8 + tileX]!
-
-  return fract((value + 0.5) / BLUE_NOISE_TILE_8.length + input.sliceIndex * 0.073)
-}
-
-function blueNoiseValue(input: VbaoSamplingInput): number {
-  const [x, y] = integerPixel(input)
-  const tileX = positiveModulo(x, 8)
-  const tileY = positiveModulo(y, 8)
-
-  return BLUE_NOISE_TILE_8[tileY * 8 + tileX]!
-}
-
-export function sampleVbaoRotation(
-  schedule: VbaoSamplingSchedule,
-  input: VbaoSamplingInput,
-): number {
-  switch (schedule) {
-    case 'magic-square':
-      return magicSquareRotation(input)
-    case 'r2':
-      return r2Rotation(input)
-    case 'hilbert':
-      return hilbertRotation(input)
-    case 'blue-noise':
-      return blueNoiseRotation(input)
+  return {
+    rotation,
+    radialJitter,
+    subsectorThreshold,
+    polishRotation,
   }
 }
 
-export function sampleVbaoRadialJitter(
-  schedule: VbaoSamplingSchedule,
-  input: VbaoSamplingInput,
-): number {
-  switch (schedule) {
-    case 'magic-square':
-      return (magicSquareValue(input) - 0.5) / MAGIC_SQUARE_5.length
-    case 'r2':
-      return r2RadialJitter(input)
-    case 'hilbert':
-      return hilbertRadialJitter(input)
-    case 'blue-noise':
-      return fract((blueNoiseValue(input) + 0.5) / BLUE_NOISE_TILE_8.length + input.sliceIndex * 0.137)
-  }
-}
-
-export function sampleVbaoStepJitter(
-  schedule: VbaoSamplingSchedule,
-  input: VbaoSamplingInput,
-): number {
-  const base = sampleVbaoRadialJitter(schedule, input)
+export function sampleVbaoStepJitter(input: VbaoSamplingInput): number {
+  const base = sampleVbaoRadialJitter(input)
   const stepDecorrelator = input.sampleIndex * 0.7548776662466927
   const sliceDecorrelator = input.sliceIndex * 0.5698402909980532
   const jitter = fract(base + stepDecorrelator + sliceDecorrelator)
@@ -192,17 +122,16 @@ export function sampleVbaoStepJitter(
   return Math.max(1e-6, Math.min(0.999999, jitter))
 }
 
-export function sampleVbaoStepFraction(
-  schedule: VbaoSamplingSchedule,
-  input: VbaoSamplingInput,
-): number {
+/** x² near-biased radial spacing, paired with GT-VBAO CDF remap in the kernel. */
+export function sampleVbaoStepFraction(input: VbaoSamplingInput): number {
   const sampleCount = Math.max(1, Math.floor(input.sampleCount))
   const sampleIndex = Math.max(0, Math.min(sampleCount - 1, Math.floor(input.sampleIndex)))
-  const stepJitter = sampleVbaoStepJitter(schedule, {
+  const stepJitter = sampleVbaoStepJitter({
     ...input,
     sampleCount,
     sampleIndex,
   })
+  const t = (sampleIndex + stepJitter) / sampleCount
 
-  return (sampleIndex + stepJitter) / sampleCount
+  return t * t
 }

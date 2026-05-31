@@ -1,67 +1,70 @@
-# ADR-007: VBAO Pivot — Visibility-Bitmask Replaces Signed-Horizon Kernel
+# ADR-007: VBAO Pivot — Visibility-Bitmask Production Cleanup
 
 - **Status:** Accepted
 - **Date:** 2026-05-22
-- **Supersedes:** the implicit ADR-002 "signed-horizon kernel" inlined in `openspec/archive/horizonao-final-spec.md`.
+- **Updated:** 2026-05-27
+- **Supersedes:** the implicit ADR-002 signed-horizon kernel and the interim hybrid VBAO research-gate shape.
 - **Related:** ADR-008 (AO-only scope), ADR-009 (no legacy), ADR-010 (normal required), ADR-011 (raw first).
 
 ## Context
 
-The previous `HorizonAoNode` implemented a GTAO-class signed-horizon kernel (Jimenez et al., SIGGRAPH 2016). Three.js's existing `GTAONode` already covers that algorithm class. Polishing it (renaming uniforms to match `GTAONode`, writing a normalisation formula, capturing denoise evidence) was the prior plan's "moves #1–#3" — defensible but uninteresting upstream, because there is no novelty.
+The project pivoted from the old signed-horizon `HorizonAoNode` to `VBAONode`, but the active source accumulated original SSILVB/VBAO ideas, GT-VBAO ideas, cosine-weighted reduction, adaptive-thickness scans, parity harnesses, and diagnostic decision gates. That hybrid made the implementation hard to reason about and biased the production package toward research machinery.
 
-The 2023 Visibility-Bitmask method (Therrien et al., arXiv:2301.11376) replaces the dual-scalar horizon `(h+, h-)` with an N-bit mask over uniformly distributed sectors of the slice hemisphere. It:
-
-- handles thin geometry correctly by encoding occluder thickness as a bit range, not a heuristic threshold;
-- eliminates the empirical `distanceFallOff` and `distanceExponent` weights GTAO needs;
-- doubles as the building block for one-bounce indirect diffuse (SSILVB) in a separate node.
-
-No TSL/WebGPU implementation has been published. This is the only post-GTAO step the field has actually taken since 2016 in screen-space AO.
-
-Production references:
-- ARK.KRA VBAO for Unreal: ~0.6 ms/1080p vs UE5 GTAO ~3 ms with strictly better thin-geometry output.
-- `cdrinmatane/posts/ssaovb-code/` published a GLSL reference (32-sector u32 mask, popcount reduction).
-
-Three.js TSL ships everything needed: `countOneBits()` (native WGSL on WebGPU, parallel-popcount GLSL emulation on WebGL2), `bitOr` / `bitAnd` / `shiftLeft` / `shiftRight` operators, and `uint` / `uvec*` types.
+Current community GT-VBAO work keeps the visibility-bitmask foundation but fixes important production details: axial slice directions for two-sided marching, slice-local sample distribution / CDF remapping, point-sample sector treatment, perspective-correct sample-local thickness direction, and a coherent cosine-weighted resolve.
 
 ## Decision
 
-Pivot the project's AO kernel from signed-horizon to Visibility-Bitmask. Source-level public node becomes `VBAONode`. The signed-horizon implementation is removed from active source and preserved as historical context in `packages/horizon-ao/archive/` and `openspec/archive/`.
+`VBAONode` production is now **one visibility-bitmask AO product node with selected GT-VBAO corrections**, with raw AO reconstructed through lazy internal cleanup/resolve/polish stages when the configured quality shape needs them. It remains visibility-bitmask AO with selected GT-VBAO corrections, but the public product boundary is stricter. Extra smoothing is controlled by `softness`; cleanup/resolve/polish are not public peer products, not original uniform-angle popcount-only VBAO, and not the previous hybrid. The production package source is consolidated around:
 
-Rename scope: **R1 source-only.** Git repo path (`G:\RWY37\horizon-ao`), GitHub remote URL, and npm package scope are unchanged. README adds a one-paragraph "repository name is historical" note. A future infra PR may rename the repo (R2); not in this change.
+- `VBAONode.ts` — TSL/WebGPU node and production shader path.
+- `VBAOResolveNode.ts` — internal JBU4 resolve/upsample from low-resolution raw AO.
+- `VBAOHalfResCleanupNode.ts` — internal 3x3 edge-aware raw-AO cleanup before low-resolution resolve.
+- `VBAOFullResPolishNode.ts` — internal 8-tap rotated full-resolution polish.
+- `vbaoConstants.ts` — public constants/options.
+- `vbaoSampling.ts` — one deterministic non-temporal phase-atlas sampling scheme with x² radial spacing and stochastic sub-sector thresholds.
+- `vbaoGtVbaoMath.ts` — scalar visibility/GT-correction reference helpers for tests.
+- `index.ts` — stable public API exports: `VBAONode`, `vbao`, and public option types.
 
-Reduction: cosine-weighted is the production formula:
-`A_i = Σ_k open(k) · max(0, cos(θ_k − γ_i_norm)) / Σ_k max(0, cos(θ_k − γ_i_norm))`.
-Popcount-only `A_i = 1 − countOneBits(M_i) / 32` lives in `vbaoReference.ts` as an ablation baseline.
+The production shader uses:
+
+1. `π` axial slice spacing with two-sided marching.
+2. Sample-local thickness direction: `Q - thickness * normalize(-Q)`.
+3. Slice-local CDF remap before sector quantization.
+4. Point-sample sector mask construction.
+5. Normal-centered, no-atan cosine-measure sectorization with popcount accessibility reduction and a uniform slice average. The projected normal frames the sector CDF; it is not a second slice-weighting reduction.
+
+Sampling is intentionally single-scheme in production: no benchmark schedule injection, no runtime sampling-mode switch, and no animated temporal dependency by default. The raw shader uses a non-interpolated phase-indexed atlas so slice rotation, radial jitter, sub-sector coverage, and polish rotation do not all derive from one scalar pixel value.
+
+`VBAONode` is the public product boundary for spatial reconstruction. `VBAONode.getTextureNode()` returns final product AO; `VBAONode.getRawTextureNode()` exposes raw AO for debug/readback only. When `resolutionScale < 0.99`, `VBAONode` lazily allocates low-resolution cleanup only when `softness > 0`, then JBU4 resolve. When `resolutionScale >= 0.99`, it bypasses JBU entirely. When `softness > 0`, it lazily allocates full-resolution polish. The resolve/cleanup/polish stages use current depth/normal/camera inputs and must not require history buffers, frame indices, reprojection, or TAA. TAA can cooperate downstream; it does not define this package's core contract.
+
+Uniform-angle popcount-only reduction remains diagnostic/reference math in `vbaoGtVbaoMath.ts`; it is not the production resolve.
+
+Research gates and historical diagnostics are removed from `@horizonao/core` active source. Demo parity machinery is no longer allowed to define package architecture.
 
 ## Consequences
 
 **Positive:**
 
-- Real upstream contribution to Three.js — the first TSL/WebGPU VBAO node.
-- Eliminates `distanceFallOff` / `distanceExponent` heuristics. Smaller, more honest public API.
-- Thin-geometry correctness (the headline claim) is structural, not tuned.
-- Cosine-weighted reduction matches the GTAO radiometric framing the paper inherits.
+- The active package source now has one algorithmic story.
+- The public API is now product-output first: `getTextureNode()` returns final AO, while `getRawTextureNode()` keeps raw access explicit for debug/readback; reconstruction passes are internal and lazily elided instead of public peer nodes.
+- The `2π`/two-sided slice duplication bug is eliminated.
+- The O(samples²) adaptive-thickness scan is removed from the production shader.
+- Resolve/upscale has a production boundary without bloating the raw AO kernel.
 
 **Negative:**
 
-- All existing signed-horizon code, tests, and openspec docs are archived; nothing in active source survives the pivot.
-- WebGL2 backend uses emulated popcount (~12 ALU ops). Functional but not the perf target.
-- Bent normals are deferred; downstream IBL coupling is not improved in v1.
+- Historical parity/decision-gate tests are deleted or archived instead of kept as active package tests.
+- Demo parity evidence must be rebuilt around the visibility-bitmask production kernel if future GPU readback gates are needed.
+- `VBAOResolveNode` is now pure JBU4 over a half-float raw AO target; cleanup/polish remain separate internal passes so hidden axis-aligned blur cannot sneak into resolve again.
 
 **Risks:**
 
-- Cosine-weighted weight table evaluation per pixel is ~32 cos + 32 max per slice. Trivial vs. depth taps but worth measuring once the kernel ships.
-- The mirrored-side / count-clamped maskRange invariants must agree byte-for-byte between `vbaoReference.ts` and the TSL kernel. Parity test catches divergence but only if its 5+ fixed configs cover the edge bits.
-
-## Alternatives considered
-
-1. **Polish the signed-horizon kernel ("modest pivot").** Land a contract-aligned GTAONode sibling first, propose VBAO later. Rejected: no novelty in v1, upstream maintainers will ask "what about VBAO?" and we have no answer.
-2. **Skip AO, jump to SSILVB indirect diffuse.** Bigger contribution but bigger scope; would land slower and the AO node is a useful building block for SSILVB anyway. Deferred.
-3. **Keep `HorizonAoNode` as `@deprecated` alongside `VBAONode`.** Rejected: pre-1.0, no downstream users. Dual-kernel package is confusing for no benefit.
+- GT-VBAO CDF framing, no-atan point-sample sector treatment, and uniform slice averaging require visual/evidence follow-up on real scenes.
+- The simplified production path intentionally drops diagnostic hooks; debugging future regressions should happen through separate debug variants, not production shader branches.
 
 ## References
 
 - Therrien, O., Levesque, Y., Gilet, G. *Screen Space Indirect Lighting with Visibility Bitmask*. arXiv:2301.11376, 2023.
 - cdrinmatane. *SSAO using Visibility Bitmasks*. https://cdrinmatane.github.io/posts/ssaovb-code/
-- Jimenez, J. et al. *Practical Real-Time Strategies for Accurate Indirect Occlusion*. SIGGRAPH 2016.
-- Three.js. `GTAONode.js` reference implementation in `examples/jsm/tsl/display/`.
+- Bevy issue #19713, SSAO/VBAO Improvements, GT-VBAO notes.
+- Three.js `GTAONode.js` reference integration shape.

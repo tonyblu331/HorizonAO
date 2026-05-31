@@ -1,8 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
-  VBAO_SAMPLING_SCHEDULES,
+  VBAO_CLAMP_RANGES,
+  clampVbaoNodeOptions,
+} from '../vbaoConstants'
+import {
+  VBAO_PHASE_ATLAS_COLUMNS,
+  VBAO_PHASE_ATLAS_PHASES,
+  VBAO_PHASE_STRIDE,
+  VBAO_SAMPLING_SCHEME,
+  sampleVbaoPhaseChannels,
   sampleVbaoRadialJitter,
   sampleVbaoRotation,
+  sampleVbaoSubsectorThreshold,
   sampleVbaoStepFraction,
   type VbaoSamplingInput,
 } from '../vbaoSampling'
@@ -16,112 +25,72 @@ const baseInput: VbaoSamplingInput = {
   sampleCount: 8,
 }
 
-describe('VBAO sampling schedules', () => {
-  it('declares the non-temporal schedules available for backtesting', () => {
-    expect(VBAO_SAMPLING_SCHEDULES).toEqual(['magic-square', 'r2', 'hilbert', 'blue-noise'])
+describe('single production VBAO sampling scheme', () => {
+  it('uses one stable deterministic production scheme', () => {
+    expect(VBAO_SAMPLING_SCHEME).toBe('phase-atlas-stable-hash')
+    expect(VBAO_PHASE_ATLAS_PHASES).toBe(64)
+    expect(VBAO_PHASE_ATLAS_COLUMNS).toBe(8)
+    expect(VBAO_PHASE_STRIDE).toBe(16)
+    expect(sampleVbaoRotation(baseInput)).toBe(sampleVbaoRotation(baseInput))
+    expect(sampleVbaoRadialJitter(baseInput)).toBe(sampleVbaoRadialJitter(baseInput))
   })
 
-  it('returns deterministic rotations in [0, 1) for every schedule', () => {
-    for (const schedule of VBAO_SAMPLING_SCHEDULES) {
-      const first = sampleVbaoRotation(schedule, baseInput)
-      const second = sampleVbaoRotation(schedule, baseInput)
+  it('provides independent phase-index channels for rotation, radial jitter, subsector coverage, and polish', () => {
+    const phase0 = sampleVbaoPhaseChannels({ pixel: baseInput.pixel, phaseIndex: 0 })
+    const phase1 = sampleVbaoPhaseChannels({ pixel: baseInput.pixel, phaseIndex: 1 })
 
-      expect(second).toBe(first)
-      expect(first).toBeGreaterThanOrEqual(0)
-      expect(first).toBeLessThan(1)
-    }
+    expect(phase0).toHaveProperty('rotation')
+    expect(phase0).toHaveProperty('radialJitter')
+    expect(phase0).toHaveProperty('subsectorThreshold')
+    expect(phase0).toHaveProperty('polishRotation')
+    expect(phase0.radialJitter).not.toBe(phase1.radialJitter)
+    expect(phase0.subsectorThreshold).not.toBe(phase1.subsectorThreshold)
+    expect(sampleVbaoSubsectorThreshold(baseInput)).toBe(
+      sampleVbaoPhaseChannels(baseInput).subsectorThreshold,
+    )
   })
 
-  it('does not accept temporal inputs in the sampling contract', () => {
-    expect(Object.keys(baseInput).sort()).toEqual([
+  it('uses x² near-biased radial spacing', () => {
+    const early = sampleVbaoStepFraction({ ...baseInput, sampleIndex: 1, sampleCount: 8 })
+    const late = sampleVbaoStepFraction({ ...baseInput, sampleIndex: 6, sampleCount: 8 })
+    expect(early).toBeGreaterThanOrEqual(0)
+    expect(late).toBeLessThanOrEqual(1)
+    expect(early).toBeLessThan((1 + 1) / 8)
+    expect(late).toBeLessThan(1)
+    expect(late).toBeGreaterThan(early)
+  })
+
+  it('keeps neighboring pixels decorrelated without temporal inputs', () => {
+    expect(Object.keys({ pixel: baseInput.pixel, phaseIndex: 7 }).sort()).toEqual([
+      'phaseIndex',
       'pixel',
-      'sampleCount',
-      'sampleIndex',
-      'sliceCount',
-      'sliceIndex',
-      'viewport',
     ])
+    expect(sampleVbaoRotation({ pixel: baseInput.pixel, phaseIndex: 7 })).not.toBe(
+      sampleVbaoRotation({ pixel: [14, 21], phaseIndex: 7 }),
+    )
   })
 
-  it('keeps radial sample positions monotonic and inside the marched segment', () => {
-    for (const schedule of VBAO_SAMPLING_SCHEDULES) {
-      let previous = 0
-
-      for (let sampleIndex = 0; sampleIndex < baseInput.sampleCount; sampleIndex++) {
-        const fraction = sampleVbaoStepFraction(schedule, { ...baseInput, sampleIndex })
-
-        expect(fraction).toBeGreaterThan(previous)
-        expect(fraction).toBeGreaterThan(0)
-        expect(fraction).toBeLessThanOrEqual(1)
-        previous = fraction
-      }
-    }
+  it('phase atlas hash-scrambles neighboring pixels to avoid visible affine ramps', () => {
+    const rotations = Array.from({ length: 16 }, (_, x) =>
+      sampleVbaoRotation({ pixel: [x, 0], phaseIndex: 7 }),
+    )
+    const deltas = rotations.slice(1).map((value, index) => {
+      const previous = rotations[index] ?? 0
+      return Math.round(((value - previous + 1) % 1) * 1000) / 1000
+    })
+    expect(new Set(deltas).size).toBeGreaterThan(8)
   })
 
-  it('returns deterministic radial jitter in [0, 1) for every schedule', () => {
-    for (const schedule of VBAO_SAMPLING_SCHEDULES) {
-      const first = sampleVbaoRadialJitter(schedule, baseInput)
-      const second = sampleVbaoRadialJitter(schedule, baseInput)
-
-      expect(second).toBe(first)
-      expect(first).toBeGreaterThanOrEqual(0)
-      expect(first).toBeLessThan(1)
-    }
-  })
-
-  it('jitters radial endpoints so neighboring pixels do not march the same lattice', () => {
-    for (const schedule of VBAO_SAMPLING_SCHEDULES) {
-      const a = sampleVbaoStepFraction(schedule, {
-        ...baseInput,
-        pixel: [12, 21],
-        sampleIndex: 7,
-      })
-      const b = sampleVbaoStepFraction(schedule, {
-        ...baseInput,
-        pixel: [13, 21],
-        sampleIndex: 7,
-      })
-
-      expect(a).toBeGreaterThan(0.5)
-      expect(a).toBeLessThanOrEqual(1)
-      expect(b).toBeGreaterThan(0.5)
-      expect(b).toBeLessThanOrEqual(1)
-      expect(a).not.toBe(b)
-    }
-  })
-
-  it('decorrelates per-step gaps for a fixed pixel instead of scaling the whole ray once', () => {
-    for (const schedule of VBAO_SAMPLING_SCHEDULES) {
-      const fractions = Array.from({ length: baseInput.sampleCount }, (_, sampleIndex) =>
-        sampleVbaoStepFraction(schedule, { ...baseInput, sampleIndex }),
-      )
-      const gaps = fractions.map((fraction, index) =>
-        index === 0 ? fraction : fraction - fractions[index - 1]!,
-      )
-      const roundedUniqueGaps = new Set(gaps.map((gap) => gap.toFixed(5)))
-
-      expect(roundedUniqueGaps.size).toBeGreaterThan(1)
-    }
-  })
-
-  it('covers every histogram bin on a 16x16 tile', () => {
-    for (const schedule of VBAO_SAMPLING_SCHEDULES) {
-      const bins = new Array<number>(8).fill(0)
-
-      for (let y = 0; y < 16; y++) {
-        for (let x = 0; x < 16; x++) {
-          const rotation = sampleVbaoRotation(schedule, {
-            ...baseInput,
-            pixel: [x, y],
-            viewport: [16, 16],
-          })
-          const binIndex = Math.min(bins.length - 1, Math.floor(rotation * bins.length))
-          bins[binIndex] = bins[binIndex]! + 1
-        }
-      }
-
-      expect(Math.min(...bins)).toBeGreaterThan(0)
-      expect(Math.max(...bins) / Math.min(...bins)).toBeLessThanOrEqual(3)
-    }
+  it('clamps public slice/sample overrides to the non-aliasing phase budget', () => {
+    expect(VBAO_CLAMP_RANGES.samples.max).toBeLessThanOrEqual(VBAO_PHASE_STRIDE)
+    expect(VBAO_CLAMP_RANGES.slices.max * VBAO_PHASE_STRIDE).toBeLessThanOrEqual(
+      VBAO_PHASE_ATLAS_PHASES,
+    )
+    expect(clampVbaoNodeOptions({ slices: 8, samples: 32 })).toMatchObject({
+      slices: 4,
+      samples: 16,
+    })
   })
 })
+
+// Phase index API keeps atlas semantics independent from slice/sample names.

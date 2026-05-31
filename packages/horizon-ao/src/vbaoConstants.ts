@@ -26,13 +26,10 @@ export const VBAO_THETA_STEP = VBAO_THETA_RANGE / SECTOR_COUNT
 /**
  * Sector center angles in radians, indexed by sector `k ∈ [0, SECTOR_COUNT)`.
  *
- * Sectors are uniformly distributed in `θ ∈ [-π/2, π/2]`, so:
+ * Sectors are uniformly distributed after the slice-local cosine-measure CDF,
+ * so exported angles are reference/debug coordinates only:
  *
  *   `θ_k = (k + 0.5) · (π / SECTOR_COUNT) - π/2`
- *
- * Used by the cosine-weighted reduction (production formula):
- *
- *   `w_k = max(0, cos(θ_k − γ_i_norm))`
  *
  * Computed once at module load. NOT a uniform.
  */
@@ -47,12 +44,10 @@ export const VBAO_SECTOR_ANGLES: readonly number[] = (() => {
 /**
  * Cosine and sine tables for {@link VBAO_SECTOR_ANGLES}.
  *
- * The reduction still evaluates `max(0, cos(theta_k - gamma))`, but the shader
- * can use the angle-difference identity:
+ * Reference/debug cosine and sine tables for {@link VBAO_SECTOR_ANGLES}.
  *
- *   cos(theta_k - gamma) = cos(theta_k) * cos(gamma) + sin(theta_k) * sin(gamma)
- *
- * This keeps the production formula intact while avoiding one cosine per sector.
+ * Production sectorization uses cosine-measure CDF remapping and reduces by
+ * popcount, so these tables are not part of the live shader hot path.
  */
 export const VBAO_SECTOR_COSINES: readonly number[] = Object.freeze(
   VBAO_SECTOR_ANGLES.map((theta) => Math.cos(theta)),
@@ -65,30 +60,35 @@ export const VBAO_SECTOR_SINES: readonly number[] = Object.freeze(
 /**
  * Default values for the public `VBAONode` uniforms.
  *
- * `resolutionScale` is a JS field on `VBAONode`, not a uniform; included here
- * because quality tiers override it alongside the uniform values.
+ * `resolutionScale` is a JS field on `VBAONode`, not a raw AO uniform; included
+ * here because quality tiers override it alongside the shader values.
  */
 export const VBAO_DEFAULTS = Object.freeze({
   radius: 1.25,
   thickness: 0.25,
-  scale: 1.0,
+  strength: 1.0,
+  contrast: 1.0,
+  softness: 0.0,
   slices: 3,
   samples: 8,
-  resolutionScale: 0.5,
+  resolutionScale: 1.0,
 } as const)
 
 /**
  * Clamp ranges for the public `VBAONode` uniforms.
  *
- * `samples` and `slices` are clamped to integer ranges; the constructor
- * rounds to the nearest integer before clamping.
+ * `samples` and `slices` are clamped to the 64-phase atlas layout used by the
+ * production shader (`slice * 16 + sample`). That keeps public overrides inside
+ * the non-aliasing phase budget instead of silently wrapping high sample counts.
  */
 export const VBAO_CLAMP_RANGES = Object.freeze({
   radius: { min: 0.05, max: 8 },
   thickness: { min: 0, max: 2 },
-  scale: { min: 0, max: 4 },
-  slices: { min: 1, max: 8 },
-  samples: { min: 2, max: 32 },
+  strength: { min: 0, max: 1 },
+  contrast: { min: 0, max: 4 },
+  softness: { min: 0, max: 1 },
+  slices: { min: 1, max: 4 },
+  samples: { min: 2, max: 16 },
   resolutionScale: { min: 0.05, max: 1 },
 } as const)
 
@@ -101,9 +101,10 @@ export const VBAO_CLAMP_RANGES = Object.freeze({
  * spec amendment.
  */
 export const VBAO_QUALITY_TIERS = Object.freeze({
-  fast: { resolutionScale: 0.5, slices: 2, samples: 6, sectors: 32 },
-  balanced: { resolutionScale: 0.5, slices: 3, samples: 8, sectors: 32 },
-  quality: { resolutionScale: 1.0, slices: 4, samples: 10, sectors: 32 },
+  performance: { resolutionScale: 1.0, slices: 2, samples: 4, sectors: 32 },
+  balanced: { resolutionScale: 1.0, slices: 3, samples: 6, sectors: 32 },
+  quality: { resolutionScale: 1.0, slices: 4, samples: 8, sectors: 32 },
+  ultra: { resolutionScale: 1.0, slices: 4, samples: 10, sectors: 32 },
 } as const)
 
 export type VBAOQualityPreset = keyof typeof VBAO_QUALITY_TIERS
@@ -115,31 +116,58 @@ export type VBAOQualityPreset = keyof typeof VBAO_QUALITY_TIERS
  * `sectors` is intentionally NOT a key — the value is compile-time in v1.
  */
 export interface VBAONodeOptions {
+  readonly quality?: VBAOQualityPreset
+  /** @deprecated Use `quality`; kept temporarily for older HorizonAO callers. */
   readonly preset?: VBAOQualityPreset
   readonly radius?: number
   readonly thickness?: number
+  readonly strength?: number
+  readonly contrast?: number
+  readonly softness?: number
+  /** @deprecated Use `contrast`; kept for GTAONode-style compatibility. */
   readonly scale?: number
+  /** @deprecated Use `strength`; kept for older HorizonAO callers. */
+  readonly intensity?: number
   readonly slices?: number
   readonly samples?: number
   readonly resolutionScale?: number
+}
+
+export interface VBAOResolvedNodeOptions {
+  readonly radius: number
+  readonly thickness: number
+  readonly strength: number
+  readonly contrast: number
+  readonly softness: number
+  readonly slices: number
+  readonly samples: number
+  readonly resolutionScale: number
 }
 
 /**
  * Clamp a partial options bag against {@link VBAO_CLAMP_RANGES} and fill
  * any missing keys with {@link VBAO_DEFAULTS}.
  */
-export function clampVbaoNodeOptions(
-  options: VBAONodeOptions,
-): Required<Omit<VBAONodeOptions, 'preset'>> {
-  const preset = options.preset === undefined ? {} : VBAO_QUALITY_TIERS[options.preset]
-  const merged = { ...VBAO_DEFAULTS, ...preset, ...options }
+export function clampVbaoNodeOptions(options: VBAONodeOptions): VBAOResolvedNodeOptions {
+  const qualityName = options.quality ?? options.preset
+  const quality =
+    qualityName === undefined ? {} : VBAO_QUALITY_TIERS[qualityName] ?? {}
+  const merged = {
+    ...VBAO_DEFAULTS,
+    ...quality,
+    ...options,
+    strength: options.strength ?? options.intensity ?? VBAO_DEFAULTS.strength,
+    contrast: options.contrast ?? options.scale ?? VBAO_DEFAULTS.contrast,
+  }
   const clamp = (v: number, range: { min: number; max: number }) =>
     Number.isFinite(v) ? Math.min(range.max, Math.max(range.min, v)) : range.min
 
   return Object.freeze({
     radius: clamp(merged.radius, VBAO_CLAMP_RANGES.radius),
     thickness: clamp(merged.thickness, VBAO_CLAMP_RANGES.thickness),
-    scale: clamp(merged.scale, VBAO_CLAMP_RANGES.scale),
+    strength: clamp(merged.strength, VBAO_CLAMP_RANGES.strength),
+    contrast: clamp(merged.contrast, VBAO_CLAMP_RANGES.contrast),
+    softness: clamp(merged.softness, VBAO_CLAMP_RANGES.softness),
     slices: Math.round(clamp(merged.slices, VBAO_CLAMP_RANGES.slices)),
     samples: Math.round(clamp(merged.samples, VBAO_CLAMP_RANGES.samples)),
     resolutionScale: clamp(merged.resolutionScale, VBAO_CLAMP_RANGES.resolutionScale),

@@ -1,35 +1,15 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck
-/**
- * VBAONode — Visibility-Bitmask Ambient Occlusion for Three.js TSL/WebGPU.
- *
- * Integration shape mirrors `THREE.GTAONode` (depth + normal + camera +
- * factory + getTextureNode + setSize). v1 ships AO scalar only; no GI,
- * bent normals, denoise, temporal, ray, or neural extensions.
- *
- * **Required normal:** Unlike `GTAONode`, this constructor throws
- * `TypeError('VBAONode: normalNode is required')` when `normalNode` is
- * null or undefined. Depth-derived fallback is intentionally absent in v1
- * (see ADR-010).
- *
- * Reference: Therrien, O., Levesque, Y., Gilet, G.
- * *Screen Space Indirect Lighting with Visibility Bitmask*.
- * arXiv:2301.11376, 2023. https://arxiv.org/abs/2301.11376
- *
- * @three_import import { vbao } from '@horizonao/core'
- */
-
 import {
   DataTexture,
+  HalfFloatType,
+  NearestFilter,
   NodeMaterial,
+  NoColorSpace,
   QuadMesh,
   RedFormat,
   RenderTarget,
   RendererUtils,
-  RepeatWrapping,
   TempNode,
   Vector2,
-  Vector3,
   type Camera,
   type Node,
   type NodeFrame,
@@ -39,12 +19,12 @@ import {
   NodeUpdateType,
   PI,
   abs,
-  atan,
   bitNot,
   bitOr,
   ceil,
   clamp,
   cos,
+  countOneBits,
   cross,
   dot,
   float,
@@ -66,8 +46,8 @@ import {
   shiftLeft,
   shiftRight,
   sin,
+  sqrt,
   texture,
-  textureSize,
   uint,
   uniform,
   uv,
@@ -79,100 +59,50 @@ import {
 import {
   SECTOR_COUNT,
   VBAO_DEFAULTS,
+  VBAO_QUALITY_TIERS,
   clampVbaoNodeOptions,
   type VBAONodeOptions,
 } from './vbaoConstants'
-import { VBAO_ADAPTIVE_THICKNESS } from './vbaoAdaptiveThickness'
+import { VBAOFullResPolishNode } from './VBAOFullResPolishNode'
+import { VBAOHalfResCleanupNode } from './VBAOHalfResCleanupNode'
+import { VBAOResolveNode } from './VBAOResolveNode'
 import {
-  VBAO_SAMPLING_SCHEDULES,
-  sampleVbaoRadialJitter,
-  sampleVbaoRotation,
-  type VbaoSamplingSchedule,
+  VBAO_NOISE_TILE_SIZE,
+  getSharedVbaoNoiseTexture,
+} from './vbaoNoise'
+import {
+  VBAO_PHASE_ATLAS_COLUMNS,
+  VBAO_PHASE_ATLAS_ROWS,
+  VBAO_PHASE_ATLAS_PHASES,
+  VBAO_PHASE_STRIDE,
 } from './vbaoSampling'
-
-// ─── module-level singletons (mirrors GTAONode pattern) ──────────────────────
 
 const quadMesh = new QuadMesh()
 const size = new Vector2()
 let rendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
 
-// ─── sampling noise (deterministic per-pixel rotation + radial scale) ────────
-
-function getSamplingTileSize(schedule: VbaoSamplingSchedule): number {
-  switch (schedule) {
-    case 'magic-square':
-      return 5
-    case 'blue-noise':
-      return 8
-    case 'r2':
-    case 'hilbert':
-      return 16
-  }
+type SampleableNode = Node & {
+  sample: (uvCoord: Node) => any
 }
 
-function generateSamplingNoise(schedule: VbaoSamplingSchedule): DataTexture {
-  const n = getSamplingTileSize(schedule)
-  const total = n * n
-  const data = new Uint8Array(total * 4)
-
-  for (let y = 0; y < n; y++) {
-    for (let x = 0; x < n; x++) {
-      const i = y * n + x
-      const input = {
-        pixel: [x, y],
-        viewport: [n, n],
-        sliceIndex: 0,
-        sliceCount: 1,
-        sampleIndex: 0,
-        sampleCount: 1,
-      } as const
-      const rotation = sampleVbaoRotation(schedule, input)
-      const radialJitter = sampleVbaoRadialJitter(schedule, input)
-      const angle = rotation * Math.PI * 2 - Math.PI
-      const v = new Vector3(Math.cos(angle), Math.sin(angle), 0).normalize()
-
-      data[i * 4 + 0] = (v.x * 0.5 + 0.5) * 255
-      data[i * 4 + 1] = (v.y * 0.5 + 0.5) * 255
-      data[i * 4 + 2] = 127
-      data[i * 4 + 3] = Math.max(0, Math.min(254, Math.floor(radialJitter * 255)))
-    }
-  }
-
-  const tex = new DataTexture(data, n, n)
-  tex.wrapS = RepeatWrapping
-  tex.wrapT = RepeatWrapping
-  tex.needsUpdate = true
-  return tex
-}
-
-// ─── VBAONode ─────────────────────────────────────────────────────────────────
-
-/**
- * Visibility-Bitmask AO TempNode.
- *
- * Public uniform surface matches `GTAONode` where the semantics overlap;
- * `distanceFallOff`, `distanceExponent`, and `useTemporalFiltering` are
- * intentionally omitted (see ADR-007). `sectors` is compile-time `32`
- * and is exposed only as a `readonly … as const` getter for documentary
- * purposes (see ADR-007 and `vbaoConstants.SECTOR_COUNT`).
- */
+/** Visibility-bitmask ambient occlusion for Three.js TSL/WebGPU. */
 export class VBAONode extends TempNode<'float'> {
   static get type(): string {
     return 'VBAONode'
   }
 
-  readonly depthNode: Node
-  readonly normalNode: Node
+  readonly depthNode: SampleableNode
+  readonly normalNode: SampleableNode
   readonly camera: Camera
 
   readonly radius = uniform(VBAO_DEFAULTS.radius)
   readonly thickness = uniform(VBAO_DEFAULTS.thickness)
-  readonly scale = uniform(VBAO_DEFAULTS.scale)
+  readonly strength = uniform(VBAO_DEFAULTS.strength)
+  readonly contrast = uniform(VBAO_DEFAULTS.contrast)
+  readonly softness = uniform(VBAO_DEFAULTS.softness)
   readonly slices = uniform(VBAO_DEFAULTS.slices)
   readonly samples = uniform(VBAO_DEFAULTS.samples)
   readonly resolution = uniform(new Vector2())
-
-  /** Documentary only — `SECTOR_COUNT` is compile-time in v1. */
   readonly sectors = SECTOR_COUNT
 
   resolutionScale: number = VBAO_DEFAULTS.resolutionScale
@@ -181,25 +111,23 @@ export class VBAONode extends TempNode<'float'> {
   private readonly renderTarget = new RenderTarget(1, 1, {
     depthBuffer: false,
     format: RedFormat,
+    type: HalfFloatType,
   })
   private readonly material = new NodeMaterial()
   private readonly textureNode: TextureNode
-  private readonly sampleTextureNode: TextureNode
+  private resolveNode?: VBAOResolveNode | undefined
+  private halfCleanupNode?: VBAOHalfResCleanupNode | undefined
+  private fullPolishNode?: VBAOFullResPolishNode | undefined
+  private outputTextureNode?: TextureNode
+  private outputGraphKey = ''
+  private outputGraphCreated = false
   private readonly cameraProjectionMatrix
   private readonly cameraProjectionMatrixInverse
   private readonly cameraNear
   private readonly cameraFar
+  private readonly noiseTexture: DataTexture
   private readonly noiseNode
-  private benchmarkSamplingSchedule: VbaoSamplingSchedule = 'magic-square'
 
-  /**
-   * @param depthNode  - TSL node producing scene depth (`float`).
-   * @param normalNode - TSL node producing view-space normals (`vec3`). **Required.**
-   * @param camera     - The camera used to render the scene.
-   * @param options    - Optional clamped uniform overrides.
-   *
-   * @throws {TypeError} if `normalNode` is `null` or `undefined`.
-   */
   constructor(depthNode: Node, normalNode: Node, camera: Camera, options: VBAONodeOptions = {}) {
     if (normalNode === null || normalNode === undefined) {
       throw new TypeError('VBAONode: normalNode is required')
@@ -207,89 +135,210 @@ export class VBAONode extends TempNode<'float'> {
 
     super('float')
 
-    this.depthNode = depthNode
-    this.normalNode = normalNode
+    this.depthNode = depthNode as SampleableNode
+    this.normalNode = normalNode as SampleableNode
     this.camera = camera
     this.renderTarget.texture.name = 'VBAO.Raw'
-    this.material.name = 'VBAO Raw'
+    this.renderTarget.texture.magFilter = NearestFilter
+    this.renderTarget.texture.minFilter = NearestFilter
+    this.renderTarget.texture.generateMipmaps = false
+    this.renderTarget.texture.colorSpace = NoColorSpace
+    this.material.name = 'VBAO'
     this.textureNode = passTexture(this as never, this.renderTarget.texture)
-    this.sampleTextureNode = texture(this.renderTarget.texture)
     this.cameraProjectionMatrix = uniform(camera.projectionMatrix)
     this.cameraProjectionMatrixInverse = uniform(camera.projectionMatrixInverse)
     this.cameraNear = reference('near', 'float', camera)
     this.cameraFar = reference('far', 'float', camera)
-    this.noiseNode = texture(generateSamplingNoise(this.benchmarkSamplingSchedule))
+    this.noiseTexture = getSharedVbaoNoiseTexture()
+    this.noiseNode = texture(this.noiseTexture)
 
     this.configure(options)
   }
 
-  /**
-   * Apply a (clamped) batch of option overrides to the live uniforms.
-   * Safe to call mid-frame.
-   */
   configure(options: VBAONodeOptions): void {
-    const next = clampVbaoNodeOptions({
+    const qualityName = options.quality ?? options.preset
+    const quality =
+      qualityName === undefined ? undefined : VBAO_QUALITY_TIERS[qualityName]
+    const fallback = {
       radius: this.radius.value,
       thickness: this.thickness.value,
-      scale: this.scale.value,
+      strength: this.strength.value,
+      contrast: this.contrast.value,
+      softness: this.softness.value,
       slices: this.slices.value,
       samples: this.samples.value,
       resolutionScale: this.resolutionScale,
-      ...options,
-    })
+    }
+    const mergedOptions = {
+      ...(options.quality === undefined ? {} : { quality: options.quality }),
+      ...(options.preset === undefined ? {} : { preset: options.preset }),
+      radius: options.radius ?? fallback.radius,
+      thickness: options.thickness ?? fallback.thickness,
+      strength: options.strength ?? options.intensity ?? fallback.strength,
+      contrast: options.contrast ?? options.scale ?? fallback.contrast,
+      softness: options.softness ?? fallback.softness,
+      slices: options.slices ?? quality?.slices ?? fallback.slices,
+      samples: options.samples ?? quality?.samples ?? fallback.samples,
+      resolutionScale: options.resolutionScale ?? quality?.resolutionScale ?? fallback.resolutionScale,
+    } satisfies VBAONodeOptions
+    const next = clampVbaoNodeOptions(mergedOptions)
+
+    if (
+      this.outputGraphCreated &&
+      (next.softness !== this.softness.value || next.resolutionScale !== this.resolutionScale)
+    ) {
+      throw new Error(
+        'VBAONode.configure(): softness and resolutionScale affect the pass graph and are construction-time only after getTextureNode(); create a new VBAONode or rebuild downstream pipelines.',
+      )
+    }
 
     this.radius.value = next.radius
     this.thickness.value = next.thickness
-    this.scale.value = next.scale
+    this.strength.value = next.strength
+    this.contrast.value = next.contrast
+    this.softness.value = next.softness
     this.slices.value = next.slices
     this.samples.value = next.samples
     this.resolutionScale = next.resolutionScale
   }
 
-  /**
-   * Internal evidence hook used by the Museum benchmark harness.
-   *
-   * This intentionally does not live in `VBAONodeOptions`: the public v1 API
-   * remains a single production schedule until screenshot/timing evidence picks
-   * a replacement.
-   */
-  setBenchmarkSamplingSchedule(schedule: VbaoSamplingSchedule): void {
-    if (!VBAO_SAMPLING_SCHEDULES.includes(schedule)) {
-      throw new TypeError(`VBAONode: unknown benchmark sampling schedule "${schedule}"`)
+  private getOrCreateHalfCleanupNode(input: TextureNode): VBAOHalfResCleanupNode {
+    if (this.halfCleanupNode === undefined || this.halfCleanupNode.rawAoNode !== input) {
+      this.halfCleanupNode?.dispose()
+      this.halfCleanupNode = new VBAOHalfResCleanupNode(
+        input,
+        this.depthNode,
+        this.normalNode,
+        this.camera,
+        this.radius,
+        {
+          enabled: true,
+          strength: this.softness.value,
+          resolutionScale: this.resolutionScale,
+        },
+      )
+    } else {
+      this.halfCleanupNode.configure({
+        enabled: true,
+        strength: this.softness.value,
+        resolutionScale: this.resolutionScale,
+      })
     }
 
-    this.benchmarkSamplingSchedule = schedule
-    this.noiseNode.value = generateSamplingNoise(schedule)
-    this.noiseNode.value.needsUpdate = true
+    return this.halfCleanupNode
   }
 
-  getBenchmarkSamplingSchedule(): VbaoSamplingSchedule {
-    return this.benchmarkSamplingSchedule
+  private getOrCreateResolveNode(input: TextureNode): VBAOResolveNode {
+    if (this.resolveNode === undefined || this.resolveNode.rawAoNode !== input) {
+      this.resolveNode?.dispose()
+      this.resolveNode = new VBAOResolveNode(input, this.depthNode, this.normalNode, this.camera, this.radius)
+    }
+
+    return this.resolveNode
+  }
+
+  private getOrCreateFullPolishNode(input: TextureNode): VBAOFullResPolishNode {
+    if (this.fullPolishNode === undefined || this.fullPolishNode.aoNode !== input) {
+      this.fullPolishNode?.dispose()
+      this.fullPolishNode = new VBAOFullResPolishNode(
+        input,
+        this.depthNode,
+        this.normalNode,
+        this.camera,
+        this.radius,
+        {
+          enabled: true,
+          strength: this.softness.value,
+        },
+      )
+    } else {
+      this.fullPolishNode.configure({
+        enabled: true,
+        strength: this.softness.value,
+      })
+    }
+
+    return this.fullPolishNode
+  }
+
+  private disposeLowResGraph(): void {
+    this.resolveNode?.dispose()
+    this.resolveNode = undefined
+    this.halfCleanupNode?.dispose()
+    this.halfCleanupNode = undefined
+  }
+
+  private disposeFullPolishGraph(): void {
+    this.fullPolishNode?.dispose()
+    this.fullPolishNode = undefined
+  }
+
+  private currentOutputGraphKey(): string {
+    const wantsPolish = this.softness.value > 0
+    return [
+      this.resolutionScale < 0.99 ? 'low' : 'full',
+      wantsPolish ? 'polish' : 'raw',
+      this.resolutionScale.toFixed(4),
+      this.softness.value.toFixed(4),
+    ].join(':')
+  }
+
+  private assertOutputGraphStable(): void {
+    if (!this.outputGraphCreated) return
+
+    const currentGraphKey = this.currentOutputGraphKey()
+    if (currentGraphKey === this.outputGraphKey) return
+
+    throw new Error(
+      'VBAONode: softness and resolutionScale affect the pass graph and are construction-time only after getTextureNode(); create a new VBAONode or rebuild downstream pipelines.',
+    )
+  }
+
+  private rebuildOutputGraph(): void {
+    const wantsPolish = this.softness.value > 0
+    const graphKey = this.currentOutputGraphKey()
+
+    if (graphKey === this.outputGraphKey && this.outputTextureNode !== undefined) return
+
+    let output: TextureNode = this.textureNode
+
+    if (this.resolutionScale < 0.99) {
+      if (wantsPolish) {
+        output = this.getOrCreateHalfCleanupNode(output).getTextureNode()
+      } else {
+        this.halfCleanupNode?.dispose()
+        this.halfCleanupNode = undefined
+      }
+
+      output = this.getOrCreateResolveNode(output).getTextureNode()
+    } else {
+      this.disposeLowResGraph()
+    }
+
+    if (wantsPolish) {
+      output = this.getOrCreateFullPolishNode(output).getTextureNode()
+    } else {
+      this.disposeFullPolishGraph()
+    }
+
+    this.outputTextureNode = output
+    this.outputGraphKey = graphKey
   }
 
   getTextureNode(): TextureNode {
+    this.assertOutputGraphStable()
+    this.rebuildOutputGraph()
+    this.outputGraphCreated = true
+    return this.outputTextureNode ?? this.textureNode
+  }
+
+  getRawTextureNode(): TextureNode {
     return this.textureNode
   }
 
-  getSampleTextureNode(): TextureNode {
-    return this.sampleTextureNode
-  }
-
-  /**
-   * Returns the internal render target that holds the raw AO texture (R channel,
-   * RedFormat, UnsignedByteType).
-   *
-   * Useful for GPU readback in tests:
-   * ```ts
-   * const rt = vbaoNode.getRenderTarget()
-   * const data = await renderer.readRenderTargetPixelsAsync(rt, 0, 0, rt.width, rt.height)
-   * ```
-   */
-  getRenderTarget(): RenderTarget {
-    return this.renderTarget
-  }
-
   setSize(width: number, height: number): void {
+    this.assertOutputGraphStable()
+
     const scaledWidth = Math.max(1, Math.round(this.resolutionScale * width))
     const scaledHeight = Math.max(1, Math.round(this.resolutionScale * height))
 
@@ -297,45 +346,30 @@ export class VBAONode extends TempNode<'float'> {
     this.renderTarget.setSize(scaledWidth, scaledHeight)
   }
 
-  updateBefore(frame: NodeFrame): void {
+  updateBefore(frame: NodeFrame): boolean | undefined {
     const renderer = frame.renderer
-    if (renderer === null || renderer === undefined) return
+    if (renderer === null || renderer === undefined) return undefined
 
-    rendererState = RendererUtils.resetRendererState(renderer, rendererState)
+    rendererState = RendererUtils.resetRendererState(renderer, rendererState as never)
 
     const drawingBufferSize = renderer.getDrawingBufferSize(size)
     this.setSize(drawingBufferSize.width, drawingBufferSize.height)
 
     quadMesh.material = this.material
-    quadMesh.name = 'VBAO Raw'
+    quadMesh.name = 'VBAO'
 
     renderer.setClearColor(0xffffff, 1)
     renderer.setRenderTarget(this.renderTarget)
     quadMesh.render(renderer)
 
     RendererUtils.restoreRendererState(renderer, rendererState)
+    return true
   }
 
-  /**
-   * Build the TSL fragment program for the VBAO effect.
-   *
-   * Algorithm (design.md §§2–6, arXiv:2301.11376):
-   *
-   *  1. Reconstruct view-space P from depth.
-   *  2. Build a stable 2-D basis (T0, T1) perpendicular to V = normalize(−P).
-   *  3. For each of `slices` directions:
-   *       a. Rotate by per-pixel magic-square noise to avoid aliasing.
-   *       b. March `samples` steps on BOTH sides of the slice axis (mirrored).
-   *       c. Each step contributes a bit range to a u32 sector mask.
-   *       d. Apply cosine-weighted reduction: A_i = Σ open·w / Σ w.
-   *  4. Average A_i, apply pow(·, scale) and write to RedFormat render target.
-   */
-  setup(builder) {
+  setup(builder: any): TextureNode {
     const uvNode = uv()
 
-    // ── depth + normal helpers ──────────────────────────────────────────────
-
-    const sampleDepth = (uvCoord) => {
+    const sampleDepth = (uvCoord: any) => {
       const d = this.depthNode.sample(uvCoord).r
       if (builder.renderer.logarithmicDepthBuffer === true) {
         const vz = logarithmicDepthToViewZ(d, this.cameraNear, this.cameraFar)
@@ -344,47 +378,39 @@ export class VBAONode extends TempNode<'float'> {
       return d
     }
 
-    // normalNode is required (ADR-010); constructor already guards null.
-    const sampleNormal = (uvCoord) => this.normalNode.sample(uvCoord).rgb.normalize()
+    const sampleNormal = (uvCoord: any) => this.normalNode.sample(uvCoord).rgb.normalize()
 
-    // ── per-pixel rotation + per-step radial seed from deterministic noise ─
+    const vbaoPixel = floor(uvNode.mul(this.resolution)).toVar('vbaoPixel')
+    const vbaoLocalPixel = vbaoPixel
+      .sub(
+        floor(vbaoPixel.div(float(VBAO_NOISE_TILE_SIZE))).mul(float(VBAO_NOISE_TILE_SIZE)),
+      )
+      .toVar('vbaoLocalPixel')
 
-    const noiseResolution = textureSize(this.noiseNode, 0)
-    const noiseUv = vec2(uvNode.x, uvNode.y.oneMinus()).mul(this.resolution.div(noiseResolution))
-    const noiseTexel = this.noiseNode.sample(noiseUv)
-    // Recover the angle stored in the noise texture (cos/sin packed in xy).
-    const noiseDir = noiseTexel.xy.mul(2.0).sub(1.0)
-    // atan2(y, x) ∈ (−π, π], +π → (0, 2π], /2π → (0, 1]
-    const rotation = atan(noiseDir.y, noiseDir.x).add(PI).div(PI.mul(2.0))
-    const radialBase = noiseTexel.w
+    const sampleNoisePhase = (slice: any, sample: any) => {
+      const phaseRaw = float(slice).mul(float(VBAO_PHASE_STRIDE)).add(float(sample))
+      const phase = phaseRaw.sub(
+        floor(phaseRaw.div(float(VBAO_PHASE_ATLAS_PHASES))).mul(float(VBAO_PHASE_ATLAS_PHASES)),
+      )
+      const phaseY = floor(phase.div(float(VBAO_PHASE_ATLAS_COLUMNS)))
+      const phaseX = phase.sub(phaseY.mul(float(VBAO_PHASE_ATLAS_COLUMNS)))
+      const atlasPixel = vbaoLocalPixel.add(vec2(phaseX, phaseY).mul(float(VBAO_NOISE_TILE_SIZE)))
+      const atlasUv = atlasPixel
+        .add(vec2(0.5))
+        .div(vec2(VBAO_NOISE_TILE_SIZE * VBAO_PHASE_ATLAS_COLUMNS, VBAO_NOISE_TILE_SIZE * VBAO_PHASE_ATLAS_ROWS))
+      return this.noiseNode.sample(atlasUv)
+    }
 
-    // ── compile-time constants ──────────────────────────────────────────────
-
-    const THETA_MIN = float(-Math.PI / 2) // lower bound of sector range
-    const DELTA_THETA = float(Math.PI / SECTOR_COUNT) // sector angular width
-    const ADAPTIVE_MIN_THICKNESS = float(VBAO_ADAPTIVE_THICKNESS.minThickness)
-    const ADAPTIVE_THICKNESS_SCALE = float(VBAO_ADAPTIVE_THICKNESS.thicknessScale)
-    const ADAPTIVE_CONTINUITY_DEPTH = float(VBAO_ADAPTIVE_THICKNESS.continuityDepthTolerance)
-    const ADAPTIVE_CONTINUITY_NORMAL = float(VBAO_ADAPTIVE_THICKNESS.continuityNormalDot)
-
-    // ── maskRange sub-function (design.md §5) ──────────────────────────────
-    // count-clamped 3-way branch; lo/hi individually clamped so out-of-domain
-    // angles (from the wrong side of the slice axis) contribute nothing.
-
-    const maskRangeFn = Fn(([k0_in, k1_in]) => {
+    const maskRangeFn = (Fn as any)(([k0_in, k1_in]: any[]) => {
       const lo = int(max(float(0), min(float(SECTOR_COUNT), float(k0_in))))
       const hi = int(max(float(0), min(float(SECTOR_COUNT), float(k1_in))))
-      const count = hi.sub(lo) // ∈ [0, SECTOR_COUNT]
+      const count = hi.sub(lo)
       const result = uint(0).toVar('maskRangeResult')
 
       If(count.greaterThan(int(0)), () => {
         If(count.greaterThanEqual(int(SECTOR_COUNT)), () => {
-          // Full range: all 32 bits set.
           result.assign(bitNot(uint(0)))
         }).Else(() => {
-          // Partial range: `count` ones starting at bit `lo`.
-          // bitNot(0u) >> (32 − count) → count low bits set.
-          // Then << lo shifts them into position.
           const ucount = uint(count)
           const ones = shiftRight(bitNot(uint(0)), uint(SECTOR_COUNT).sub(ucount))
           result.assign(shiftLeft(ones, uint(lo)))
@@ -401,314 +427,191 @@ export class VBAONode extends TempNode<'float'> {
       ],
     })
 
-    // ── main VBAO kernel ────────────────────────────────────────────────────
+    const vbaoCosineMeasureNoAtan = (Fn as any)(([D_in, V_in, S_in, sinGamma_in, cosGamma_in]: any[]) => {
+      const D = vec3(D_in)
+      const Vbasis = vec3(V_in)
+      const Sbasis = vec3(S_in)
+      const sinGamma = float(sinGamma_in)
+      const cosGamma = float(cosGamma_in)
+      const x = dot(D, Sbasis)
+      const y = max(dot(D, Vbasis), float(1e-5))
+      const invLen = float(1).div(sqrt(max(x.mul(x).add(y.mul(y)), float(1e-8))))
+      const sinBeta = x.mul(cosGamma).sub(y.mul(sinGamma)).mul(invLen)
+      const cosBeta = y.mul(cosGamma).add(x.mul(sinGamma)).mul(invLen)
+      const interior = sinBeta.mul(float(0.5)).add(float(0.5))
+      const clampedBoundary = sinBeta.greaterThanEqual(float(0)).select(float(1), float(0))
+      return cosBeta.lessThan(float(0)).select(clampedBoundary, interior).clamp(0, 1)
+    }).setLayout({
+      name: 'vbaoCosineMeasureNoAtan',
+      type: 'float',
+      inputs: [
+        { name: 'D', type: 'vec3' },
+        { name: 'V', type: 'vec3' },
+        { name: 'S', type: 'vec3' },
+        { name: 'sinGamma', type: 'float' },
+        { name: 'cosGamma', type: 'float' },
+      ],
+    })
 
-    const vbaoKernel = Fn(() => {
-      // 1. Depth — discard sky/background pixels (depth >= 1).
+    const intervalMaskStochasticFn = (Fn as any)(([u0_in, u1_in, xi_in]: any[]) => {
+      const u0 = clamp(min(float(u0_in), float(u1_in)), float(0), float(1)).toVar('vbaoIntervalMaskU0')
+      const u1 = clamp(max(float(u0_in), float(u1_in)), float(0), float(1)).toVar('vbaoIntervalMaskU1')
+      const xi = clamp(float(xi_in), float(0), float(1)).toVar('vbaoIntervalMaskXi')
+      const intervalSectors = u1.sub(u0).mul(float(SECTOR_COUNT)).toVar('vbaoIntervalSectors')
+      const result = uint(0).toVar('vbaoIntervalMaskResult')
+
+      If(intervalSectors.greaterThan(float(1e-5)), () => {
+        If(intervalSectors.greaterThanEqual(float(1)), () => {
+          const k0 = int(ceil(u0.mul(float(SECTOR_COUNT)).sub(float(0.5))))
+          const k1 = int(floor(u1.mul(float(SECTOR_COUNT)).sub(float(0.5))))
+          result.assign((maskRangeFn as any)(k0, k1.add(int(1))))
+        }).Else(() => {
+          const thinSectorRaw = floor(u0.add(u1).mul(float(0.5 * SECTOR_COUNT)))
+          const thinSectorIndex = int(
+            max(float(0), min(float(SECTOR_COUNT - 1), thinSectorRaw)),
+          ).toVar('vbaoThinSectorIndex')
+          const thinSectorMask = shiftLeft(uint(1), uint(thinSectorIndex)).toVar('vbaoThinSectorMask')
+          const thinContribution = (xi.lessThan(intervalSectors) as any).select(
+            thinSectorMask,
+            uint(0),
+          )
+          result.assign(thinContribution)
+        })
+      })
+
+      return result
+    }).setLayout({
+      name: 'vbaoIntervalMaskStochastic',
+      type: 'uint',
+      inputs: [
+        { name: 'u0', type: 'float' },
+        { name: 'u1', type: 'float' },
+        { name: 'xi', type: 'float' },
+      ],
+    })
+
+    const vbaoKernel = (Fn as any)(() => {
       const depth = sampleDepth(uvNode).toVar('depth')
       depth.greaterThanEqual(1.0).discard()
 
-      // 2. View-space position and surface normal.
       const P = getViewPosition(uvNode, depth, this.cameraProjectionMatrixInverse).toVar('P')
       const N = sampleNormal(uvNode).toVar('N')
-
-      // View direction from surface toward camera.
       const V = normalize(P.negate()).toVar('V')
 
-      // 3. Stable 2-D basis perpendicular to V (design.md §2).
-      //    anyPerpendicular: abs(V.x) < 0.9 avoids degenerate cross products.
-      const T0 = normalize(
-        abs(V.x)
-          .lessThan(0.9)
-          .select(cross(V, vec3(1, 0, 0)), cross(V, vec3(0, 1, 0))),
-      ).toVar('T0')
-      const T1 = normalize(cross(V, T0)).toVar('T1')
+      const tangentSeed = (abs((V as any).x) as any)
+        .lessThan(0.9)
+        .select(cross(V, vec3(1, 0, 0)), cross(V, vec3(0, 1, 0)))
+      const T0 = (normalize(tangentSeed as any) as any).toVar('T0')
+      const T1 = (normalize(cross(V as any, T0 as any) as any) as any).toVar('T1')
+      const maxThickness = this.radius.mul(float(0.30)).toVar('vbaoMaxThickness')
+      const baseThickness = min(this.thickness, maxThickness).toVar('vbaoBaseThickness')
+      const maxValidRadius = this.radius.add(baseThickness).toVar('vbaoMaxValidRadius')
+      const maxValidRadius2 = maxValidRadius.mul(maxValidRadius).toVar('vbaoMaxValidRadius2')
+      const safeTexel = vec2(0.5).div(this.resolution).toVar('vbaoSafeTexel')
+      const weightedAccessibility = float(0).toVar('weightedAccessibility')
+      const weightSum = float(0).toVar('weightSum')
 
-      // 4. Slice accumulation.
-      const accessibility = float(0).toVar('accessibility')
+      ;(Loop as any)({ start: int(0), end: int(this.slices), type: 'int', condition: '<' }, ({ i }: any) => {
+        // GT-VBAO++ axial slice orientation: mirrored two-sided sampling covers π, not 2π.
+        const sliceNoiseTexel = sampleNoisePhase(i, int(0))
+        const rotation = sliceNoiseTexel.x.toVar('vbaoSliceRotation')
+        const phi = float(i).add(rotation).div(float(this.slices)).mul(PI)
+        const S_i = (normalize((T0 as any).mul(cos(phi)).add((T1 as any).mul(sin(phi)))) as any).toVar('S_i')
+        const B_i = (normalize(cross(S_i as any, V as any) as any) as any).toVar('B_i')
+        const NprojRaw = N.sub(B_i.mul(dot(N, B_i))).toVar('NprojRaw')
+        const NprojLen = sqrt(max(dot(NprojRaw, NprojRaw), float(1e-8))).toVar('NprojLen')
+        const Nproj = NprojRaw.div(NprojLen).toVar('Nproj')
+        const sinGamma = dot(Nproj, S_i).toVar('sinGamma')
+        const cosGamma = max(dot(Nproj, V), float(1e-5)).toVar('cosGamma')
 
-      Loop({ start: int(0), end: int(this.slices), type: 'int', condition: '<' }, ({ i }) => {
-        // Slice direction in the hemisphere perpendicular to V.
-        // φ_i = 2π · (i + rotation) / slices  (design.md §2)
-        const phi = float(i).add(rotation).div(float(this.slices)).mul(PI.mul(2.0))
-        const S_i = normalize(T0.mul(cos(phi)).add(T1.mul(sin(phi)))).toVar('S_i')
-
-        // Projected surface-normal angle in the slice plane.
-        // γ_i = atan2(N·V, N·S_i), clamped to [−π/2, π/2]  (design.md §2)
-        const gammaNorm = clamp(
-          atan(dot(N, V), dot(N, S_i)),
-          float(-Math.PI / 2),
-          float(Math.PI / 2),
-        ).toVar('gammaNorm')
-
-        // Per-slice visibility mask (u32; 0 = all open, 0xFFFFFFFF = all blocked).
         const occludedMask = uint(0).toVar('occludedMask')
 
-        // 5. Mirrored march: side ∈ {+1, −1}  (design.md §4)
-        Loop(
+        ;(Loop as any)(
           { start: int(0), end: int(2), type: 'int', condition: '<', name: 'sideIdx' },
-          ({ sideIdx }) => {
+          ({ sideIdx }: any) => {
             const sideSign = sideIdx.equal(int(0)).select(float(1), float(-1))
-            const S_side = S_i.mul(sideSign).toVar('S_side')
+            const sampleDir = S_i.mul(sideSign).toVar('sampleDir')
+            const sampleScreenEnd = getScreenPosition(
+              P.add(sampleDir.mul(this.radius)),
+              this.cameraProjectionMatrix,
+            )
 
-            // Stratified step spacing with deterministic per-slice/per-step
-            // jitter. The old single per-pixel radial scale compressed the
-            // whole ray by the same factor and reinforced a screen lattice.
-            Loop(
-              {
-                start: int(0),
-                end: int(this.samples),
-                type: 'int',
-                condition: '<',
-                name: 'j',
-              },
-              ({ j }) => {
-                const stepJitter = fract(
-                  radialBase
-                    .add(float(i).mul(0.5698402909980532))
-                    .add(float(j).mul(0.7548776662466927)),
-                ).toVar('stepJitter')
-                const stepFrac = float(j).add(stepJitter).div(float(this.samples))
-                // Project the slice endpoint once, then march linearly in screen
-                // space. Reprojecting P + S * radius * t per step bends the
-                // sample path for off-axis pixels under perspective.
-                const sampleScreenEnd = getScreenPosition(
-                  P.add(S_side.mul(this.radius)),
-                  this.cameraProjectionMatrix,
-                )
-                const sampleScreenPos = uvNode
-                  .add(sampleScreenEnd.sub(uvNode).mul(stepFrac))
-                  .toVar('sampleScreenPos')
-
-                // Skip samples outside the viewport [0,1]².
-                If(
-                  sampleScreenPos.x
+            ;(Loop as any)(
+              { start: int(0), end: int(this.samples), type: 'int', condition: '<', name: 'j' },
+              ({ j }: any) => {
+                If(occludedMask.notEqual(bitNot(uint(0))), () => {
+                  const sampleNoiseTexel = sampleNoisePhase(i, j)
+                  const stepJitter = sampleNoiseTexel.y.toVar('stepJitter')
+                  const subsectorNoise = sampleNoiseTexel.z.toVar('vbaoSubsectorNoise')
+                  const stepT = float(j).add(stepJitter).div(float(this.samples))
+                  const stepFrac = stepT.mul(stepT)
+                  const sampleScreenPos = uvNode
+                    .add(sampleScreenEnd.sub(uvNode).mul(stepFrac))
+                    .toVar('sampleScreenPos')
+                  const sampleSafeUv = clamp(
+                    sampleScreenPos,
+                    safeTexel,
+                    vec2(1).sub(safeTexel),
+                  ).toVar('sampleSafeUv')
+                  const onScreen = sampleScreenPos.x
                     .greaterThanEqual(float(0))
                     .and(sampleScreenPos.x.lessThanEqual(float(1)))
                     .and(sampleScreenPos.y.greaterThanEqual(float(0)))
-                    .and(sampleScreenPos.y.lessThanEqual(float(1))),
-                  () => {
-                    // Reconstruct only real scene surfaces. Background/far-plane
-                    // samples are empty space; treating them as geometry blacks
-                    // out open silhouettes and large exterior views.
-                    const sD = sampleDepth(sampleScreenPos)
-                    If(sD.lessThan(float(1.0)), () => {
-                      const samplePos = getViewPosition(
-                        sampleScreenPos,
-                        sD,
-                        this.cameraProjectionMatrixInverse,
-                      ).toVar('samplePos')
-
-                      // Front face: the sample surface.
-                      const D_front = normalize(samplePos.sub(P))
-                      // Estimate blocker thickness from the contiguous same-surface
-                      // run on this slice side. This mirrors the scalar reference:
-                      // background breaks the run, depth/normal gaps split surfaces,
-                      // and `this.thickness` is only the max cap.
-                      const adaptiveThickness = ADAPTIVE_MIN_THICKNESS.toVar('adaptiveThickness')
-                      const adaptiveMaxThickness = max(
-                        ADAPTIVE_MIN_THICKNESS,
-                        this.thickness,
-                      ).toVar('adaptiveMaxThickness')
-                      const segmentValid = int(0).toVar('adaptiveSegmentValid')
-                      const segmentContainsTarget = int(0).toVar('adaptiveSegmentContainsTarget')
-                      const foundTargetSegment = int(0).toVar('adaptiveFoundTargetSegment')
-                      const segmentMinDepth = float(0).toVar('adaptiveSegmentMinDepth')
-                      const segmentMaxDepth = float(0).toVar('adaptiveSegmentMaxDepth')
-                      const previousValid = int(0).toVar('adaptivePreviousValid')
-                      const previousPos = vec3(0, 0, 0).toVar('adaptivePreviousPos')
-                      const previousNormal = vec3(0, 0, 1).toVar('adaptivePreviousNormal')
-
-                      const closeAdaptiveSegment = () => {
-                        If(
-                          segmentContainsTarget
-                            .equal(int(1))
-                            .and(foundTargetSegment.equal(int(0))),
-                          () => {
-                            const span = max(float(0), segmentMaxDepth.sub(segmentMinDepth))
-                            adaptiveThickness.assign(
-                              clamp(
-                                ADAPTIVE_MIN_THICKNESS.add(span.mul(ADAPTIVE_THICKNESS_SCALE)),
-                                ADAPTIVE_MIN_THICKNESS,
-                                adaptiveMaxThickness,
-                              ),
-                            )
-                            foundTargetSegment.assign(int(1))
-                          },
-                        )
-
-                        segmentValid.assign(int(0))
-                        segmentContainsTarget.assign(int(0))
-                      }
-
-                      Loop(
-                        {
-                          start: int(0),
-                          end: int(this.samples),
-                          type: 'int',
-                          condition: '<',
-                          name: 'adaptiveScanIdx',
-                        },
-                        ({ adaptiveScanIdx }) => {
-                          const scanStepFrac = float(adaptiveScanIdx)
-                            .add(
-                              fract(
-                                radialBase
-                                  .add(float(i).mul(0.5698402909980532))
-                                  .add(float(adaptiveScanIdx).mul(0.7548776662466927)),
-                              ),
-                            )
-                            .div(float(this.samples))
-                          const scanScreenPos = uvNode
-                            .add(sampleScreenEnd.sub(uvNode).mul(scanStepFrac))
-                            .toVar('adaptiveScanScreenPos')
-                          const scanValid = int(0).toVar('adaptiveScanValid')
-                          const scanPos = vec3(0, 0, 0).toVar('adaptiveScanPos')
-                          const scanNormal = vec3(0, 0, 1).toVar('adaptiveScanNormal')
-
-                          If(
-                            scanScreenPos.x
-                              .greaterThanEqual(float(0))
-                              .and(scanScreenPos.x.lessThanEqual(float(1)))
-                              .and(scanScreenPos.y.greaterThanEqual(float(0)))
-                              .and(scanScreenPos.y.lessThanEqual(float(1))),
-                            () => {
-                              const scanDepth = sampleDepth(scanScreenPos)
-                              If(scanDepth.lessThan(float(1.0)), () => {
-                                scanPos.assign(
-                                  getViewPosition(
-                                    scanScreenPos,
-                                    scanDepth,
-                                    this.cameraProjectionMatrixInverse,
-                                  ),
-                                )
-                                scanNormal.assign(sampleNormal(scanScreenPos))
-                                scanValid.assign(int(1))
-                              })
-                            },
-                          )
-
-                          If(scanValid.equal(int(1)), () => {
-                            const sameSurface = previousValid
-                              .equal(int(1))
-                              .and(
-                                abs(dot(scanPos.sub(previousPos), V)).lessThanEqual(
-                                  ADAPTIVE_CONTINUITY_DEPTH,
-                                ),
-                              )
-                              .and(
-                                dot(scanNormal, previousNormal).greaterThanEqual(
-                                  ADAPTIVE_CONTINUITY_NORMAL,
-                                ),
-                              )
-
-                            If(segmentValid.equal(int(0)).or(sameSurface.not()), () => {
-                              closeAdaptiveSegment()
-                              segmentValid.assign(int(1))
-                              segmentMinDepth.assign(dot(scanPos, V))
-                              segmentMaxDepth.assign(dot(scanPos, V))
-                            }).Else(() => {
-                              const scanViewDepth = dot(scanPos, V)
-                              segmentMinDepth.assign(min(segmentMinDepth, scanViewDepth))
-                              segmentMaxDepth.assign(max(segmentMaxDepth, scanViewDepth))
-                            })
-
-                            If(adaptiveScanIdx.equal(j), () => {
-                              segmentContainsTarget.assign(int(1))
-                            })
-
-                            previousValid.assign(int(1))
-                            previousPos.assign(scanPos)
-                            previousNormal.assign(scanNormal)
-                          }).Else(() => {
-                            closeAdaptiveSegment()
-                            previousValid.assign(int(0))
-                          })
-                        },
-                      )
-
-                      closeAdaptiveSegment()
-
-                      // Back face: recede along the sampled point's view vector.
-                      // Under perspective, using the shaded pixel's V here bends thin blockers.
-                      const sampleViewDir = normalize(samplePos.negate())
-                      const D_back = normalize(
-                        samplePos.sub(sampleViewDir.mul(adaptiveThickness)).sub(P),
-                      )
-
-                      // Horizon angles (design.md §4).
-                      // θ = atan2(D·V, D·S_side) — angle from S_side toward V.
-                      const thetaFront = atan(dot(D_front, V), dot(D_front, S_side))
-                      const thetaBack = atan(dot(D_back, V), dot(D_back, S_side))
-
-                      const t0 = min(thetaFront, thetaBack)
-                      const t1 = max(thetaFront, thetaBack)
-
-                      // Discrete sector indices: floor for inclusive start, ceil for exclusive end.
-                      const k0 = int(floor(t0.sub(THETA_MIN).div(DELTA_THETA)))
-                      const k1 = int(ceil(t1.sub(THETA_MIN).div(DELTA_THETA)))
-
-                      // OR the sample's sector range into the slice mask.
-                      occludedMask.assign(bitOr(occludedMask, maskRangeFn(k0, k1)))
-                    })
-                  },
-                )
+                    .and(sampleScreenPos.y.lessThanEqual(float(1)))
+                    .toVar('vbaoSampleOnScreen')
+                  const sD = sampleDepth(sampleSafeUv).toVar('vbaoSampleDepth')
+                  const samplePos = getViewPosition(
+                    sampleSafeUv,
+                    sD,
+                    this.cameraProjectionMatrixInverse,
+                  ).toVar('samplePos')
+                  const sampleDelta = samplePos.sub(P).toVar('sampleDelta')
+                  const sampleDist2 = dot(sampleDelta, sampleDelta).toVar('sampleDist2')
+                  const sampleAlong = dot(sampleDelta, sampleDir).toVar('sampleAlong')
+                  const sampleValid = onScreen
+                    .and(sD.lessThan(float(1.0)))
+                    .and(sD.greaterThanEqual(float(0)))
+                    .and(sampleDist2.greaterThan(float(1e-8)))
+                    .and(sampleDist2.lessThanEqual(maxValidRadius2))
+                    .and(sampleAlong.greaterThan(float(0)))
+                    .toVar('sampleValid')
+                  const sampleDist = sqrt(max(sampleDist2, float(1e-8))).toVar('sampleDist')
+                  const effectiveThickness = min(baseThickness, sampleDist.mul(float(0.85))).toVar('effectiveThickness')
+                  const D_front = sampleDelta.div(sampleDist).toVar('D_front')
+                  const sampleViewLen = sqrt(max(dot(samplePos, samplePos), float(1e-8))).toVar('sampleViewLen')
+                  const sampleViewDir = samplePos.negate().div(sampleViewLen).toVar('sampleViewDir')
+                  const backDelta = samplePos
+                    .sub(sampleViewDir.mul(effectiveThickness))
+                    .sub(P)
+                    .toVar('backDelta')
+                  const backDist = sqrt(max(dot(backDelta, backDelta), float(1e-8))).toVar('backDist')
+                  const D_back = backDelta.div(backDist).toVar('D_back')
+                  const uFront = (vbaoCosineMeasureNoAtan as any)(D_front, V, S_i, sinGamma, cosGamma)
+                  const uBack = (vbaoCosineMeasureNoAtan as any)(D_back, V, S_i, sinGamma, cosGamma)
+                  const u0 = min(uFront, uBack).toVar('vbaoIntervalU0')
+                  const u1 = max(uFront, uBack).toVar('vbaoIntervalU1')
+                  const pointSampleMask = (intervalMaskStochasticFn as any)(u0, u1, subsectorNoise).toVar('pointSampleMask')
+                  const validSampleMask = (sampleValid as any).select(pointSampleMask, uint(0))
+                  occludedMask.assign(bitOr(occludedMask, validSampleMask))
+                })
               },
             )
           },
         )
 
-        // 6. Cosine-weighted reduction (design.md §6.1, production formula).
-        //    A_i = Σ_k open(k) · max(0, cos(θ_k − γ)) / Σ_k max(0, cos(θ_k − γ))
-        const numerator = float(0).toVar('numerator')
-        const denominator = float(0).toVar('denominator')
-        const cosGamma = cos(gammaNorm).toVar('cosGamma')
-        const sinGamma = sin(gammaNorm).toVar('sinGamma')
-        const cosTheta = float(Math.cos(-Math.PI / 2 + Math.PI / (SECTOR_COUNT * 2))).toVar(
-          'cosTheta',
-        )
-        const sinTheta = float(Math.sin(-Math.PI / 2 + Math.PI / (SECTOR_COUNT * 2))).toVar(
-          'sinTheta',
-        )
-        const cosDelta = float(Math.cos(Math.PI / SECTOR_COUNT))
-        const sinDelta = float(Math.sin(Math.PI / SECTOR_COUNT))
-
-        Loop(
-          {
-            start: int(0),
-            end: int(SECTOR_COUNT),
-            type: 'int',
-            condition: '<',
-            name: 'k',
-          },
-          ({ k }) => {
-            // Sector centre: θ_k = (k + 0.5) · Δθ + θ_min (design.md §3).
-            // Use cos(θ_k − γ) = cosθ_k·cosγ + sinθ_k·sinγ to avoid a cosine per sector.
-            const w = max(float(0), cosTheta.mul(cosGamma).add(sinTheta.mul(sinGamma)))
-            denominator.addAssign(w)
-
-            // Bit k clear → sector k is OPEN; bit k set → sector k is blocked.
-            If(shiftRight(occludedMask, uint(k)).bitAnd(uint(1)).equal(uint(0)), () => {
-              numerator.addAssign(w)
-            })
-
-            const currentCosTheta = cosTheta.toVar('currentCosTheta')
-            const currentSinTheta = sinTheta.toVar('currentSinTheta')
-            const nextCosTheta = currentCosTheta.mul(cosDelta).sub(currentSinTheta.mul(sinDelta))
-            const nextSinTheta = currentSinTheta.mul(cosDelta).add(currentCosTheta.mul(sinDelta))
-            cosTheta.assign(nextCosTheta)
-            sinTheta.assign(nextSinTheta)
-          },
-        )
-
-        accessibility.addAssign(numerator.div(max(denominator, float(1e-6))))
+        const blockedSectors = float(countOneBits(occludedMask) as any).toVar('blockedSectors')
+        const sliceAccessibility = float(1).sub(blockedSectors.div(float(SECTOR_COUNT))).toVar('sliceAccessibility')
+        weightedAccessibility.addAssign(sliceAccessibility)
+        weightSum.addAssign(float(1))
       })
 
-      // 7. Average over slices, clamp, apply user scale.
-      accessibility.assign(clamp(accessibility.div(float(this.slices)), float(0), float(1)))
-      accessibility.assign(pow(accessibility, this.scale))
-
-      return accessibility
+      const accessibility = clamp(
+        weightedAccessibility.div(max(weightSum, float(1e-4))),
+        float(0),
+        float(1),
+      ).toVar('accessibility')
+      const contrastedAo = pow(accessibility, this.contrast)
+      return float(1).sub(float(1).sub(contrastedAo).mul(this.strength))
     })
 
     this.material.fragmentNode = vbaoKernel().context(builder.getSharedContext())
@@ -718,17 +621,14 @@ export class VBAONode extends TempNode<'float'> {
   }
 
   dispose(): void {
+    this.resolveNode?.dispose()
+    this.halfCleanupNode?.dispose()
+    this.fullPolishNode?.dispose()
     this.renderTarget.dispose()
     this.material.dispose()
   }
 }
 
-/**
- * Factory function for `VBAONode`. Mirrors Three's `ao(...)` factory for
- * `GTAONode`.
- *
- * @throws {TypeError} if `normalNode` is `null` or `undefined`.
- */
 export function vbao(
   depthNode: Node,
   normalNode: Node,

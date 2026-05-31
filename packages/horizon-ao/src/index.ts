@@ -8,13 +8,4 @@
  */
 
 export { VBAONode, vbao } from './VBAONode'
-export {
-  SECTOR_COUNT,
-  VBAO_DEFAULTS,
-  VBAO_CLAMP_RANGES,
-  VBAO_QUALITY_TIERS,
-  VBAO_SECTOR_ANGLES,
-  clampVbaoNodeOptions,
-  type VBAONodeOptions,
-  type VBAOQualityPreset,
-} from './vbaoConstants'
+export type { VBAONodeOptions, VBAOQualityPreset } from './vbaoConstants'

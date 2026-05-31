@@ -23,7 +23,10 @@ Concrete actions in PR-00:
 
 1. Move `packages/horizon-ao/src/horizonAoNode.ts`, `horizonAoMath.ts`, their test files, and `parityHarness.ts` to `packages/horizon-ao/archive/`. Single commit.
 2. Move `openspec/horizonao-final-spec.md`, `horizonao-math-revision-2025.md`, `horizonao-current-shape-roadmap.md` to `openspec/archive/`. Single commit.
-3. `packages/horizon-ao/src/index.ts` exports ONLY: `VBAONode`, `vbao`, `VBAO_QUALITY_TIERS`, `VBAONodeOptions` (type), `VBAOQualityPreset` (type). `parityHarness` is no longer public.
+3. `packages/horizon-ao/src/index.ts` exports ONLY: `VBAONode`, `vbao`, and
+   public option/types such as `VBAONodeOptions` and `VBAOQualityPreset`.
+   Internal quality-tier constants and reconstruction passes are not root
+   exports. `parityHarness` is no longer public.
 4. No deprecation period. No re-export shim. No backwards-compatibility alias.
 
 The archive directory exists for git-blameability and to make resurrection a `git mv` away if VBAO collapses. It is not a supported import path. The package's published surface is whatever `index.ts` exports.
