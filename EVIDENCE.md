@@ -4,6 +4,522 @@ Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
 This file is the gate for later adaptive thickness, sampling, denoise, or depth
 hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
+## 2026-06-02 — VBAO temporal host gate smoke
+
+Status: **host temporal sampling is wired, but not promoted**.
+
+This capture compares temporal `off`, internal/demo-only temporal `host`
+sampling, host `TRAA`, and a non-temporal `spatial-ultra` alternative on Museum
+full-resolution VBAO at 1280x720. It does **not** include internal AO history.
+Therefore it is an evidence gate for host temporal sampling, not proof that
+temporal AO improves quality.
+
+Commands:
+
+```sh
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='beauty,ao'; $env:AO_BENCHMARK_DENOISE_STATES='false,true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='off'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='3'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-temporal-off-latest.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-temporal-off-summary.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-temporal-off'; $env:AO_BENCHMARK_PORT='5191'; pnpm --filter @horizonao/demo benchmark:ao
+
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='beauty,ao'; $env:AO_BENCHMARK_DENOISE_STATES='false,true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='host'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='3'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-temporal-host-latest.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-temporal-host-summary.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-temporal-host'; $env:AO_BENCHMARK_PORT='5192'; pnpm --filter @horizonao/demo benchmark:ao
+
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='beauty,ao'; $env:AO_BENCHMARK_DENOISE_STATES='false,true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='host'; $env:AO_BENCHMARK_VBAO_HOST_TAA='traa'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='3'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-temporal-host-traa-latest.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-temporal-host-traa-summary.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-temporal-host-traa'; $env:AO_BENCHMARK_PORT='5196'; pnpm --filter @horizonao/demo benchmark:ao
+
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='beauty,ao'; $env:AO_BENCHMARK_DENOISE_STATES='false,true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='off'; $env:AO_BENCHMARK_VBAO_SAMPLE_MODE='spatial-ultra'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='3'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-temporal-spatial-ultra-latest.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-temporal-spatial-ultra-summary.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-temporal-spatial-ultra'; $env:AO_BENCHMARK_PORT='5194'; pnpm --filter @horizonao/demo benchmark:ao
+```
+
+Artifacts:
+
+- `artifacts/benchmarks/vbao-temporal-off-latest.json`
+- `artifacts/benchmarks/vbao-temporal-off-summary.md`
+- `artifacts/benchmarks/screenshots-vbao-temporal-off/`
+- `artifacts/benchmarks/vbao-temporal-host-latest.json`
+- `artifacts/benchmarks/vbao-temporal-host-summary.md`
+- `artifacts/benchmarks/screenshots-vbao-temporal-host/`
+- `artifacts/benchmarks/vbao-temporal-host-traa-latest.json`
+- `artifacts/benchmarks/vbao-temporal-host-traa-summary.md`
+- `artifacts/benchmarks/screenshots-vbao-temporal-host-traa/`
+- `artifacts/benchmarks/vbao-temporal-spatial-ultra-latest.json`
+- `artifacts/benchmarks/vbao-temporal-spatial-ultra-summary.md`
+- `artifacts/benchmarks/screenshots-vbao-temporal-spatial-ultra/`
+- `artifacts/benchmarks/vbao-temporal-gate-verdict.json`
+- `artifacts/benchmarks/vbao-temporal-gate-verdict.md`
+
+| Temporal | View | Output | Pattern/noise ↓ | Stripe ↓ | Edge bleed ↓ | Thin-gap ↑ | Product GPU ms |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| off | beauty | raw-debug | 0.03466 | 0.15600 | 0.02908 | 0.00680 | n/a |
+| host | beauty | raw-debug | 0.03469 | 0.15584 | 0.02918 | 0.00686 | n/a |
+| off | beauty | product | 0.03447 | 0.15682 | 0.02872 | 0.00612 | 1.729 |
+| host | beauty | product | 0.03451 | 0.15708 | 0.02886 | 0.00618 | 1.247 |
+| off | ao | raw-debug | 0.02312 | 0.18957 | 0.00986 | 0.00340 | n/a |
+| host | ao | raw-debug | 0.02312 | 0.18957 | 0.00986 | 0.00340 | n/a |
+| off | ao | product | 0.02305 | 0.19014 | 0.00969 | 0.00308 | 1.478 |
+| host | ao | product | 0.02305 | 0.19069 | 0.00971 | 0.00311 | 1.391 |
+
+Spatial alternative:
+
+| Sample mode | View | Output | Pattern/noise ↓ | Stripe ↓ | Edge bleed ↓ | Thin-gap ↑ | Product GPU ms |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| spatial-ultra | beauty | product | 0.03446 | 0.15696 | 0.02870 | 0.00606 | 1.800 |
+| spatial-ultra | ao | product | 0.02307 | 0.19028 | 0.00979 | 0.00305 | 1.876 |
+
+Host TRAA:
+
+| Host TAA | View | Output | Pattern/noise ↓ | Stripe ↓ | Edge bleed ↓ | Thin-gap ↑ | Product GPU ms |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| traa | beauty | product | 0.03424 | 0.15774 | 0.02869 | 0.00611 | 1.744 |
+| traa | ao | product | 0.02305 | 0.19068 | 0.00980 | 0.00304 | 1.509 |
+
+Outcome:
+
+- `host` mode is stable enough to capture without AO history allocation.
+- Without host TAA/TRAA, `host` does not materially reduce pattern/noise.
+- With host TRAA, beauty product pattern/noise improves (`0.03424` vs
+  `0.03447`), but the win is paired with stripe regression and does not satisfy
+  the gate.
+- AO product stripe proxy is slightly worse in the `host` row (`0.19069` vs
+  `0.19014`), so this is not a promotion signal.
+- `pnpm --filter @horizonao/demo verify:vbao-temporal` returns
+  `prototype-only` and `internalTemporalAllowed: true`.
+- `VBAO_TEMPORAL_REQUIRE_CANDIDATE=1 pnpm --filter @horizonao/demo
+  verify:vbao-temporal` remains the hard promotion-gate form and fails for this
+  evidence.
+- Same-cost non-temporal alternative evidence is present through
+  `spatial-ultra`, and it is sufficient to unblock private internal temporal
+  prototyping.
+- Internal temporal accumulation may start as a private prototype only. The
+  stripe regression remains a known risk and blocks public temporal API or
+  quality promotion until internal-mode evidence clears it.
+
+## 2026-06-02 — VBAO lab non-temporal baseline
+
+Status: **baseline captured**.
+
+This capture confirms `/lab` can produce full-resolution VBAO raw and product
+rows for beauty and AO-only output. It is baseline evidence for the temporal
+gate, not a temporal promotion claim.
+
+Command:
+
+```sh
+$env:AO_BENCHMARK_SCENES='lab'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='beauty,ao'; $env:AO_BENCHMARK_DENOISE_STATES='false,true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='off'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='3'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-lab-baseline-latest.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-lab-baseline-summary.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-lab-baseline'; $env:AO_BENCHMARK_PORT='5193'; pnpm --filter @horizonao/demo benchmark:ao
+```
+
+Artifacts:
+
+- `artifacts/benchmarks/vbao-lab-baseline-latest.json`
+- `artifacts/benchmarks/vbao-lab-baseline-summary.md`
+- `artifacts/benchmarks/screenshots-vbao-lab-baseline/`
+
+| View | Output | Pattern/noise ↓ | Stripe ↓ | Edge bleed ↓ | Thin-gap ↑ | Product GPU ms |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| beauty | raw-debug | 0.01396 | 0.13086 | 0.01001 | 0.00345 | n/a |
+| beauty | product | 0.01345 | 0.13565 | 0.00945 | 0.00250 | 1.243 |
+| ao | raw-debug | 0.01776 | 0.17476 | 0.01126 | 0.00791 | n/a |
+| ao | product | 0.01407 | 0.21887 | 0.00892 | 0.00502 | 1.090 |
+
+## 2026-06-02 — VBAO internal temporal prototype smoke
+
+Status: **private prototype evaluated; no quality promotion**.
+
+This capture verifies that `internal` temporal mode can render full-res Museum
+beauty/AO product rows, emit measured temporal/reprojection guide pass
+timestamps, and disclose benchmark diagnostics for the active validation mode
+and reset state. It is evidence for private prototype evaluation only. It does
+not clear the host temporal stripe regression, and the upgraded verifier rejects
+promotion because internal temporal shows no material pattern/noise win.
+
+Command:
+
+```sh
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='ao'; $env:AO_BENCHMARK_DENOISE_STATES='true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='internal'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='1'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-temporal-internal-smoke.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-temporal-internal-smoke.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-temporal-internal-smoke'; $env:AO_BENCHMARK_PORT='5197'; pnpm --filter @horizonao/demo benchmark:ao
+
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='beauty,ao'; $env:AO_BENCHMARK_DENOISE_STATES='true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='internal'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='3'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-temporal-internal-latest.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-temporal-internal-summary.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-temporal-internal'; $env:AO_BENCHMARK_PORT='5198'; pnpm --filter @horizonao/demo benchmark:ao
+
+pnpm --filter @horizonao/demo verify:vbao-temporal
+```
+
+Artifacts:
+
+- `artifacts/benchmarks/vbao-temporal-internal-smoke.json`
+- `artifacts/benchmarks/vbao-temporal-internal-smoke.md`
+- `artifacts/benchmarks/screenshots-vbao-temporal-internal-smoke/`
+- `artifacts/benchmarks/vbao-temporal-internal-latest.json`
+- `artifacts/benchmarks/vbao-temporal-internal-summary.md`
+- `artifacts/benchmarks/screenshots-vbao-temporal-internal/`
+- `artifacts/benchmarks/vbao-temporal-gate-verdict.json`
+- `artifacts/benchmarks/vbao-temporal-gate-verdict.md`
+
+| Resolution | View | Output | Pattern/noise ↓ | Stripe ↓ | Edge bleed ↓ | Thin-gap ↑ | Raw GPU ms | Temporal GPU ms | Guide GPU ms | Polish GPU ms | Total product GPU ms |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1280x720 | ao | product | 0.02305 | 0.19014 | 0.00969 | 0.00308 | 1.044 | 0.046 | 0.028 | 0.093 | 1.212 |
+| 1280x720 | beauty | product | 0.03447 | 0.15682 | 0.02872 | 0.00612 | 1.047 | 0.046 | 0.030 | 0.094 | 1.217 |
+| 1280x720 | ao | product | 0.02305 | 0.19014 | 0.00969 | 0.00308 | 1.606 | 0.068 | 0.045 | 0.142 | 1.861 |
+
+Diagnostics:
+
+- `validationMode`: `reproject-depth-normal-clamp`
+- `historyWeight`: `0.8`
+- `depthContinuityThreshold`: `0.01`
+- `normalContinuityThreshold`: `0.8`
+- `gpuRejectionCounters`: `not-instrumented`
+- `verify:vbao-temporal`: `prototype-only`;
+  `internalTemporalEvidence: true`;
+  `internalTemporalPassesPromotion: false`.
+
+Outcome:
+
+- The private temporal node is wired after full-resolution resolve and before
+  full-resolution polish.
+- The pass owns AO history, resets on resize/camera cuts, reprojects current
+  depth into previous-frame UV, rejects out-of-viewport history, validates
+  previous depth/normal guide history, clamps history to the current 3x3 AO
+  neighborhood, and starts with history weight `0.8`.
+- Phase 3.7 diagnostics are complete for this prototype gate. Benchmark output
+  exposes validation mode, reset state/reasons, thresholds, and temporal guide
+  timings. GPU rejection counters are explicitly `not-instrumented`.
+- Phase 4 is complete as a rejection/prototype gate. Internal temporal evidence
+  is present, but it does not produce a material pattern/noise win, so promotion
+  remains blocked.
+- Public temporal API and temporal quality promotion remain blocked.
+
+## 2026-06-02 — Product fixture observation gate
+
+Status: **observed, not promoted**. The required product fixture observations
+now exist and missing observations are blockers. This is necessary quality
+evidence, not a release-quality claim by itself.
+
+Artifacts:
+
+- `packages/horizon-ao/reference/vbaoProductFixtureObservations.ts`
+- `packages/horizon-ao/reference/__tests__/vbaoProductFixtureObservations.test.ts`
+
+Verification:
+
+```sh
+pnpm --filter @horizonao/core test -- packages/horizon-ao/reference/__tests__/vbaoProductFixtureObservations.test.ts
+```
+
+| Fixture | Expected product observation | Gate behavior |
+| --- | --- | --- |
+| `flat-plane` | fully accessible, no occupied sectors | observed |
+| `full-hemisphere` | fully occluded, all 32 sectors occupied | observed |
+| `two-wall-corner` | partially accessible, broad sector coverage | observed |
+| `thin-occluder` | narrow sector coverage, more accessible than thick blockers | observed |
+
+Decision:
+
+- Missing product fixture observations are `missing-reference-observation`
+  blockers, never passes.
+- These fixture observations complement screenshot/timing evidence; they do not
+  override the half-resolution demotion from the stage matrix.
+
+## 2026-06-02 — Reconstruction release-readiness verification gate
+
+Status: **pass for targeted verification; no production build run**.
+
+Verification commands:
+
+```sh
+pnpm --filter @horizonao/core test -- packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSampling.test.ts packages/horizon-ao/reference/__tests__/vbaoProductFixtureObservations.test.ts
+pnpm --filter @horizonao/core typecheck
+pnpm --filter @horizonao/demo typecheck
+node --check apps/demo/scripts/collect-vbao-generated-shader-inspection.mjs
+node --check apps/demo/scripts/collect-ao-benchmark.mjs
+node --check apps/demo/scripts/profiling/productionReport.mjs
+$env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5192'; $env:PLAYWRIGHT_TEST_PORT='5192'; pnpm --filter @horizonao/demo exec node scripts/collect-vbao-generated-shader-inspection.mjs
+git diff --check
+```
+
+Results:
+
+- Targeted Vitest/source-contract suite: 12 files passed, 95 tests passed.
+- Core typecheck: passed.
+- Demo typecheck: passed.
+- Script syntax checks: passed.
+- Generated shader inspection: passed with `vbaoDuplicateDeclarationWarnings: 0`.
+- `git diff --check`: passed with line-ending warnings only.
+- Production build: **not run**; no explicit production-build authorization was
+  given.
+
+## 2026-06-02 — Runtime fat cleanup gate
+
+Status: **pass**. Benchmark-only noise candidates are no longer part of product
+runtime sampling, and the public package export boundary remains product-only.
+
+What changed:
+
+- `packages/horizon-ao/src/vbaoSampling.ts` now contains only the production
+  `phase-atlas-stable-hash` sampling path.
+- `packages/horizon-ao/src/vbaoNoise.ts` now shares a single default production
+  noise texture instead of a candidate-keyed texture map.
+- `apps/demo/src/scenes/vbaoBenchmarkNoise.ts` owns benchmark-only candidate
+  texture generation for noise-source comparison captures.
+- `packages/horizon-ao/src/VBAOHalfResCleanupNode.ts` no longer has the duplicate
+  disabled `setup()` bypass; disabled behavior remains covered by `getTextureNode`
+  and `updateBefore`.
+
+Verification:
+
+- `pnpm --filter @horizonao/core test -- packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoSampling.test.ts`
+- `pnpm --filter @horizonao/core typecheck`
+- `pnpm --filter @horizonao/demo typecheck`
+
+Decision:
+
+- Keep benchmark candidates in demo/benchmark code. The product package should
+  ship the default production path plus the hidden texture injection seam needed
+  by demo evidence, not every rejected benchmark candidate.
+
+## 2026-06-02 — Generated shader diagnostics cleanup gate
+
+Status: **pass**. The duplicate VBAO TSL declaration warning was reproduced,
+then fixed without changing the product pass shape.
+
+Reproduction command:
+
+```sh
+$env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5190'; $env:PLAYWRIGHT_TEST_PORT='5190'; pnpm --filter @horizonao/demo exec node scripts/collect-vbao-generated-shader-inspection.mjs
+```
+
+Reproduction result:
+
+- `vbaoDuplicateDeclarationWarnings: 3`
+- Warning text named `vbaoRawNoisePixel`, proving that renaming `vbaoPixel` was
+  not enough; the problem was duplicate named TSL declarations from a reused
+  helper expression.
+
+Fix verification command:
+
+```sh
+$env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5191'; $env:PLAYWRIGHT_TEST_PORT='5191'; pnpm --filter @horizonao/demo exec node scripts/collect-vbao-generated-shader-inspection.mjs
+```
+
+Artifacts:
+
+- `artifacts/benchmarks/vbao-generated-shader-inspection-latest.json`
+- `artifacts/benchmarks/vbao-generated-shader-inspection-summary.md`
+
+| Product preset | Sample mode | Full resolution | VBAO shader programs | Fragment programs | Slice loop | Sample loop | Full-res JBU | Wide polish | Surprise pass | VBAO duplicate declaration warnings |
+| --- | --- | --- | ---: | ---: | --- | --- | --- | --- | --- | ---: |
+| `quality` | `product-preset` | yes | 2 | 2 | fixed `< 4` | fixed `< 8` | no | no | no | 0 |
+
+Decision:
+
+- Keep the raw noise pixel as an expression, not a named `toVar(...)`.
+- Generated shader inspection now fails when any VBAO duplicate declaration
+  warning appears. Release diagnostics are clean for this gate.
+
+## 2026-06-02 — Half-resolution raw source-coordinate correction gate
+
+Status: **half-res remains demoted**. Raw AO now separates source texture
+resolution from scaled output resolution, but the recaptured stage matrix still
+shows `raw` as the first failing stage at both resolutions.
+
+Capture command:
+
+```sh
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_VBAO_RECONSTRUCTION_STAGES='1'; $env:AO_BENCHMARK_PORT='5189'; pnpm --filter @horizonao/demo benchmark:ao
+```
+
+What changed:
+
+- `packages/horizon-ao/src/VBAONode.ts` now tracks `sourceResolution` separately
+  from scaled raw AO `resolution`.
+- Raw AO phase-atlas pixel selection uses source texture coordinates.
+- Raw AO safe UV clamping uses source texture texels, not half-resolution output
+  texels.
+
+Artifacts:
+
+- `artifacts/benchmarks/ao-production-latest.json`
+- `artifacts/benchmarks/ao-production-quality-summary.md`
+- `artifacts/benchmarks/screenshots-ao-production/`
+
+| Resolution | First failing stage | Final labels | Raw pattern/noise ↓ | Raw stripe ↓ | Final pattern/noise ↓ | Final stripe ↓ | Total product GPU ms |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 1920x1080 | `raw` | `noise,false-curvature,scale-mismatch` | 0.01286 | 0.13885 | 0.01103 | 0.13256 | 1.391 |
+| 1280x720 | `raw` | `noise,false-curvature,scale-mismatch` | 0.02458 | 0.21444 | 0.02347 | 0.19915 | 1.315 |
+
+Decision:
+
+- Keep the source-coordinate split. It is the correct contract for sampling
+  full-resolution depth/normal inputs from a half-resolution raw AO target.
+- Do **not** promote half-resolution. The failure labels survive recapture, so
+  this was a necessary correction, not the quality fix.
+- Do **not** tune cleanup/JBU yet. The first failing stage is still raw.
+- Move next to diagnostics cleanup: the known duplicate `vbaoPixel` warning
+  still reproduces during this capture.
+
+## 2026-06-01 — Half-resolution reconstruction stage autopsy gate
+
+Status: **stage evidence captured; first failing stage is raw**. This does not
+promote half-resolution. It only proves the autopsy path now captures each
+reconstruction stage separately.
+
+Capture command:
+
+```sh
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_VBAO_RECONSTRUCTION_STAGES='1'; $env:AO_BENCHMARK_PORT='5188'; pnpm --filter @horizonao/demo benchmark:ao
+```
+
+Notes:
+
+- The first attempt failed because port `5173` was already occupied; the valid
+  capture used isolated port `5188`.
+- Capture reproduced the known `vbaoPixel` duplicate-name warnings and WebGPU
+  timestamp-query pool warnings. Those remain diagnostics/timing debt, not
+  promotion evidence.
+
+Artifacts:
+
+- `artifacts/benchmarks/ao-production-latest.json`
+- `artifacts/benchmarks/ao-production-quality-summary.md`
+- `artifacts/benchmarks/screenshots-ao-production/`
+
+| Resolution | Stage coverage | Missing stages | First failing stage | Stage screenshots |
+| --- | ---: | --- | --- | --- |
+| 1920x1080 | 5/5 | none | `raw` | `raw`, `cleanup`, `resolve`, `polish`, `final` |
+| 1280x720 | 5/5 | none | `raw` | `raw`, `cleanup`, `resolve`, `polish`, `final` |
+
+Decision:
+
+- Because `raw` is the first failing stage in both captured resolutions, the
+  next fix should inspect half-resolution raw AO radius projection, sample
+  validity, and thickness scaling before tuning cleanup/JBU weights.
+- Do not blur harder yet. That would be cargo-culting the pipeline instead of
+  understanding where the error enters.
+
+## 2026-06-01 — Review archive completeness gate
+
+Status: **pass**. The release-candidate review manifest now lists the runtime
+entry point, internal VBAO pass files, benchmark-only noise helper, reference
+modules, tests, demo evidence scripts, specs, ADRs, and the manifest verifier.
+The verifier reports `missingFiles: []` and `missingImports: []`.
+
+Verification command:
+
+```sh
+node scripts/verify-vbao-review-archive.mjs
+```
+
+Result:
+
+- Manifest: `openspec/changes/vbao-release-candidate-gates/review-archive-manifest.md`
+- Missing files: `0`
+- Missing relative imports: `0`
+- Excluded generated artifacts: benchmark JSON/markdown/screenshots under
+  `artifacts/benchmarks/`, because `.gitignore` keeps them opt-in and they must
+  be force-added only when curated for a specific handoff.
+
+## 2026-06-01 — Generated shader inspection gate
+
+Status: **pass with diagnostics debt**. The captured WebGPU shader programs for
+the Museum VBAO product row confirm fixed `quality` loop bounds and no surprise
+full-res JBU, wide-polish, or extra pass shape. The known `vbaoPixel`
+duplicate-name warning still reproduces and is documented as diagnostics debt.
+
+Capture command:
+
+```sh
+$env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5182'; $env:PLAYWRIGHT_TEST_PORT='5182'; pnpm --filter @horizonao/demo exec node scripts/collect-vbao-generated-shader-inspection.mjs
+```
+
+Artifacts:
+
+- `artifacts/benchmarks/vbao-generated-shader-inspection-latest.json`
+- `artifacts/benchmarks/vbao-generated-shader-inspection-summary.md`
+
+| Product preset | Sample mode | Full resolution | VBAO shader programs | Fragment programs | Slice loop | Sample loop | Full-res JBU | Wide polish | Surprise pass | `vbaoPixel` warnings |
+| --- | --- | --- | ---: | ---: | --- | --- | --- | --- | --- | ---: |
+| `quality` | `product-preset` | yes | 2 | 2 | fixed `< 4` | fixed `< 8` | no | no | no | 3 |
+
+Decision:
+
+- The generated WGSL evidence matches the source contracts for the product
+  preset: fixed 4-slice / 8-sample hot loops are present.
+- No hidden full-resolution JBU, wide polish, or unexpected pass count was
+  detected in the captured product row.
+- The `vbaoPixel` duplicate-name warning is real and remains a non-blocking
+  diagnostics cleanup item; it does not hide a shader-shape failure.
+
+## 2026-06-01 — Half-resolution product quality gate
+
+Status: **half-res is not promoted**. It is cheaper in VBAO pass GPU time, but current product-preset evidence still carries `false-curvature` / `scale-mismatch` labels and worse stripe metrics in key rows. That is exactly why we measure this instead of guessing. CONCEPTS > vibes.
+
+Capture command:
+
+```sh
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5178'; $env:PLAYWRIGHT_TEST_PORT='5178'; pnpm --filter @horizonao/demo exec node scripts/collect-ao-benchmark.mjs
+```
+
+Notes:
+
+- Port `5173` was occupied by an unrelated `auto-cv` Vite server, so the valid combined capture used isolated port `5178`.
+- Capture emitted known blockers: repeated `THREE.TSL` duplicate-name warning for `vbaoPixel` and WebGPU timestamp-query pool warnings. These remain release-candidate debt for the generated-shader/diagnostics gate.
+- Rows below are product preset rows (`quality`, not debug sample/slice override rows).
+
+| Resolution | View | VBAO res | Sample mode | Pattern/noise ↓ | Stripe ↓ | Edge bleed ↓ | Thin-gap ↑ | Median frame ms | P95 frame ms | VBAO pass GPU ms | Failure labels | Screenshot |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 1920x1080 | beauty | half-res | product-preset | 0.02236 | 0.12792 | 0.02252 | 0.00435 | 1.10 | 1.40 | 0.958 | `noise,false-curvature,scale-mismatch` | `artifacts/benchmarks/screenshots-ao-production/1920x1080-museum-vbao-product-preset-half-res-product-beauty.png` |
+| 1920x1080 | beauty | full-res | product-preset | 0.02157 | 0.08717 | 0.01682 | 0.00389 | 1.20 | 1.50 | 2.418 | `noise,edge-bleed` | `artifacts/benchmarks/screenshots-ao-production/1920x1080-museum-vbao-product-preset-full-res-product-beauty.png` |
+| 1920x1080 | ao | half-res | product-preset | 0.01104 | 0.12846 | 0.00688 | 0.00184 | 1.20 | 1.60 | 1.038 | `noise,false-curvature,scale-mismatch` | `artifacts/benchmarks/screenshots-ao-production/1920x1080-museum-vbao-product-preset-half-res-product-ao.png` |
+| 1920x1080 | ao | full-res | product-preset | 0.01051 | 0.13563 | 0.00350 | 0.00153 | 0.90 | 1.20 | 2.435 | `noise,edge-bleed` | `artifacts/benchmarks/screenshots-ao-production/1920x1080-museum-vbao-product-preset-full-res-product-ao.png` |
+| 1280x720 | beauty | half-res | product-preset | 0.03559 | 0.17876 | 0.03071 | 0.00956 | 1.20 | 1.90 | 0.565 | `noise,false-curvature,scale-mismatch` | `artifacts/benchmarks/screenshots-ao-production/1280x720-museum-vbao-product-preset-half-res-product-beauty.png` |
+| 1280x720 | beauty | full-res | product-preset | 0.03447 | 0.15682 | 0.02872 | 0.00612 | 1.20 | 1.60 | 1.288 | `noise,edge-bleed` | `artifacts/benchmarks/screenshots-ao-production/1280x720-museum-vbao-product-preset-full-res-product-beauty.png` |
+| 1280x720 | ao | half-res | product-preset | 0.02347 | 0.19911 | 0.01109 | 0.00472 | 1.10 | 1.40 | 0.544 | `noise,false-curvature,scale-mismatch` | `artifacts/benchmarks/screenshots-ao-production/1280x720-museum-vbao-product-preset-half-res-product-ao.png` |
+| 1280x720 | ao | full-res | product-preset | 0.02305 | 0.19014 | 0.00969 | 0.00308 | 0.70 | 1.00 | 1.457 | `noise,edge-bleed` | `artifacts/benchmarks/screenshots-ao-production/1280x720-museum-vbao-product-preset-full-res-product-ao.png` |
+
+Decision:
+
+- Half-res remains an internal/performance experiment, not the promoted default product path.
+- The cost win is real: half-res VBAO pass totals are roughly `0.96 ms` vs `2.42 ms` at 1080p beauty, and `0.57 ms` vs `1.29 ms` at 720p beauty.
+- The quality gate fails today because half-res rows have worse stripe metrics and retain `false-curvature,scale-mismatch` labels. Fix the reconstruction evidence before promoting it.
+
+
+## 2026-06-01 — Noise reality gate after product-preset fix
+
+Status: **default noise source unchanged**. No candidate produced a clean Pareto win across product rows, so `phase-atlas-stable-hash` remains the default. This is the discipline: no shiny swap because one metric twitched.
+
+Capture command:
+
+```sh
+$env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5179'; $env:PLAYWRIGHT_TEST_PORT='5179'; pnpm --filter @horizonao/demo exec node scripts/collect-vbao-noise-source-comparison.mjs
+```
+
+Scope: full-resolution VBAO product rows after the Museum product path was corrected to use `quality: 'quality'` instead of explicit sample/slice overrides.
+
+| Resolution | View | Noise source | Median ms ↓ | P95 ms ↓ | Pattern/noise ↓ | Stripe ↓ | Edge bleed ↓ | Thin-gap ↑ | Failure labels | Screenshot |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| 1920x1080 | beauty | phase-atlas-stable-hash | 1.20 | 1.40 | 0.02157 | 0.08717 | 0.01682 | 0.00389 | `noise,edge-bleed` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1920x1080-museum-vbao-beauty-product-phase-atlas-stable-hash.png` |
+| 1920x1080 | beauty | ign | 1.40 | 2.20 | 0.02163 | 0.08672 | 0.01741 | 0.00391 | `noise` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1920x1080-museum-vbao-beauty-product-ign.png` |
+| 1920x1080 | beauty | static-stbn | 1.40 | 1.70 | 0.02129 | 0.08940 | 0.01834 | 0.00277 | `noise,edge-bleed,thin-gap` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1920x1080-museum-vbao-beauty-product-static-stbn.png` |
+| 1920x1080 | beauty | fast-like | 1.40 | 1.60 | 0.02134 | 0.08797 | 0.01599 | 0.00403 | `noise` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1920x1080-museum-vbao-beauty-product-fast-like.png` |
+| 1920x1080 | ao | phase-atlas-stable-hash | 1.00 | 1.10 | 0.01051 | 0.13563 | 0.00350 | 0.00153 | `noise,edge-bleed` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1920x1080-museum-vbao-ao-product-phase-atlas-stable-hash.png` |
+| 1920x1080 | ao | ign | 1.00 | 1.30 | 0.01057 | 0.13465 | 0.00381 | 0.00158 | `noise,edge-bleed` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1920x1080-museum-vbao-ao-product-ign.png` |
+| 1920x1080 | ao | static-stbn | 1.00 | 1.40 | 0.01038 | 0.13746 | 0.00405 | 0.00097 | `noise,edge-bleed,thin-gap` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1920x1080-museum-vbao-ao-product-static-stbn.png` |
+| 1920x1080 | ao | fast-like | 0.90 | 1.20 | 0.01040 | 0.13697 | 0.00305 | 0.00162 | `noise` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1920x1080-museum-vbao-ao-product-fast-like.png` |
+| 1280x720 | beauty | phase-atlas-stable-hash | 1.20 | 1.60 | 0.03447 | 0.15682 | 0.02872 | 0.00612 | `noise,edge-bleed` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1280x720-museum-vbao-beauty-product-phase-atlas-stable-hash.png` |
+| 1280x720 | beauty | ign | 1.20 | 1.50 | 0.03449 | 0.15706 | 0.02943 | 0.00606 | `noise` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1280x720-museum-vbao-beauty-product-ign.png` |
+| 1280x720 | beauty | static-stbn | 1.40 | 1.80 | 0.03433 | 0.15611 | 0.03027 | 0.00523 | `noise,edge-bleed,thin-gap` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1280x720-museum-vbao-beauty-product-static-stbn.png` |
+| 1280x720 | beauty | fast-like | 1.40 | 1.60 | 0.03436 | 0.15775 | 0.02801 | 0.00619 | `noise` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1280x720-museum-vbao-beauty-product-fast-like.png` |
+| 1280x720 | ao | phase-atlas-stable-hash | 1.00 | 1.30 | 0.02305 | 0.19014 | 0.00969 | 0.00308 | `noise,edge-bleed` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1280x720-museum-vbao-ao-product-phase-atlas-stable-hash.png` |
+| 1280x720 | ao | ign | 0.90 | 1.10 | 0.02307 | 0.19036 | 0.01001 | 0.00305 | `noise` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1280x720-museum-vbao-ao-product-ign.png` |
+| 1280x720 | ao | static-stbn | 1.00 | 1.70 | 0.02302 | 0.19126 | 0.01029 | 0.00261 | `noise,edge-bleed,thin-gap` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1280x720-museum-vbao-ao-product-static-stbn.png` |
+| 1280x720 | ao | fast-like | 1.00 | 1.20 | 0.02301 | 0.19068 | 0.00926 | 0.00311 | `noise` | `artifacts/benchmarks/screenshots-vbao-noise-sources/1280x720-museum-vbao-ao-product-fast-like.png` |
+
+Decision:
+
+- Keep `phase-atlas-stable-hash` as the default.
+- Reject `ign` for now: it does not reduce pattern/noise materially and still carries `noise` labels; current implementation is also a CPU-generated atlas texture, not a procedural/no-texture shader path.
+- Reject `static-stbn` for now: it regresses thin-gap and edge-bleed labels in multiple product rows.
+- Reject `fast-like` for now: it has some favorable edge/thin-gap proxies, but still carries `noise` labels and does not establish a broad Pareto win.
+- Add procedural/no-texture IGN as a future task/blocker before making any mobile bandwidth claim about IGN.
+
+Implementation blocker:
+
+- `packages/horizon-ao/src/vbaoNoise.ts` builds every candidate through `createVbaoNoiseTexture(...)` and `DataTexture`.
+- `packages/horizon-ao/src/vbaoSampling.ts` defines IGN as `ignUnit(...)`, but it is baked into atlas channels by `sampleVbaoPhaseChannels(...)`; it is not sampled procedurally in the shader today.
+
+
 ## 2026-06-01 — Reference AO fixture gate started
 
 Status: **reference verifier started; no production quality promotion claimed**.
@@ -11,18 +527,18 @@ Status: **reference verifier started; no production quality promotion claimed**.
 What changed:
 
 - Added deterministic finite-radius ray-cast AO reference fixtures in
-  `packages/horizon-ao/src/reference/aoRaycastReference.ts`.
+  `packages/horizon-ao/reference/aoRaycastReference.ts`.
 - Added Vitest coverage in
-  `packages/horizon-ao/src/__tests__/aoRaycastReference.test.ts`.
+  `packages/horizon-ao/reference/__tests__/aoRaycastReference.test.ts`.
 - Added report rows/summaries in
-  `packages/horizon-ao/src/reference/aoReferenceReport.ts` and
-  `packages/horizon-ao/src/__tests__/aoReferenceReport.test.ts`.
+  `packages/horizon-ao/reference/aoReferenceReport.ts` and
+  `packages/horizon-ao/reference/__tests__/aoReferenceReport.test.ts`.
 - Added strict canonical VBAO lane in
-  `packages/horizon-ao/src/reference/canonicalVbaoReference.ts` and
-  `packages/horizon-ao/src/__tests__/canonicalVbaoReference.test.ts`.
+  `packages/horizon-ao/reference/canonicalVbaoReference.ts` and
+  `packages/horizon-ao/reference/__tests__/canonicalVbaoReference.test.ts`.
 - Added canonical/product drift report in
-  `packages/horizon-ao/src/reference/vbaoCanonicalDriftReport.ts` and
-  `packages/horizon-ao/src/__tests__/vbaoCanonicalDriftReport.test.ts`.
+  `packages/horizon-ao/reference/vbaoCanonicalDriftReport.ts` and
+  `packages/horizon-ao/reference/__tests__/vbaoCanonicalDriftReport.test.ts`.
 - Added `ssao` and single-row internally filtered `n8ao` capture support to
   `apps/demo/scripts/collect-ao-benchmark.mjs` so future production screenshot
   metrics can cover the baselines the lab exposes.
@@ -60,16 +576,16 @@ Decision:
 Validation:
 
 ```sh
-node_modules\.bin\vitest run packages/horizon-ao/src/__tests__/aoRaycastReference.test.ts
+node_modules\.bin\vitest run packages/horizon-ao/reference/__tests__/aoRaycastReference.test.ts
 # 1 file / 5 tests passed
 
-node_modules\.bin\vitest run packages/horizon-ao/src/__tests__/aoReferenceReport.test.ts
+node_modules\.bin\vitest run packages/horizon-ao/reference/__tests__/aoReferenceReport.test.ts
 # 1 file / 4 tests passed
 
-node_modules\.bin\vitest run packages/horizon-ao/src/__tests__/canonicalVbaoReference.test.ts
+node_modules\.bin\vitest run packages/horizon-ao/reference/__tests__/canonicalVbaoReference.test.ts
 # 1 file / 5 tests passed
 
-node_modules\.bin\vitest run packages/horizon-ao/src/__tests__/vbaoCanonicalDriftReport.test.ts
+node_modules\.bin\vitest run packages/horizon-ao/reference/__tests__/vbaoCanonicalDriftReport.test.ts
 # 1 file / 4 tests passed
 
 node_modules\.bin\tsc -p packages\horizon-ao\tsconfig.json --noEmit
@@ -80,6 +596,201 @@ node_modules\.bin\vitest run
 
 Production build was not run.
 
+
+## 2026-06-01 — Production reference gate integration started
+
+Status: **product rows are wired into the reference gate; missing fixture
+observations still block quality claims**.
+
+What changed:
+
+- Added
+  `packages/horizon-ao/reference/aoProductionReferenceGate.ts` to compare
+  product AO rows for `vbao`, `gtao`, `ssao`, and `n8ao` against the ray-cast
+  fixture report when rows provide explicit fixture observations.
+- The same gate includes the canonical/product VBAO drift report beside the
+  ray-cast report, so product VBAO cannot hide canonical drift behind polish.
+- Added `AO Reference Gate Status` output to
+  `apps/demo/scripts/profiling/productionReport.mjs`.
+- Updated `apps/demo/scripts/collect-ao-benchmark.mjs` so future production
+  benchmark JSON includes reference-gate product row statuses.
+
+Decision:
+
+- Screenshot/FPS rows are not treated as physical AO observations.
+- Product rows without `referenceObservations` are reported as
+  `missing-reference-observation`, not pass.
+- Product reference comparison is limited to AO-view product rows:
+  `VBAO product`, `GTAO denoised`, `SSAO denoised`, and internally filtered
+  `N8AO`.
+
+Validation:
+
+```sh
+node_modules\.bin\vitest run packages/horizon-ao/reference/__tests__/aoProductionReferenceGate.test.ts packages/horizon-ao/reference/__tests__/aoReferenceReport.test.ts packages/horizon-ao/reference/__tests__/vbaoCanonicalDriftReport.test.ts packages/horizon-ao/src/__tests__/vbaoProfilingFailureLabels.test.ts --reporter=verbose
+# 4 files / 18 tests passed
+```
+
+Production build was not run.
+
+
+## 2026-06-01 — Reference/report modules moved outside runtime src
+
+Status: **architecture boundary tightened; runtime package source now excludes
+reference/report modules**.
+
+What changed:
+
+- Moved scalar/reference/report code to `packages/horizon-ao/reference/`.
+- Moved related Vitest suites to `packages/horizon-ao/reference/__tests__/`.
+- Added `packages/horizon-ao/tsconfig.reference.json` and updated the package
+  test/typecheck scripts so evidence code stays verified without living under
+  runtime `src/`.
+
+Decision:
+
+- Product runtime code stays under `packages/horizon-ao/src/`.
+- Reference/report code may import product math/constants, but product code must
+  not import reference/report modules.
+
+Validation:
+
+```sh
+pnpm --filter @horizonao/core test
+# 11 files / 84 tests passed
+
+pnpm test
+# packages/horizon-ao: 11 files / 84 tests passed
+# apps/demo: 1 file / 2 tests passed
+
+pnpm --filter @horizonao/core typecheck
+# passed
+
+pnpm --filter @horizonao/core typecheck:tsgo
+# passed
+
+pnpm --filter @horizonao/demo typecheck
+# passed
+
+pnpm typecheck
+# passed
+
+pnpm lint
+# passed
+
+node --check apps/demo/scripts/collect-ao-benchmark.mjs
+node --check apps/demo/scripts/collect-vbao-noise-source-comparison.mjs
+node --check apps/demo/scripts/profiling/productionReport.mjs
+node --check apps/demo/scripts/profiling/screenshotMetrics.mjs
+# passed
+```
+
+Production build was not run.
+
+
+## 2026-06-01 — VBAO production pass timings captured
+
+Status: **raw/cleanup/resolve/polish rows now use measured WebGPU timestamps;
+no placeholder timings are used**.
+
+Artifacts:
+
+- JSON: `artifacts/benchmarks/ao-production-latest.json`
+- Markdown summary: `artifacts/benchmarks/ao-production-quality-summary.md`
+- Screenshots: `artifacts/benchmarks/screenshots-ao-production/`
+
+Commands:
+
+```powershell
+$env:AO_BENCHMARK_PORT='41874'; $env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1920'; $env:AO_BENCHMARK_HEIGHT='1080'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='10'; pnpm --dir apps/demo benchmark:ao
+$env:AO_BENCHMARK_PORT='41875'; $env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='10'; pnpm --dir apps/demo benchmark:ao
+```
+
+Measured product pass timings (median GPU ms from 10 steady-state timestamp
+samples; `n/a` means the pass is elided for that graph, not zero cost):
+
+| Resolution | View | VBAO res | Output | Raw ms | Cleanup ms | Resolve ms | Polish ms | Total product ms |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 1920x1080 | beauty | half-res | product | 0.938 | 0.177 | 0.188 | n/a | 1.304 |
+| 1920x1080 | beauty | full-res | product | 3.928 | n/a | n/a | 0.318 | 4.247 |
+| 1920x1080 | ao | half-res | product | 0.716 | 0.157 | 0.144 | n/a | 1.017 |
+| 1920x1080 | ao | full-res | product | 4.044 | n/a | n/a | 0.332 | 4.376 |
+| 1280x720 | beauty | half-res | product | 0.457 | 0.125 | 0.132 | n/a | 0.714 |
+| 1280x720 | beauty | full-res | product | 1.458 | n/a | n/a | 0.197 | 1.655 |
+| 1280x720 | ao | half-res | product | 0.392 | 0.080 | 0.073 | n/a | 0.545 |
+| 1280x720 | ao | full-res | product | 1.317 | n/a | n/a | 0.151 | 1.467 |
+
+Notes:
+
+- The production summary now includes the view column in pass timing rows so
+  Beauty and AO timings are not ambiguous duplicates.
+- The collector treats an emitted timestamp as `measured` even when the static
+  graph expectation thought the pass would be skipped.
+- A single all-resolution run lost the Vite server before the second viewport,
+  so the promoted artifact was assembled from the two successful resolution
+  captures above.
+- The runs emitted the existing Three TSL duplicate-name and timestamp query
+  pool warnings. The rows above came from completed WebGPU timestamp captures;
+  the warnings are not promoted into a performance win claim.
+
+Production build was not run.
+
+
+## 2026-06-01 — VBAO noise source comparison
+
+Status: **comparison captured; no noise-source promotion**.
+
+Artifacts:
+
+- JSON: `artifacts/benchmarks/vbao-noise-source-comparison-latest.json`
+- Markdown summary: `artifacts/benchmarks/vbao-noise-source-comparison-summary.md`
+- Screenshots: `artifacts/benchmarks/screenshots-vbao-noise-sources/`
+
+Command:
+
+```powershell
+$env:AO_BENCHMARK_PORT='41870'; $env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; pnpm --dir apps/demo benchmark:vbao-noise
+```
+
+Scope:
+
+- Scene/camera: Museum / `museumBaseline`.
+- Resolutions: `1920x1080` and `1280x720`.
+- Rows captured: 32 (`beauty` + `ao`, `raw-debug` + `product`, four noise sources).
+- Timing basis: Museum route frame sampler (`latest.medianFrameMs` / `latest.p95FrameMs`), not pass-level GPU timestamps.
+- Metric basis: cropped screenshot luma proxies from `screenshotMetrics.mjs`.
+
+Primary AO/product rows:
+
+| Resolution | Noise source | Median ms ↓ | p95 ms ↓ | Pattern/noise ↓ | Stripe ↓ | Edge bleed proxy ↓ | Thin-gap proxy ↑ | Failure labels |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 1920x1080 | phase-atlas-stable-hash | 0.900 | 2.100 | 0.01066 | 0.13415 | 0.00375 | 0.00182 | noise,edge-bleed |
+| 1920x1080 | ign | 1.000 | 1.300 | 0.01064 | 0.13353 | 0.00409 | 0.00174 | noise,edge-bleed |
+| 1920x1080 | static-stbn | 1.100 | 1.300 | 0.01043 | 0.13699 | 0.00461 | 0.00107 | noise,edge-bleed,thin-gap |
+| 1920x1080 | fast-like | 0.800 | 1.100 | 0.01046 | 0.13661 | 0.00320 | 0.00182 | noise |
+| 1280x720 | phase-atlas-stable-hash | 0.800 | 1.100 | 0.02312 | 0.18972 | 0.00992 | 0.00333 | noise,edge-bleed |
+| 1280x720 | ign | 0.700 | 1.000 | 0.02312 | 0.18998 | 0.01019 | 0.00319 | noise |
+| 1280x720 | static-stbn | 1.300 | 2.100 | 0.02303 | 0.19082 | 0.01072 | 0.00268 | noise,edge-bleed,thin-gap |
+| 1280x720 | fast-like | 0.800 | 1.200 | 0.02304 | 0.19089 | 0.00939 | 0.00334 | noise |
+
+Decision:
+
+- Keep `phase-atlas-stable-hash` as the production default.
+- `fast-like` is the best follow-up candidate: it improves edge-bleed proxy in
+  this capture and is not slower in primary AO/product rows, but it still carries
+  the `noise` label and needs fixture/readback evidence before any promotion.
+- `ign` is not a clear win: similar noise, slightly worse edge/gap proxies in
+  several rows.
+- `static-stbn` is rejected for now: lower pattern/noise in some rows is bought
+  with edge-bleed and thin-gap proxy regressions plus worse timing.
+
+Notes:
+
+- The run emitted repeated Three TSL duplicate-name warnings for `vbaoPixel` and
+  WebGPU timestamp query pool warnings. The collector completed and wrote all 32
+  rows; these warnings do not promote or invalidate a candidate by themselves.
+- `edgeBleedProxy` and `thinGapPreservationProxy` are screenshot proxies, not
+  physical AO truth. Fixture/readback gates still own correctness claims.
 
 ## Current VBAO State - 2026-05-27
 
@@ -92,7 +803,7 @@ Current production boundary:
 - There is no public `VBAODenoiseNode` toolkit or hidden external blur in the package API; `softness` controls optional internal polish.
 - Default full-resolution polish uses the near 8-tap `POISSON8` stencil only; any wider full-resolution tap budget needs separate timing and screenshot evidence before it can become default.
 - Production sampling is single-scheme `phase-atlas-stable-hash` with live shader x² near-biased spacing.
-- Noise source changes are gated: the current stable hash atlas remains default until a committed matrix compares it against IGN, static STBN, or FAST-like candidates with timing and failure labels.
+- Noise source changes remain gated: the 2026-06-01 matrix compared `phase-atlas-stable-hash`, IGN, static STBN, and FAST-like candidates; no candidate was promoted, so the stable hash atlas remains default.
 - Slices are uniformly averaged after cosine-measure sectorization; projected-normal length is used to frame the CDF, not to weight slices.
 - `normalNode` remains required.
 - Runtime Museum/E2E/benchmark paths no longer expose the old research candidate controls.
@@ -391,7 +1102,7 @@ Validation:
 node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts
 # 1 file / 8 tests passed
 
-node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/src/__tests__/vbaoReference.test.ts packages/horizon-ao/src/__tests__/vbaoRadiusThicknessScaleGate.test.ts packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts
+node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoSupportBitmaskVisibility.test.ts packages/horizon-ao/reference/__tests__/vbaoReference.test.ts packages/horizon-ao/src/__tests__/vbaoRadiusThicknessScaleGate.test.ts packages/horizon-ao/src/__tests__/vbaoGpuReadbackParity.test.ts
 # 4 files / 102 tests passed
 
 node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__

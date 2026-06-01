@@ -52,8 +52,18 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { ao as gtao } from 'three/addons/tsl/display/GTAONode.js'
 import { denoise } from 'three/addons/tsl/display/DenoiseNode.js'
+import { traa } from 'three/addons/tsl/display/TRAANode.js'
 import { N8AONode, createN8AOScenePass } from 'n8ao-webgpu'
 import { VBAONode } from '@horizonao/core'
+import { VBAOFullResPolishNode } from '../../../../packages/horizon-ao/src/VBAOFullResPolishNode'
+import { VBAOHalfResCleanupNode } from '../../../../packages/horizon-ao/src/VBAOHalfResCleanupNode'
+import { VBAOResolveNode } from '../../../../packages/horizon-ao/src/VBAOResolveNode'
+import { createGpuPassTimingProbe, type GpuPassTiming } from './gpuPassTimingProbe'
+import {
+  VBAO_BENCHMARK_NOISE_SOURCES,
+  createVbaoBenchmarkNoiseTexture,
+  type VbaoBenchmarkNoiseSourceName,
+} from './vbaoBenchmarkNoise'
 
 type PageState = 'loading' | 'ready' | 'error'
 type CompareMode = 'off' | 'gtao' | 'ssao' | 'vbao' | 'n8ao'
@@ -62,7 +72,22 @@ type ViewMode = 'beauty' | 'ao'
 type SceneVariant = 'city' | 'museum'
 type VbaoSamplingSchedule = 'phase-atlas-stable-hash'
 type VbaoBenchmarkSamplingSchedule = VbaoSamplingSchedule | 'n/a'
-type VbaoBenchmarkSamplePreset = 'baseline' | 'n/a'
+type VbaoNoiseSource = VbaoBenchmarkNoiseSourceName
+type VbaoBenchmarkNoiseSource = VbaoNoiseSource | 'n/a'
+type VbaoBenchmarkOptions = NonNullable<ConstructorParameters<typeof VBAONode>[3]> & {
+  readonly benchmark?: { readonly noiseTexture?: ReturnType<typeof createVbaoBenchmarkNoiseTexture> }
+  readonly temporalMode?: VbaoTemporalMode
+}
+type VbaoSampleMode = 'product-preset' | 'debug-override' | 'spatial-ultra'
+type VbaoTemporalMode = 'off' | 'host' | 'internal'
+type VbaoHostTaaMode = 'off' | 'traa'
+type VbaoBenchmarkTemporalMode = VbaoTemporalMode | 'n/a'
+type VbaoBenchmarkHostTaaMode = VbaoHostTaaMode | 'n/a'
+type VbaoBenchmarkSamplePreset = 'quality' | 'debug-override' | 'spatial-ultra' | 'n/a'
+type VbaoBenchmarkTemporalDiagnostics =
+  | NonNullable<ReturnType<VBAONode['getInternalTemporalDiagnostics']>>
+  | null
+type VbaoReconstructionStage = 'raw' | 'cleanup' | 'resolve' | 'polish' | 'final'
 type TslIntLoop = (
   params: {
     readonly start: unknown
@@ -92,7 +117,12 @@ interface Stats {
   readonly denoiseEnabled: boolean
   readonly fullResolutionVbao: boolean
   readonly vbaoSamplingSchedule: VbaoBenchmarkSamplingSchedule
+  readonly vbaoNoiseSource: VbaoBenchmarkNoiseSource
+  readonly vbaoTemporalMode: VbaoBenchmarkTemporalMode
+  readonly vbaoHostTaaMode: VbaoBenchmarkHostTaaMode
+  readonly vbaoTemporalDiagnostics: VbaoBenchmarkTemporalDiagnostics
   readonly vbaoSamplePreset: VbaoBenchmarkSamplePreset
+  readonly vbaoReconstructionStage: VbaoReconstructionStage | 'n/a'
   readonly vbaoRadius: number
   readonly vbaoThickness: number
   readonly vbaoSamples: number
@@ -120,7 +150,10 @@ const COMPOSE_DEBUG_MODES = [
   'n8ao',
 ] as const satisfies readonly ComposeDebugMode[]
 const VBAO_PRODUCTION_SAMPLING_SCHEDULE: VbaoSamplingSchedule = 'phase-atlas-stable-hash'
-const VBAO_SAMPLE_PRESET = { samples: 8, slices: 3 } as const
+const VBAO_PRODUCT_QUALITY = 'quality' as const
+const VBAO_PRODUCT_PRESET_SHAPE = { samples: 8, slices: 4 } as const
+const VBAO_DEBUG_OVERRIDE_SHAPE = VBAO_PRODUCT_PRESET_SHAPE
+const VBAO_SPATIAL_ULTRA_SHAPE = { samples: 10, slices: 4 } as const
 const VBAO_RADIUS_STRESS_PRESETS = {
   baseline: { radius: 0.35, thickness: 0.09 },
 } as const
@@ -130,11 +163,28 @@ interface AoBenchmarkApi {
   latest?: Stats
   readonly history: Stats[]
   reset: () => void
+  inspectVbaoGeneratedShaders: () => VbaoGeneratedShaderInspection
+  resolveGpuPassTimings: () => Promise<readonly GpuPassTiming[]>
+  setVbaoReconstructionStage: (stage: VbaoReconstructionStage) => void
   snapshot: () => {
     readonly environment: AoBenchmarkEnvironment
     readonly latest?: Stats
     readonly history: Stats[]
   }
+}
+
+interface VbaoGeneratedShaderProgram {
+  readonly stage: 'vertex' | 'fragment'
+  readonly code: string
+  readonly length: number
+  readonly containsVbao: boolean
+}
+
+interface VbaoGeneratedShaderInspection {
+  readonly productPreset: typeof VBAO_PRODUCT_QUALITY
+  readonly sampleMode: VbaoSampleMode
+  readonly fullResolution: boolean
+  readonly shaderPrograms: readonly VbaoGeneratedShaderProgram[]
 }
 
 declare global {
@@ -153,6 +203,76 @@ function sortComposeDebugModes(modes: readonly ComposeDebugMode[]) {
 
 function getComposeDebugLabel(mode: ComposeDebugMode) {
   return mode.toUpperCase()
+}
+
+function getRequestedVbaoNoiseSource(): VbaoNoiseSource {
+  const requested = new URLSearchParams(window.location.search).get('vbaoNoiseSource')
+  return VBAO_BENCHMARK_NOISE_SOURCES.some((source) => source === requested)
+    ? (requested as VbaoNoiseSource)
+    : VBAO_PRODUCTION_SAMPLING_SCHEDULE
+}
+
+function getRequestedVbaoSampleMode(): VbaoSampleMode {
+  const requested = new URLSearchParams(window.location.search).get('vbaoSampleMode')
+  if (requested === 'debug-override' || requested === 'spatial-ultra') return requested
+  return 'product-preset'
+}
+
+function getRequestedVbaoTemporalMode(): VbaoTemporalMode {
+  const requested = new URLSearchParams(window.location.search).get('vbaoTemporalMode')
+  if (requested === 'internal') return 'internal'
+  return requested === 'host' ? 'host' : 'off'
+}
+
+function getRequestedVbaoHostTaaMode(): VbaoHostTaaMode {
+  const requested = new URLSearchParams(window.location.search).get('vbaoHostTaa')
+  return requested === 'traa' ? 'traa' : 'off'
+}
+
+function getRequestedVbaoReconstructionStage(): VbaoReconstructionStage {
+  const requested = new URLSearchParams(window.location.search).get('vbaoReconstructionStage')
+  if (
+    requested === 'raw' ||
+    requested === 'cleanup' ||
+    requested === 'resolve' ||
+    requested === 'polish' ||
+    requested === 'final'
+  ) {
+    return requested
+  }
+  return 'final'
+}
+
+function collectGeneratedShaderPrograms(renderer: WebGPURenderer): readonly VbaoGeneratedShaderProgram[] {
+  const programs = (
+    renderer as unknown as {
+      readonly _pipelines?: {
+        readonly programs?: {
+          readonly vertex?: Map<string, { readonly code?: string }>
+          readonly fragment?: Map<string, { readonly code?: string }>
+        }
+      }
+    }
+  )._pipelines?.programs
+
+  const collectStage = (
+    stage: VbaoGeneratedShaderProgram['stage'],
+    shaderMap: Map<string, { readonly code?: string }> | undefined,
+  ) =>
+    [...(shaderMap?.entries() ?? [])].map(([sourceCode, program]) => {
+      const code = program.code ?? sourceCode
+      return {
+        stage,
+        code,
+        length: code.length,
+        containsVbao: code.toLowerCase().includes('vbao'),
+      }
+    })
+
+  return [
+    ...collectStage('vertex', programs?.vertex),
+    ...collectStage('fragment', programs?.fragment),
+  ].filter((program) => program.containsVbao)
 }
 
 export function CityScene() {
@@ -223,7 +343,7 @@ async function runGtaoReferenceScene(
     antialias: true,
     forceWebGL: false,
     powerPreference: 'high-performance',
-    trackTimestamp: false,
+    trackTimestamp: true,
   })
   renderer.toneMapping = ACESFilmicToneMapping
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
@@ -233,8 +353,10 @@ async function runGtaoReferenceScene(
     (renderer as unknown as { readonly backend?: { readonly isWebGLBackend?: boolean } }).backend
       ?.isWebGLBackend === true
   container.dataset.rendererBackend = isWebGlFallback ? 'webgl' : 'webgpu'
+  const gpuPassTimingProbe = createGpuPassTimingProbe(renderer)
 
   if (signal.aborted) {
+    gpuPassTimingProbe.dispose()
     renderer.dispose()
     canvas.remove()
     return
@@ -256,7 +378,23 @@ async function runGtaoReferenceScene(
   controls.target.set(0, 0.7, 0)
   controls.update()
 
-  const pipelines = isWebGlFallback ? undefined : createReferencePipelines(renderer, scene, camera)
+  const vbaoNoiseSource = getRequestedVbaoNoiseSource()
+  const vbaoSampleMode = getRequestedVbaoSampleMode()
+  const vbaoTemporalMode = getRequestedVbaoTemporalMode()
+  const vbaoHostTaaMode = getRequestedVbaoHostTaaMode()
+  let vbaoReconstructionStage = getRequestedVbaoReconstructionStage()
+  const pipelines = isWebGlFallback
+    ? undefined
+    : createReferencePipelines(
+        renderer,
+        scene,
+        camera,
+        vbaoNoiseSource,
+        vbaoSampleMode,
+        vbaoTemporalMode,
+        vbaoHostTaaMode,
+        () => vbaoReconstructionStage,
+      )
   let activeMode: CompareMode = 'off'
   let viewMode: ViewMode = 'beauty'
   let composeDebugEnabled = !isWebGlFallback
@@ -330,6 +468,21 @@ async function runGtaoReferenceScene(
       requiredBackend: 'webgpu',
       userAgent: navigator.userAgent,
     },
+    () => {
+      if (pipelines === undefined) {
+        return {
+          productPreset: VBAO_PRODUCT_QUALITY,
+          sampleMode: vbaoSampleMode,
+          fullResolution: fullResolutionVbao,
+          shaderPrograms: [],
+        }
+      }
+      return pipelines.inspectVbaoGeneratedShaders(fullResolutionVbao)
+    },
+    gpuPassTimingProbe.resolveLatestVbaoPassTimings,
+    (stage) => {
+      vbaoReconstructionStage = stage
+    },
   )
   const stats = createStatsSampler((next) => {
     benchmark.publish(next)
@@ -364,11 +517,31 @@ async function runGtaoReferenceScene(
       denoiseEnabled,
       fullResolutionVbao,
       vbaoSamplingSchedule: usesVbao ? VBAO_PRODUCTION_SAMPLING_SCHEDULE : 'n/a',
-      vbaoSamplePreset: usesVbao ? 'baseline' : 'n/a',
+      vbaoNoiseSource: usesVbao ? vbaoNoiseSource : 'n/a',
+      vbaoTemporalMode: usesVbao ? vbaoTemporalMode : 'n/a',
+      vbaoHostTaaMode: usesVbao ? vbaoHostTaaMode : 'n/a',
+      vbaoTemporalDiagnostics:
+        usesVbao && vbaoTemporalMode === 'internal' && pipelines !== undefined
+          ? (pipelines.getVbaoTemporalDiagnostics(fullResolutionVbao) ?? null)
+          : null,
+      vbaoSamplePreset: usesVbao
+        ? vbaoSampleMode !== 'product-preset'
+          ? vbaoSampleMode
+          : VBAO_PRODUCT_QUALITY
+        : 'n/a',
+      vbaoReconstructionStage: usesVbao ? vbaoReconstructionStage : 'n/a',
       vbaoRadius: usesVbao ? VBAO_RADIUS_STRESS_PRESETS.baseline.radius : 0,
       vbaoThickness: usesVbao ? VBAO_RADIUS_STRESS_PRESETS.baseline.thickness : 0,
-      vbaoSamples: usesVbao ? VBAO_SAMPLE_PRESET.samples : 0,
-      vbaoSlices: usesVbao ? VBAO_SAMPLE_PRESET.slices : 0,
+      vbaoSamples: usesVbao
+        ? vbaoSampleMode === 'spatial-ultra'
+          ? VBAO_SPATIAL_ULTRA_SHAPE.samples
+          : VBAO_PRODUCT_PRESET_SHAPE.samples
+        : 0,
+      vbaoSlices: usesVbao
+        ? vbaoSampleMode === 'spatial-ultra'
+          ? VBAO_SPATIAL_ULTRA_SHAPE.slices
+          : VBAO_PRODUCT_PRESET_SHAPE.slices
+        : 0,
       viewport: {
         width: rendererCssWidth,
         height: rendererCssHeight,
@@ -410,6 +583,7 @@ async function runGtaoReferenceScene(
     panel.remove()
     labels.remove()
     benchmark.dispose()
+    gpuPassTimingProbe.dispose()
     pipelines?.dispose()
     renderer.dispose()
     canvas.remove()
@@ -420,6 +594,11 @@ function createReferencePipelines(
   renderer: WebGPURenderer,
   scene: Scene,
   camera: PerspectiveCamera,
+  vbaoNoiseSource: VbaoNoiseSource,
+  vbaoSampleMode: VbaoSampleMode,
+  vbaoTemporalMode: VbaoTemporalMode,
+  vbaoHostTaaMode: VbaoHostTaaMode,
+  getVbaoReconstructionStage: () => VbaoReconstructionStage,
 ) {
   const prePass = pass(scene, camera)
   prePass.transparent = false
@@ -437,6 +616,7 @@ function createReferencePipelines(
     sampleUv: Parameters<ReturnType<typeof prePass.getTextureNode>['sample']>[0],
   ) => colorToDirection(prePass.getTextureNode().sample(sampleUv))
   const prePassDepth = prePass.getTextureNode('depth')
+  const prePassVelocity = prePass.getTextureNode('velocity')
   const normalTexture = prePass.getTexture('output')
   normalTexture.type = UnsignedByteType
 
@@ -470,7 +650,11 @@ function createReferencePipelines(
           .add(vec3(angle.cos(), angle.sin(), 0).xy.mul(sampleRadius))
           .toVar()
         const sampleDepth = prePassDepth.sample(sampleUv).r.toVar()
-        const sampleView = getViewPosition(sampleUv, sampleDepth, ssaoProjectionMatrixInverse).toVar()
+        const sampleView = getViewPosition(
+          sampleUv,
+          sampleDepth,
+          ssaoProjectionMatrixInverse,
+        ).toVar()
         const sampleDelta = sampleView.sub(centerView).toVar()
         const sampleDistance = sqrt(sampleDelta.dot(sampleDelta)).toVar()
         const rangeWeight = float(1).sub(sampleDistance.div(ssaoRadius)).clamp(0, 1)
@@ -563,6 +747,7 @@ function createReferencePipelines(
     readonly aoRaw: RenderPipeline
     readonly aoDenoised: RenderPipeline
   }
+  type VbaoStagePipelineSet = Record<VbaoReconstructionStage, RenderPipeline>
   type ComposeTarget = {
     readonly renderTarget: RenderTarget
     readonly copyPipeline: RenderPipeline
@@ -613,11 +798,15 @@ function createReferencePipelines(
     | {
         readonly fullResolution: boolean
         readonly node: VBAONode
+        readonly stageNodes: readonly {
+          dispose: () => void
+        }[]
         readonly pipelines: PipelineSet
+        readonly stagePipelines: VbaoStagePipelineSet | undefined
       }
     | undefined
 
-  const disposePipelineSet = (pipelineSet: PipelineSet) => {
+  const disposePipelineSet = (pipelineSet: Record<string, RenderPipeline>) => {
     const disposedPipelines = new Set<RenderPipeline>()
     Object.values(pipelineSet).forEach((pipeline) => {
       if (disposedPipelines.has(pipeline)) return
@@ -629,40 +818,136 @@ function createReferencePipelines(
   const disposeActiveVbao = () => {
     if (activeVbao === undefined) return
     disposePipelineSet(activeVbao.pipelines)
+    if (activeVbao.stagePipelines !== undefined) disposePipelineSet(activeVbao.stagePipelines)
+    activeVbao.stageNodes.forEach((node) => node.dispose())
     activeVbao.node.dispose()
     activeVbao = undefined
   }
 
   const createVbaoPipelines = (fullResolution: boolean) => {
-    const vbaoNode = new VBAONode(prePassDepth, prePassNormal, camera, {
+    const vbaoOptions: VbaoBenchmarkOptions = {
+      quality: VBAO_PRODUCT_QUALITY,
       radius: baselineVbaoRadius.radius,
       thickness: baselineVbaoRadius.thickness,
-      scale: 0.85,
+      contrast: 0.85,
       softness: 0.45,
-      samples: VBAO_SAMPLE_PRESET.samples,
-      slices: VBAO_SAMPLE_PRESET.slices,
       resolutionScale: fullResolution ? 1.0 : 0.5,
-    })
+      benchmark: { noiseTexture: createVbaoBenchmarkNoiseTexture(vbaoNoiseSource) },
+      temporalMode: vbaoTemporalMode,
+      ...(vbaoSampleMode === 'debug-override'
+        ? {
+            samples: VBAO_DEBUG_OVERRIDE_SHAPE.samples,
+            slices: VBAO_DEBUG_OVERRIDE_SHAPE.slices,
+          }
+        : vbaoSampleMode === 'spatial-ultra'
+          ? {
+              samples: VBAO_SPATIAL_ULTRA_SHAPE.samples,
+              slices: VBAO_SPATIAL_ULTRA_SHAPE.slices,
+            }
+        : {}),
+    }
+    const vbaoNode = new VBAONode(prePassDepth, prePassNormal, camera, vbaoOptions)
     const vbaoRawScalar = vbaoNode.getRawTextureNode().r
     const vbaoProductScalar = vbaoNode.getTextureNode().r
+    const useHostTaa = vbaoTemporalMode === 'host' && vbaoHostTaaMode === 'traa'
+    const vbaoBeautyProductNode = useHostTaa
+      ? traa(
+          vec4(sceneColor.rgb.mul(vbaoProductScalar), float(1)),
+          prePassDepth,
+          prePassVelocity,
+          camera,
+        )
+      : undefined
+    const vbaoAoProductNode = useHostTaa
+      ? traa(
+          vec4(vbaoProductScalar, vbaoProductScalar, vbaoProductScalar, float(1)),
+          prePassDepth,
+          prePassVelocity,
+          camera,
+        )
+      : undefined
+    let stagePipelines: VbaoStagePipelineSet | undefined
+    const stageNodes: {
+      dispose: () => void
+    }[] = []
+    if (vbaoBeautyProductNode !== undefined) stageNodes.push(vbaoBeautyProductNode)
+    if (vbaoAoProductNode !== undefined) stageNodes.push(vbaoAoProductNode)
+
+    if (!fullResolution) {
+      const cleanupNode = new VBAOHalfResCleanupNode(
+        vbaoNode.getRawTextureNode(),
+        prePassDepth,
+        prePassNormal,
+        camera,
+        vbaoNode.radius,
+        {
+          enabled: true,
+          strength: 0.45,
+          resolutionScale: 0.5,
+        },
+      )
+      const resolveNode = new VBAOResolveNode(
+        cleanupNode.getTextureNode(),
+        prePassDepth,
+        prePassNormal,
+        camera,
+        vbaoNode.radius,
+      )
+      const polishStrength = Math.max(0, (vbaoOptions.softness ?? 0) - 0.5) * 2
+      const polishNode = new VBAOFullResPolishNode(
+        resolveNode.getTextureNode(),
+        prePassDepth,
+        prePassNormal,
+        camera,
+        vbaoNode.radius,
+        {
+          enabled: polishStrength > 0,
+          strength: polishStrength,
+        },
+      )
+      const cleanupScalar = cleanupNode.getTextureNode().r
+      const resolveScalar = resolveNode.getTextureNode().r
+      const polishScalar = polishNode.getTextureNode().r
+      stageNodes.push(cleanupNode, resolveNode, polishNode)
+      stagePipelines = {
+        raw: makeAoPipeline(vbaoRawScalar),
+        cleanup: makeAoPipeline(cleanupScalar),
+        resolve: makeAoPipeline(resolveScalar),
+        polish: makeAoPipeline(polishScalar),
+        final: makeAoPipeline(vbaoProductScalar),
+      }
+    }
 
     return {
       fullResolution,
       node: vbaoNode,
+      stageNodes,
       pipelines: {
         beautyRaw: makeBeautyPipeline(vbaoRawScalar),
-        beautyDenoised: makeBeautyPipeline(vbaoProductScalar),
+        beautyDenoised:
+          vbaoBeautyProductNode === undefined
+            ? makeBeautyPipeline(vbaoProductScalar)
+            : new RenderPipeline(renderer, vbaoBeautyProductNode),
         aoRaw: makeAoPipeline(vbaoRawScalar),
-        aoDenoised: makeAoPipeline(vbaoProductScalar),
+        aoDenoised:
+          vbaoAoProductNode === undefined
+            ? makeAoPipeline(vbaoProductScalar)
+            : new RenderPipeline(renderer, vbaoAoProductNode),
       },
+      stagePipelines,
     }
   }
 
   const activeVbaoPipelines = (fullResolutionVbao: boolean) => {
     if (activeVbao?.fullResolution === fullResolutionVbao) return activeVbao.pipelines
     disposeActiveVbao()
-    activeVbao = createVbaoPipelines(fullResolutionVbao)
-    return activeVbao.pipelines
+    const nextVbao = createVbaoPipelines(fullResolutionVbao)
+    activeVbao = nextVbao
+    return nextVbao.pipelines
+  }
+  const getVbaoTemporalDiagnostics = (fullResolutionVbao: boolean) => {
+    activeVbaoPipelines(fullResolutionVbao)
+    return activeVbao?.node.getInternalTemporalDiagnostics()
   }
   const composeBufferSize = new Vector2()
   const composeSavedViewport = new Vector4()
@@ -715,7 +1000,10 @@ function createReferencePipelines(
       }
     }
 
-    if (composeTarget.width !== composeBufferWidth || composeTarget.height !== composeBufferHeight) {
+    if (
+      composeTarget.width !== composeBufferWidth ||
+      composeTarget.height !== composeBufferHeight
+    ) {
       composeTarget.width = composeBufferWidth
       composeTarget.height = composeBufferHeight
       composeTarget.renderTarget.setSize(composeBufferWidth, composeBufferHeight)
@@ -768,13 +1056,29 @@ function createReferencePipelines(
           ? 'beautyDenoised'
           : 'beautyRaw'
     if (mode === 'vbao') {
-      activeVbaoPipelines(fullResolutionVbao)[key].render()
+      const active = activeVbaoPipelines(fullResolutionVbao)
+      const stage = getVbaoReconstructionStage()
+      const stagePipeline =
+        !fullResolutionVbao && denoiseEnabled && viewMode === 'ao'
+          ? activeVbao?.stagePipelines?.[stage]
+          : undefined
+      ;(stagePipeline ?? active[key]).render()
       return
     }
     pipelines[mode][key].render()
   }
 
   return {
+    inspectVbaoGeneratedShaders: (fullResolutionVbao: boolean): VbaoGeneratedShaderInspection => {
+      activeVbaoPipelines(fullResolutionVbao).aoDenoised.render()
+      return {
+        productPreset: VBAO_PRODUCT_QUALITY,
+        sampleMode: vbaoSampleMode,
+        fullResolution: fullResolutionVbao,
+        shaderPrograms: collectGeneratedShaderPrograms(renderer),
+      }
+    },
+    getVbaoTemporalDiagnostics,
     renderSingle: renderMode,
     renderComposeDebug: (
       modes: readonly ComposeDebugMode[],
@@ -1206,6 +1510,9 @@ function createSplitLabels(container: HTMLElement) {
 
 function createAoBenchmarkPublisher(
   environment: AoBenchmarkEnvironment,
+  inspectVbaoGeneratedShaders: () => VbaoGeneratedShaderInspection,
+  resolveGpuPassTimings: () => Promise<readonly GpuPassTiming[]>,
+  setVbaoReconstructionStage: (stage: VbaoReconstructionStage) => void,
 ) {
   const history: Stats[] = []
   const api: AoBenchmarkApi = {
@@ -1215,6 +1522,9 @@ function createAoBenchmarkPublisher(
       history.length = 0
       delete api.latest
     },
+    inspectVbaoGeneratedShaders,
+    resolveGpuPassTimings,
+    setVbaoReconstructionStage,
     snapshot: () => {
       const snapshot: { environment: AoBenchmarkEnvironment; latest?: Stats; history: Stats[] } = {
         environment,
