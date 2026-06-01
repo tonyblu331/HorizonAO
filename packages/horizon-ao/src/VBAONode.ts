@@ -437,8 +437,7 @@ export class VBAONode extends TempNode<'float'> {
     return this.textureNode
   }
 
-  /** @internal Demo benchmark evidence hook; not part of the public package contract. */
-  getInternalTemporalDiagnostics() {
+  private getInternalTemporalDiagnostics() {
     return this.temporalAccumulationNode?.getInternalTemporalDiagnostics()
   }
 

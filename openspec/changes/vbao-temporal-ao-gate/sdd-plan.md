@@ -2,11 +2,12 @@
 
 ## Current State
 
-The temporal gate is in `prototype-only` state.
+The temporal gate is in `reject-promotion` state.
 
 What is allowed:
 
-- Continue private `internal` temporal prototyping.
+- Keep `internal` temporal plumbing private for inspection and removal/tuning
+  decisions.
 - Capture internal-mode smoke evidence.
 - Add reprojection, validation, reset, and diagnostics behind internal/demo
   plumbing.
@@ -26,13 +27,15 @@ history weight `0.8`.
 ## Current Gate Result
 
 Phases 3.3, 3.4, 3.7, 4.1 through 4.5, and 6.1 are complete for this gate run.
-The upgraded verifier reads internal temporal evidence and still reports
-`prototype-only`.
+The upgraded verifier reads internal temporal evidence and reports
+`reject-promotion`.
 
 - `internalTemporalEvidence`: `true`
 - `internalTemporalPassesPromotion`: `false`
+- `internalTemporalAllowed`: `false`
 - Rationale: internal temporal has diagnostics and measured pass timings, but no
-  material pattern/noise win against temporal-off rows.
+  material pattern/noise win against temporal-off rows, and blocking failure
+  labels remain present.
 
 Remaining plan work is limited to future hardening or an explicit tuning fork;
 public API promotion remains blocked.
@@ -245,8 +248,8 @@ $env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCH
 
 ## Phase 4.2: Gate Verifier Upgrade
 
-Goal: make the verifier decide between `reject-promotion`, `prototype-only`,
-`candidate`, and `promote-internal`.
+Goal: make the verifier decide between `incomplete`, `reject-promotion`,
+`candidate`, and later explicit API promotion.
 
 ### RED
 
@@ -260,11 +263,11 @@ Goal: make the verifier decide between `reject-promotion`, `prototype-only`,
 ### GREEN
 
 - Extend `verify-vbao-temporal-gate.mjs` to read internal evidence artifacts.
-- Keep `prototype-only` when internal evidence is missing or incomplete.
+- Return `incomplete` when internal evidence is missing or incomplete.
 - Produce `candidate` only when internal evidence is complete and materially
   better without regression.
-- Reserve `promote-internal` for a later API/default decision, not for a single
-  smoke run.
+- Reserve public/internal API promotion for a later explicit decision, not for a
+  single smoke run.
 
 ### VERIFY
 
@@ -362,7 +365,7 @@ Goal: make the selected decision stable for future contributors.
   research code.
 - Archive evidence under the change directory.
 - Add an ADR or update `ADR-013` explaining why temporal stayed private/rejected.
-- Keep the verifier result as `reject-promotion` or `prototype-only`.
+- Keep the verifier result as `reject-promotion`.
 
 ### If Temporal Becomes Candidate
 
@@ -388,7 +391,7 @@ Production build remains out of scope unless explicitly requested.
 | Decision | Current Answer | Reason |
 | --- | --- | --- |
 | Default temporal AO | No | Default product remains temporal-free. |
-| Public API | No | Current evidence is `prototype-only`, not candidate. |
+| Public API | No | Current evidence is `reject-promotion`, not candidate. |
 | Host temporal promotion | No | Host/host TRAA regressed stripe. |
 | Internal prototype | Private only | Evidence is evaluated but does not justify promotion. |
 | Same-pixel history | Replaced | Internal mode now samples history through previous-frame UV. |

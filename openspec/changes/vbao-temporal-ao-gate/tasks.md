@@ -96,20 +96,21 @@
   roadmap for remaining work. It splits 3.3, 3.4, diagnostics, internal evidence,
   verifier upgrade, failure review, API revisit, and release hardening into
   RED/GREEN/VERIFY gates.
-- Phase 4 is complete as a rejection/prototype gate. Temporal `off`, `host`,
+- Phase 4 is complete as a rejection gate. Temporal `off`, `host`,
   host TRAA, same-cost `spatial-ultra`, and internal `beauty,ao` product rows
   are captured. The upgraded verifier evaluates internal evidence and still
-  returns `prototype-only`: internal temporal evidence is present, but
+  returns `reject-promotion`: internal temporal evidence is present, but
   `internalTemporalPassesPromotion` is `false` because there is no material
-  pattern/noise win.
+  pattern/noise win and blocking failure labels are present.
 - 5.1 decision: current evidence does not justify a public `temporal` option.
   Therefore 5.2 is satisfied by adding no public option, and 5.3 is satisfied by
   keeping all temporal/reprojection parameters out of the public API.
 - 6.1 is complete for this gate pass: internal temporal remains private and the
   rejection rationale is recorded in `EVIDENCE.md`,
   `vbao-temporal-gate-verdict.md`, and this task ledger. Removal is not required
-  because `internalTemporalAllowed` remains `true` for private prototyping.
+  yet, but `internalTemporalAllowed` is now `false`; future internal work needs
+  a fresh tuning fork and evidence matrix.
 - Closeout: the plan is complete as a gate run, not as a temporal feature
-  promotion. The verifier outcome is `prototype-only` and
-  `internalTemporalAllowed` is `true`, so private internal accumulation work may
-  start while public API and quality promotion remain blocked.
+  promotion. The verifier outcome is `reject-promotion` and
+  `internalTemporalAllowed` is `false`, so public API, quality promotion, and
+  prototype allowance remain blocked.

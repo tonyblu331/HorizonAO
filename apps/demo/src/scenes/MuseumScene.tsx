@@ -85,7 +85,18 @@ type VbaoBenchmarkTemporalMode = VbaoTemporalMode | 'n/a'
 type VbaoBenchmarkHostTaaMode = VbaoHostTaaMode | 'n/a'
 type VbaoBenchmarkSamplePreset = 'quality' | 'debug-override' | 'spatial-ultra' | 'n/a'
 type VbaoBenchmarkTemporalDiagnostics =
-  | NonNullable<ReturnType<VBAONode['getInternalTemporalDiagnostics']>>
+  | {
+      readonly enabled: boolean
+      readonly validationMode: string
+      readonly historyWeight: number
+      readonly depthContinuityThreshold: number
+      readonly normalContinuityThreshold: number
+      readonly cameraCutResetDistance: number
+      readonly historyResetPending: boolean
+      readonly pendingResetReason: string
+      readonly lastAppliedResetReason: string
+      readonly gpuRejectionCounters: string
+    }
   | null
 type VbaoReconstructionStage = 'raw' | 'cleanup' | 'resolve' | 'polish' | 'final'
 type TslIntLoop = (
@@ -947,7 +958,7 @@ function createReferencePipelines(
   }
   const getVbaoTemporalDiagnostics = (fullResolutionVbao: boolean) => {
     activeVbaoPipelines(fullResolutionVbao)
-    return activeVbao?.node.getInternalTemporalDiagnostics()
+    return (activeVbao?.node as any).getInternalTemporalDiagnostics?.()
   }
   const composeBufferSize = new Vector2()
   const composeSavedViewport = new Vector4()

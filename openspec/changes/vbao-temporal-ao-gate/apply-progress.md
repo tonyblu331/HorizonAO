@@ -36,7 +36,7 @@ not add internal AO history and it did not make temporal AO public API.
 | `artifacts/benchmarks/vbao-temporal-host-latest.json` | Captured matching internal host-mode rows. |
 | `artifacts/benchmarks/vbao-temporal-host-traa-latest.json` | Captured matching host-mode rows through Three's WebGPU `TRAANode`. |
 | `artifacts/benchmarks/vbao-temporal-spatial-ultra-latest.json` | Captured 1280x720 Museum full-res non-temporal `spatial-ultra` rows as the higher-sample spatial alternative. |
-| `artifacts/benchmarks/vbao-temporal-gate-verdict.json` | Automated verdict is `prototype-only`; `internalTemporalAllowed` is `true`; host TAA/TRAA evidence is present; same-cost alternative evidence is present; `VBAO_TEMPORAL_REQUIRE_CANDIDATE=1` still fails because promotion is not justified. |
+| `artifacts/benchmarks/vbao-temporal-gate-verdict.json` | Automated verdict is `reject-promotion`; `internalTemporalAllowed` is `false`; host TAA/TRAA evidence is present; same-cost alternative evidence is present; `VBAO_TEMPORAL_REQUIRE_CANDIDATE=1` still fails because promotion is not justified. |
 | `artifacts/benchmarks/vbao-temporal-internal-smoke.json` | Captured one 1280x720 Museum full-res AO product smoke row for private `internal` mode. The temporal pass emitted a measured GPU timestamp; this is runtime plumbing evidence, not a quality promotion. |
 | `artifacts/benchmarks/vbao-temporal-internal-latest.json` | Captured 1280x720 Museum full-res `beauty,ao` product rows for private `internal` mode with diagnostics and pass timings. |
 | `EVIDENCE.md` | Records the comparison as a non-TAA smoke gate and explicitly rejects promotion. |
@@ -62,10 +62,10 @@ git diff --check -- openspec/changes/vbao-temporal-ao-gate packages/horizon-ao/s
 - The installed Three package provides WebGPU `TRAANode`; it is wired into the
   demo host path and captured as `vbao-temporal-host-traa-latest.json`, but the
   captured rows do not pass the promotion gate.
-- Internal temporal accumulation is evaluated and remains only a private
-  prototype. It must carry the host stripe regression as known risk and cannot
-  be used for public API or quality promotion because the internal rows show no
-  material pattern/noise win.
+- Internal temporal accumulation is evaluated and rejected for promotion. It
+  must carry the host stripe regression and internal blocking failure labels as
+  known risks, and cannot be used for public API, quality promotion, or a
+  prototype-allowed verdict.
 - The first internal prototype is wired after full-resolution resolve and before
   full-resolution polish. It owns AO history, resets on resize and camera cuts,
   clamps history to the current 3x3 AO neighborhood, and uses history weight
@@ -74,14 +74,14 @@ git diff --check -- openspec/changes/vbao-temporal-ao-gate packages/horizon-ao/s
   sampled through previous-frame UV, out-of-viewport history is rejected, and
   previous depth/normal guide history is validated before blending.
 - `sdd-plan.md` now owns the remaining roadmap. Phase 3.7 and Phase 4 are
-  complete as a rejection/prototype gate; remaining work is Phase 6 hardening or
-  an explicit future tuning fork.
+  complete as a rejection gate; remaining work is Phase 6 hardening or an
+  explicit future tuning fork.
 
 ## Gate Closeout
 
-This change closes as an evidence-gated no-go for temporal promotion, but it now
-unblocks private internal temporal accumulation prototyping. Host phase animation
-was implemented and captured with both non-TAA output and host TRAA output. The
-same-cost non-temporal `spatial-ultra` alternative was also captured. The
-verifier reports `prototype-only` with `internalTemporalAllowed: true`, so Phase
-3 may start without public API or product-quality claims.
+This change closes as an evidence-gated no-go for temporal promotion and no-go
+for prototype allowance. Host phase animation was implemented and captured with
+both non-TAA output and host TRAA output. The same-cost non-temporal
+`spatial-ultra` alternative was also captured. The verifier reports
+`reject-promotion` with `internalTemporalAllowed: false`, so further temporal
+work needs a fresh tuning fork and evidence matrix.

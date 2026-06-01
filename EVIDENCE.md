@@ -78,16 +78,15 @@ Outcome:
 - AO product stripe proxy is slightly worse in the `host` row (`0.19069` vs
   `0.19014`), so this is not a promotion signal.
 - `pnpm --filter @horizonao/demo verify:vbao-temporal` returns
-  `prototype-only` and `internalTemporalAllowed: true`.
+  `reject-promotion` and `internalTemporalAllowed: false`.
 - `VBAO_TEMPORAL_REQUIRE_CANDIDATE=1 pnpm --filter @horizonao/demo
   verify:vbao-temporal` remains the hard promotion-gate form and fails for this
   evidence.
 - Same-cost non-temporal alternative evidence is present through
-  `spatial-ultra`, and it is sufficient to unblock private internal temporal
-  prototyping.
-- Internal temporal accumulation may start as a private prototype only. The
-  stripe regression remains a known risk and blocks public temporal API or
-  quality promotion until internal-mode evidence clears it.
+  `spatial-ultra`, but the stricter internal gate still rejects promotion.
+- Internal temporal accumulation remains private and rejected for promotion. The
+  stripe regression and internal blocking failure labels block public temporal
+  API, quality promotion, and any prototype-allowed verdict.
 
 ## 2026-06-02 — VBAO lab non-temporal baseline
 
@@ -161,9 +160,10 @@ Diagnostics:
 - `depthContinuityThreshold`: `0.01`
 - `normalContinuityThreshold`: `0.8`
 - `gpuRejectionCounters`: `not-instrumented`
-- `verify:vbao-temporal`: `prototype-only`;
+- `verify:vbao-temporal`: `reject-promotion`;
   `internalTemporalEvidence: true`;
-  `internalTemporalPassesPromotion: false`.
+  `internalTemporalPassesPromotion: false`;
+  `internalTemporalAllowed: false`.
 
 Outcome:
 
@@ -176,9 +176,9 @@ Outcome:
 - Phase 3.7 diagnostics are complete for this prototype gate. Benchmark output
   exposes validation mode, reset state/reasons, thresholds, and temporal guide
   timings. GPU rejection counters are explicitly `not-instrumented`.
-- Phase 4 is complete as a rejection/prototype gate. Internal temporal evidence
-  is present, but it does not produce a material pattern/noise win, so promotion
-  remains blocked.
+- Phase 4 is complete as a rejection gate. Internal temporal evidence is
+  present, but it has no material pattern/noise win and carries blocking failure
+  labels, so promotion and prototype allowance are both blocked by the verifier.
 - Public temporal API and temporal quality promotion remain blocked.
 
 ## 2026-06-02 — Product fixture observation gate

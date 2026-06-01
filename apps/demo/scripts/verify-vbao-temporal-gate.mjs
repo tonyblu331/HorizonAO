@@ -40,6 +40,14 @@ const MATERIAL_PATTERN_WIN = 0.0005
 const STRIPE_REGRESSION_TOLERANCE = 0.0003
 const EDGE_REGRESSION_TOLERANCE = 0.0003
 const THIN_GAP_REGRESSION_TOLERANCE = 0.0003
+const BLOCKING_FAILURE_LABELS = new Set([
+  'ghosting',
+  'disocclusion',
+  'mud',
+  'halo',
+  'edge-bleed',
+  'thin-gap',
+])
 const requireCandidate = process.env.VBAO_TEMPORAL_REQUIRE_CANDIDATE === '1'
 
 function resolveRepoPath(value, fallback) {
@@ -93,12 +101,73 @@ function finiteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function resolveEvidencePath(filePath) {
+  return path.isAbsolute(filePath) ? filePath : path.join(repoRoot, filePath)
+}
+
+async function createExistingScreenshotPathSet(reports) {
+  const paths = new Set()
+  const candidates = reports
+    .flatMap((report) => report?.rows ?? [])
+    .map((row) => row.screenshotPath)
+    .filter((filePath) => typeof filePath === 'string' && filePath.length > 0)
+
+  await Promise.all(
+    [...new Set(candidates)].map(async (filePath) => {
+      try {
+        await access(resolveEvidencePath(filePath))
+        paths.add(filePath)
+      } catch (err) {
+        if (err instanceof Error && 'code' in err && err.code === 'ENOENT') return
+        throw err
+      }
+    }),
+  )
+
+  return paths
+}
+
+function qualityMetricsComplete(row) {
+  return (
+    finiteNumber(row.qualityMetrics?.patternNoiseScore) &&
+    finiteNumber(row.qualityMetrics?.stripeScore) &&
+    finiteNumber(row.qualityMetrics?.edgeBleedProxy) &&
+    finiteNumber(row.qualityMetrics?.thinGapPreservationProxy)
+  )
+}
+
+function passTimingComplete(row) {
+  if (!Array.isArray(row.passTimings) || row.passTimings.length === 0) return false
+  if (row.passTimings.some((pass) => ['missing', 'unexpected'].includes(pass.status))) {
+    return false
+  }
+
+  const rawPass = row.passTimings.find((pass) => pass.pass === 'raw')
+  if (rawPass?.status !== 'measured' || !finiteNumber(rawPass.gpuMs)) return false
+
+  if (outputName(row) !== 'product') return true
+
+  const totalProductPass = row.passTimings.find((pass) => pass.pass === 'total-product')
+  return (
+    totalProductPass !== undefined &&
+    ['derived', 'measured'].includes(totalProductPass.status) &&
+    finiteNumber(totalProductPass.gpuMs)
+  )
+}
+
+function hasBlockingFailureLabels(row) {
+  return (row.failureLabels ?? []).some((label) => BLOCKING_FAILURE_LABELS.has(label))
+}
+
+let existingScreenshotPaths = new Set()
+
 function evidenceComplete(row) {
   if (typeof row.screenshotPath !== 'string' || row.screenshotPath.length === 0) return false
+  if (!existingScreenshotPaths.has(row.screenshotPath)) return false
   if (!finiteNumber(row.latest?.medianFrameMs)) return false
   if (!finiteNumber(row.latest?.p95FrameMs)) return false
-  if (!Array.isArray(row.passTimings)) return false
-  return row.passTimings.every((pass) => !['missing', 'unexpected'].includes(pass.status))
+  if (!qualityMetricsComplete(row)) return false
+  return passTimingComplete(row)
 }
 
 function internalTemporalEvidenceComplete(row) {
@@ -106,7 +175,8 @@ function internalTemporalEvidenceComplete(row) {
   if (!evidenceComplete(row)) return false
   if (diagnostics?.validationMode !== 'reproject-depth-normal-clamp') return false
   for (const passName of ['temporal', 'temporal-depth', 'temporal-normal']) {
-    if (row.passTimings?.find((pass) => pass.pass === passName)?.status !== 'measured') {
+    const pass = row.passTimings?.find((candidate) => candidate.pass === passName)
+    if (pass?.status !== 'measured' || !finiteNumber(pass.gpuMs)) {
       return false
     }
   }
@@ -165,6 +235,13 @@ const hostReport = await readReport(hostJsonPath)
 const hostTaaReport = await readOptionalReport(hostTaaJsonPath)
 const alternativeReport = await readOptionalReport(alternativeJsonPath)
 const internalReport = await readOptionalReport(internalJsonPath)
+existingScreenshotPaths = await createExistingScreenshotPathSet([
+  offReport,
+  hostReport,
+  hostTaaReport,
+  alternativeReport,
+  internalReport,
+])
 const offRows = offReport.rows.filter((row) => row.mode === 'vbao' && row.temporalMode === 'off')
 const hostRows = hostReport.rows.filter((row) => row.mode === 'vbao' && row.temporalMode === 'host')
 const hostTaaRows =
@@ -201,7 +278,8 @@ const missingHostTaaRows = productOffRows
 const missingInternalRows = productOffRows
   .filter((row) => !internalByKey.has(comparisonKey(row)))
   .map((row) => comparisonKey(row))
-const complete = missingHostRows.length === 0 && comparisons.every((row) => row.evidenceComplete)
+const hostEvidenceComplete =
+  missingHostRows.length === 0 && comparisons.every((row) => row.evidenceComplete)
 const productComparisons = comparisons.filter((row) => row.output === 'product')
 const hostTaaComparisons = productOffRows
   .map((offRow) => {
@@ -215,6 +293,7 @@ const hostTaaEvidence =
   hostTaaComparisons.every((row) => row.evidenceComplete)
 const hasHostTaaMaterialPatternWin = hostTaaComparisons.some((row) => row.materialPatternWin)
 const hasHostTaaStripeRegression = hostTaaComparisons.some((row) => row.stripeRegression)
+const hasHostTaaBlockingFailureLabels = hostTaaRows.some(hasBlockingFailureLabels)
 const alternativeComparisons = productOffRows
   .map((offRow) => {
     const alternativeRow = alternativeByKey.get(alternativeComparisonKey(offRow))
@@ -269,26 +348,29 @@ const hasInternalEdgeRegression = internalComparisons.some(
 const hasInternalThinGapRegression = internalComparisons.some(
   (row) => row.delta.thinGapPreservationProxy < -THIN_GAP_REGRESSION_TOLERANCE,
 )
+const hasInternalBlockingFailureLabels = internalRows.some(hasBlockingFailureLabels)
 
 const hostTaaPassesPromotion =
-  hostTaaEvidence && hasHostTaaMaterialPatternWin && !hasHostTaaStripeRegression
+  hostTaaEvidence &&
+  hasHostTaaMaterialPatternWin &&
+  !hasHostTaaStripeRegression &&
+  !hasHostTaaBlockingFailureLabels
 const internalTemporalPassesPromotion =
   internalTemporalEvidence &&
   hasInternalMaterialPatternWin &&
   !hasInternalStripeRegression &&
   !hasInternalEdgeRegression &&
-  !hasInternalThinGapRegression
-const internalPrototypeAllowed = complete && hostTaaEvidence && sameCostAlternativeEvidence
+  !hasInternalThinGapRegression &&
+  !hasInternalBlockingFailureLabels
+const complete = hostEvidenceComplete && sameCostAlternativeEvidence && internalTemporalEvidence
 const evaluatedInternalEvidence = internalTemporalEvidence && sameCostAlternativeEvidence
 
 const verdict =
   complete && hostTaaPassesPromotion && internalTemporalPassesPromotion
     ? 'candidate'
-    : complete && internalPrototypeAllowed
-      ? 'prototype-only'
-      : complete
-        ? 'reject-promotion'
-        : 'incomplete'
+    : complete
+      ? 'reject-promotion'
+      : 'incomplete'
 
 const report = {
   generatedAt: new Date().toISOString(),
@@ -308,6 +390,7 @@ const report = {
   hostTaaEvidence,
   hasHostTaaMaterialPatternWin,
   hasHostTaaStripeRegression,
+  hasHostTaaBlockingFailureLabels,
   sameCostAlternativeEvidence,
   internalTemporalEvidence,
   evaluatedInternalEvidence,
@@ -315,16 +398,17 @@ const report = {
   hasInternalStripeRegression,
   hasInternalEdgeRegression,
   hasInternalThinGapRegression,
+  hasInternalBlockingFailureLabels,
   internalTemporalPassesPromotion,
   verdict,
-  internalTemporalAllowed: internalPrototypeAllowed,
+  internalTemporalAllowed: verdict === 'candidate',
   reason:
     verdict === 'candidate'
       ? 'Host TAA/TRAA evidence and internal temporal evidence both pass the material quality gate without tracked regressions.'
-      : verdict === 'prototype-only'
-        ? 'Host temporal sampling is not promoted, but complete host TAA/TRAA and same-cost alternative evidence are present, so private internal temporal prototyping may start with stripe regression carried as a known risk and without public API or quality claims.'
       : verdict === 'reject-promotion'
-        ? hostTaaEvidence
+        ? hasInternalBlockingFailureLabels
+          ? 'Internal temporal evidence is present, but it has blocking failure labels and no material product pattern/noise win.'
+          : hostTaaEvidence
           ? 'Host sampling has host TAA/TRAA evidence, but it did not show a material product pattern/noise win without stripe regression.'
           : 'Host sampling did not show a material product pattern/noise win without regression in the non-TAA smoke comparison.'
         : 'Temporal off/host evidence is incomplete.',
@@ -393,9 +477,9 @@ lines.push(
   `Internal temporal evidence: **${report.internalTemporalEvidence ? 'present' : 'not present'}**; promotion pass: **${report.internalTemporalPassesPromotion ? 'yes' : 'no'}**.`,
 )
 lines.push('')
-lines.push('This verifier cannot promote temporal AO unless host TAA/TRAA evidence is present, same-cost non-temporal comparisons are present, and internal temporal evidence produces a material win without stripe, edge, or thin-gap regression. Private internal temporal prototyping is allowed when the evidence set is complete, with observed regressions carried forward as prototype risks rather than promotion claims.')
+lines.push('This verifier cannot allow temporal AO unless host TAA/TRAA evidence is present, same-cost non-temporal comparisons are present, and internal temporal evidence produces a material win without blocking labels or stripe, edge, or thin-gap regression. Complete-but-failing evidence remains `reject-promotion`; internal temporal allowance is candidate-only.')
 lines.push('')
-await writeFile(outputMdPath, `${lines.join('\n')}\n`)
+await writeFile(outputMdPath, lines.join('\n'))
 
 console.log(JSON.stringify({ outputJsonPath, outputMdPath, verdict }, null, 2))
 

@@ -367,10 +367,23 @@ export class VBAOTemporalAccumulationNode extends TempNode<'float'> {
         .sample(previousUv)
         .rgb.normalize()
         .toVar('vbaoTemporalPreviousNormal')
-      const depthContinuity = abs(previousDepth.sub(currentDepth))
+      const expectedPreviousDepth = viewZToPerspectiveDepth(
+        previousViewPosition.z,
+        this.cameraNear,
+        this.cameraFar,
+      ).toVar('vbaoTemporalExpectedPreviousDepth')
+      const currentWorldNormal = this.cameraWorldMatrix
+        .mul(vec4(currentNormal, float(0)))
+        .xyz.normalize()
+        .toVar('vbaoTemporalCurrentWorldNormal')
+      const currentPreviousViewNormal = this.previousCameraWorldMatrixInverse
+        .mul(vec4(currentWorldNormal, float(0)))
+        .xyz.normalize()
+        .toVar('vbaoTemporalCurrentPreviousViewNormal')
+      const depthContinuity = abs(previousDepth.sub(expectedPreviousDepth))
         .lessThanEqual(this.depthContinuityThreshold)
         .toVar('vbaoTemporalDepthContinuity')
-      const normalContinuity = dot(previousNormal, currentNormal)
+      const normalContinuity = dot(previousNormal, currentPreviousViewNormal)
         .greaterThanEqual(this.normalContinuityThreshold)
         .toVar('vbaoTemporalNormalContinuity')
       const currentFrameValid = currentDepth

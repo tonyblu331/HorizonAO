@@ -1,12 +1,12 @@
 # VBAO Temporal Gate Verdict
 
-Generated: 2026-06-01T21:07:04.191Z
+Generated: 2026-06-01T21:35:28.619Z
 
-Verdict: **prototype-only**
+Verdict: **reject-promotion**
 
-Internal temporal allowed: **yes**
+Internal temporal allowed: **no**
 
-Host temporal sampling is not promoted, but complete host TAA/TRAA and same-cost alternative evidence are present, so private internal temporal prototyping may start with stripe regression carried as a known risk and without public API or quality claims.
+Internal temporal evidence is present, but it has blocking failure labels and no material product pattern/noise win.
 
 | View | Output | Pattern delta | Stripe delta | Edge delta | Thin-gap delta | Material win | Stripe regression |
 | --- | --- | ---: | ---: | ---: | ---: | --- | --- |
@@ -35,4 +35,4 @@ Same-cost non-temporal alternative evidence: **present**.
 
 Internal temporal evidence: **present**; promotion pass: **no**.
 
-This verifier cannot promote temporal AO unless host TAA/TRAA evidence is present, same-cost non-temporal comparisons are present, and internal temporal evidence produces a material win without stripe, edge, or thin-gap regression. Private internal temporal prototyping is allowed when the evidence set is complete, with observed regressions carried forward as prototype risks rather than promotion claims.
+This verifier cannot allow temporal AO unless host TAA/TRAA evidence is present, same-cost non-temporal comparisons are present, and internal temporal evidence produces a material win without blocking labels or stripe, edge, or thin-gap regression. Complete-but-failing evidence remains `reject-promotion`; internal temporal allowance is candidate-only.
