@@ -55,6 +55,26 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
     )
   }
   lines.push('')
+  lines.push('## AO Production Pass Timing Status')
+  lines.push('')
+  lines.push('Skipped passes are not zero-cost passes; `skipped` means the pass is elided from that graph, while `unmeasured` means the pass participates but this collector has not captured a pass-level GPU timestamp yet.')
+  lines.push('')
+  lines.push('| Resolution | Algorithm | VBAO res | Output | Pass | Status | GPU ms |')
+  lines.push('| --- | --- | --- | --- | --- | --- | ---: |')
+  for (const row of report.rows) {
+    const outputLabel =
+      row.mode === 'vbao' ? (row.denoise ? 'product' : 'raw-debug') : row.denoise ? 'denoised' : 'raw'
+    for (const passTiming of row.passTimings ?? []) {
+      const gpuMs =
+        passTiming.gpuMs === null || passTiming.gpuMs === undefined
+          ? 'n/a'
+          : passTiming.gpuMs.toFixed(3)
+      lines.push(
+        `| ${row.resolution.width}x${row.resolution.height} | ${row.mode} | ${row.vbaoResolution} | ${outputLabel} | ${passTiming.pass} | ${passTiming.status} | ${gpuMs} |`,
+      )
+    }
+  }
+  lines.push('')
   lines.push('Metric basis:')
   lines.push('- `patternNoiseScore`: RMS of a cross-high-pass residual over the central scene crop.')
   lines.push('- `stripeScore`: max row/column residual coherence normalized by high-pass RMS; catches visible bands/stripes.')

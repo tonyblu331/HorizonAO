@@ -67,7 +67,7 @@ describe('modernized VBAO production source contract', () => {
   })
 
   it('applies x² sample spacing in the live shader path', () => {
-    expect(source).toContain('const stepT = float(j).add(stepJitter).div(float(this.samples))')
+    expect(source).toContain('const stepT = float(j).add(stepJitter).div(sampleCount)')
     expect(source).toContain('const stepFrac = stepT.mul(stepT)')
     expect(source).toContain('const sampleNoiseTexel = sampleNoisePhase(i, j)')
     expect(source).toContain("const stepJitter = sampleNoiseTexel.y.toVar('stepJitter')")
@@ -151,7 +151,7 @@ describe('modernized VBAO production source contract', () => {
   it('computes side-invariant projection once outside the inner sample loop', () => {
     expect(source).toContain('const sampleScreenEnd = getScreenPosition(')
     expect(source).toMatch(
-      /const sampleScreenEnd = getScreenPosition[\s\S]*?\(Loop as any\)\(\s*\{\s*start: int\(0\), end: int\(this\.samples\)/,
+      /const sampleScreenEnd = getScreenPosition[\s\S]*?\(Loop as any\)\(\s*\{\s*start: int\(0\), end: sampleLoopEnd/,
     )
   })
 
@@ -161,7 +161,7 @@ describe('modernized VBAO production source contract', () => {
       "const sampleDist2 = dot(sampleDelta, sampleDelta).toVar('sampleDist2')",
     )
     expect(source).toContain("const sampleAlong = dot(sampleDelta, sampleDir).toVar('sampleAlong')")
-    expect(source).toMatch(/const maxThickness = this\.radius\.mul\(float\(0\.30\)\)\.toVar\('vbaoMaxThickness'\)[\s\S]*?const maxValidRadius2 = maxValidRadius\.mul\(maxValidRadius\)\.toVar\('vbaoMaxValidRadius2'\)[\s\S]*?\(Loop as any\)\(\s*\{ start: int\(0\), end: int\(this\.slices\)/)
+    expect(source).toMatch(/const maxThickness = this\.radius\.mul\(float\(0\.30\)\)\.toVar\('vbaoMaxThickness'\)[\s\S]*?const maxValidRadius2 = maxValidRadius\.mul\(maxValidRadius\)\.toVar\('vbaoMaxValidRadius2'\)[\s\S]*?\(Loop as any\)\(\s*\{ start: int\(0\), end: sliceLoopEnd/)
     expect(source).toContain('sampleDist2.greaterThan(float(1e-8))')
     expect(source).toContain('sampleDist2.lessThanEqual(maxValidRadius2)')
     expect(source).not.toContain('sampleDist2.lessThanEqual(maxValidRadius.mul(maxValidRadius))')
@@ -244,7 +244,8 @@ describe('modernized VBAO production source contract', () => {
     expect(source).toContain('private currentOutputGraphKey(): string')
     expect(source).toContain('private assertOutputGraphStable(): void')
     expect(source).toContain('if (this.resolutionScale < 0.99)')
-    expect(source).toContain('const wantsPolish = this.softness.value > 0')
+    expect(source).toContain('const cleanupStrength = this.lowResolutionCleanupStrength()')
+    expect(source).toContain('const polishStrength = this.fullResolutionPolishStrength()')
     expect(source).toContain('softness and resolutionScale affect the pass graph')
     expect(source).toMatch(/this\.outputGraphCreated &&[\s\S]*next\.softness !== this\.softness\.value[\s\S]*next\.resolutionScale !== this\.resolutionScale/)
     expect(source).toMatch(/getTextureNode\(\): TextureNode \{\s*this\.assertOutputGraphStable\(\)\s*this\.rebuildOutputGraph\(\)[\s\S]*this\.outputGraphCreated = true/)
@@ -348,6 +349,46 @@ describe('modernized VBAO production source contract', () => {
     expect(fullResPolishSource).not.toContain('reprojection')
   })
 
+  it('reconstructs JBU fallback from the same manual four-tap AO footprint', () => {
+    expect(resolveSource).toContain('vbaoResolveFallbackAo')
+    expect(resolveSource).toContain('vbaoResolveFallbackWeight')
+    expect(resolveSource).toContain('fallbackAo.addAssign(tapAo.mul(bilinearWeight))')
+    expect(resolveSource).toContain('fallbackWeight.addAssign(bilinearWeight)')
+    expect(resolveSource).toContain('const fallbackResolvedAo = fallbackAo.div(max(fallbackWeight, float(1e-6)))')
+    expect(resolveSource).not.toContain('const fallbackAo = rawAo.sample(uvNode).r')
+  })
+
+  it('keeps default full-resolution polish to the near 8-tap kernel', () => {
+    expect(fullResPolishSource).toContain('POISSON8.forEach')
+    expect(fullResPolishSource).not.toContain('POISSON_WIDE_TAPS.forEach')
+    expect(fullResPolishSource).not.toContain('tapIndex + POISSON8.length')
+  })
+
+  it('spends low-resolution softness on cleanup before full-resolution polish', () => {
+    expect(source).toContain('private lowResolutionCleanupStrength(): number')
+    expect(source).toContain('return this.resolutionScale < 0.99 ? this.softness.value : 0')
+    expect(source).toContain('private fullResolutionPolishStrength(): number')
+    expect(source).toContain('return Math.max(0, this.softness.value - 0.5) * 2')
+    expect(source).toContain('const cleanupStrength = this.lowResolutionCleanupStrength()')
+    expect(source).toContain('const polishStrength = this.fullResolutionPolishStrength()')
+    expect(source).toContain('if (cleanupStrength > 0)')
+    expect(source).toContain('if (polishStrength > 0)')
+    expect(source).not.toMatch(/const wantsPolish = this\.softness\.value > 0[\s\S]*?if \(wantsPolish\)[\s\S]*?getOrCreateHalfCleanupNode[\s\S]*?if \(wantsPolish\)[\s\S]*?getOrCreateFullPolishNode/)
+  })
+
+  it('uses fixed hot-loop bounds for product quality presets', () => {
+    expect(source).toContain('type VbaoRawLoopShape')
+    expect(source).toContain('private rawLoopShape: VbaoRawLoopShape')
+    expect(source).toContain('private resolveRawLoopShape(')
+    expect(source).toMatch(/qualityName !== undefined &&\s*options\.slices === undefined &&\s*options\.samples === undefined/)
+    expect(source).toContain('const sliceLoopEnd = this.rawLoopShape.fixed ? int(this.rawLoopShape.slices) : int(this.slices)')
+    expect(source).toContain('const sampleLoopEnd = this.rawLoopShape.fixed ? int(this.rawLoopShape.samples) : int(this.samples)')
+    expect(source).toContain('end: sliceLoopEnd')
+    expect(source).toContain('end: sampleLoopEnd')
+    expect(source).not.toContain('end: int(this.slices)')
+    expect(source).not.toContain('end: int(this.samples)')
+  })
+
   it('keeps runtime demo and benchmark paths free of old research candidates', () => {
     for (const forbidden of forbiddenRuntimeResearchKnobs) {
       expect(runtimeSources).not.toContain(forbidden)
@@ -357,6 +398,8 @@ describe('modernized VBAO production source contract', () => {
   it('captures measurable AO image quality metrics, not only screenshots/timing', () => {
     expect(benchmarkSource).toContain('analyzeScreenshotQuality')
     expect(benchmarkSource).toContain('qualityMetrics')
+    expect(benchmarkSource).toContain("const modes = ['off', 'gtao', 'ssao', 'vbao', 'n8ao']")
+    expect(benchmarkSource).toContain("mode === 'n8ao' && !denoiseEnabled")
     expect(benchmarkSource).toContain("import { analyzeScreenshotQuality } from './profiling/screenshotMetrics.mjs'")
     expect(benchmarkSource).toContain('AO_BENCHMARK_BASE_URL')
     expect(benchmarkSource).toContain('AO_BENCHMARK_EXTERNAL_SERVER=1 requires AO_BENCHMARK_BASE_URL')
@@ -395,6 +438,15 @@ describe('modernized VBAO production source contract', () => {
     expect(profilingProductionReportSource).toContain('AO Production Screenshot Quality Summary')
     expect(profilingProductionReportSource).toContain('Pattern/noise ↓')
     expect(profilingProductionReportSource).toContain('Metric basis:')
+  })
+
+  it('records VBAO internal pass timing status without treating skipped passes as zero cost', () => {
+    expect(benchmarkSource).toContain('function createVbaoPassTimingRows')
+    expect(benchmarkSource).toContain("'skipped'")
+    expect(benchmarkSource).toContain('gpuMs: null')
+    expect(benchmarkSource).toContain('passTimings: createVbaoPassTimingRows')
+    expect(profilingProductionReportSource).toContain('AO Production Pass Timing Status')
+    expect(profilingProductionReportSource).toContain('Skipped passes are not zero-cost passes')
   })
 
   it('ships product-first quality presets without platform labels', () => {

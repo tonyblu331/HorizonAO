@@ -46,14 +46,14 @@ export interface VBAOFullResPolishNodeOptions {
 }
 
 const POISSON8 = Object.freeze([
-  [1.0, 0.0],
-  [-1.0, 0.0],
-  [0.0, 1.0],
-  [0.0, -1.0],
-  [0.707, 0.707],
-  [-0.707, 0.707],
-  [0.707, -0.707],
-  [-0.707, -0.707],
+  [1.0, 0.0, 1.0],
+  [-1.0, 0.0, 1.0],
+  [0.0, 1.0, 1.0],
+  [0.0, -1.0, 1.0],
+  [0.707, 0.707, 0.85],
+  [-0.707, 0.707, 0.85],
+  [0.707, -0.707, 0.85],
+  [-0.707, -0.707, 0.85],
 ] as const)
 
 const fullResPolishQuadMesh = new QuadMesh()
@@ -219,12 +219,17 @@ export class VBAOFullResPolishNode extends TempNode<'float'> {
       const noiseAngle = noise.mul(PI.mul(float(2))).toVar('vbaoFullResPolishNoiseAngle')
       const c = cos(noiseAngle).toVar('vbaoFullResPolishRotationCos')
       const s = sin(noiseAngle).toVar('vbaoFullResPolishRotationSin')
+      const filterRadius = float(1)
+        .add(this.strengthUniform.mul(float(0.75)))
+        .toVar('vbaoFullResPolishFilterRadius')
 
-      const visitTap = (x: number, y: number, tapIndex: number) => {
+      const visitTap = (x: number, y: number, spatialWeight: number, tapIndex: number) => {
         const offset = vec2(
           float(x).mul(c).sub(float(y).mul(s)),
           float(x).mul(s).add(float(y).mul(c)),
-        ).toVar(`vbaoFullResPolishRotatedOffset${tapIndex}`)
+        )
+          .mul(filterRadius)
+          .toVar(`vbaoFullResPolishRotatedOffset${tapIndex}`)
         const tapUv = uvNode.add(offset.mul(texelSize)).toVar(`vbaoFullResPolishTapUv${tapIndex}`)
 
         If(
@@ -265,6 +270,7 @@ export class VBAOFullResPolishNode extends TempNode<'float'> {
               .toVar(`vbaoFullResPolishNormalWeight${tapIndex}`)
             const tapWeight = depthWeight
               .mul(normalWeight)
+              .mul(float(spatialWeight))
               .toVar(`vbaoFullResPolishTapWeight${tapIndex}`)
 
             If(centerValid.and(tapValid), () => {
@@ -277,8 +283,8 @@ export class VBAOFullResPolishNode extends TempNode<'float'> {
         )
       }
 
-      POISSON8.forEach(([x, y], tapIndex) => {
-        visitTap(x, y, tapIndex)
+      POISSON8.forEach(([x, y, spatialWeight], tapIndex) => {
+        visitTap(x, y, spatialWeight, tapIndex)
       })
 
       const meanAo = weightedAo.div(max(totalWeight, float(1e-6))).toVar('vbaoFullResPolishMeanAo')

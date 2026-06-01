@@ -114,6 +114,8 @@ async function expectSplitSegmentsVisible(
     },
   )
 
+  await expect(page.locator('canvas'), 'split composer should keep one renderer canvas').toHaveCount(1)
+
   const canvas = page.locator('canvas').first()
   const screenshot = await canvas.screenshot()
   const stats = await measureSegmentPixels(page, screenshot, modes.length)

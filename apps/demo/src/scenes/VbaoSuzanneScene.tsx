@@ -39,7 +39,7 @@ export function VbaoSuzanneScene() {
       ambientIntensity: 0.5,
       sunPosition: [6, 12, 5],
       sunIntensity: 1.3,
-      vbao: { radius: 0.22, thickness: 0.055, samples: 8, slices: 3, resolutionScale: 0.5 },
+      vbao: { radius: 0.22, thickness: 0.055, samples: 8, slices: 3, resolutionScale: 1.0 },
     }).then(
       () => {
         if (!disposed) setPageState('ready')

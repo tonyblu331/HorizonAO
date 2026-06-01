@@ -4,7 +4,7 @@
 - **Date:** 2026-05-22
 - **Updated:** 2026-05-27
 - **Supersedes:** the implicit ADR-002 signed-horizon kernel and the interim hybrid VBAO research-gate shape.
-- **Related:** ADR-008 (AO-only scope), ADR-009 (no legacy), ADR-010 (normal required), ADR-011 (raw first).
+- **Related:** ADR-008 (AO-only scope), ADR-009 (no legacy), ADR-010 (normal required), ADR-011 (raw first), ADR-013 (quality hardening).
 
 ## Context
 

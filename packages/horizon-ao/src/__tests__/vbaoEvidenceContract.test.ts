@@ -4,6 +4,7 @@ import adrSource from '../../../../openspec/adr/ADR-007-vbao-pivot.md?raw'
 import gpuReadbackSource from '../../../../apps/demo/scripts/collect-ao-gpu-readback-baseline.mjs?raw'
 import indexSource from '../index.ts?raw'
 import optionsSource from '../vbaoConstants.ts?raw'
+import canonicalReferenceSource from '../reference/canonicalVbaoReference.ts?raw'
 
 describe('VBAO evidence alignment contract', () => {
   it('keeps experimental evidence controls out of the public package API', () => {
@@ -17,6 +18,8 @@ describe('VBAO evidence alignment contract', () => {
     expect(optionsSource).not.toContain('temporal')
     expect(optionsSource).not.toContain('visibilityBucket')
     expect(optionsSource).not.toContain('confidence')
+    expect(indexSource).not.toContain('canonicalVbaoReference')
+    expect(indexSource).not.toContain('evaluateCanonicalVbaoReference')
   })
 
   it('documents visibility-bitmask AO with selected GT-VBAO corrections without overclaiming', () => {
@@ -28,6 +31,14 @@ describe('VBAO evidence alignment contract', () => {
     expect(specSource).not.toContain('projected-normal slice weighting')
     expect(specSource).toContain('point-sample')
     expect(specSource).not.toContain('vbaoReference.ts')
+  })
+
+  it('keeps the canonical VBAO verifier separate from the product node', () => {
+    expect(canonicalReferenceSource).toContain('canonicalVbaoUpdateSectors')
+    expect(canonicalReferenceSource).toContain('1 - popcount32(mask) / SECTOR_COUNT')
+    expect(canonicalReferenceSource).not.toContain('VBAOFullResPolishNode')
+    expect(canonicalReferenceSource).not.toContain('VBAOResolveNode')
+    expect(canonicalReferenceSource).not.toContain('sample-local')
   })
 
   it('records the cleanup decision in ADR-007', () => {

@@ -51,9 +51,10 @@ export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
   const radius = options.radius ?? 1.25
   const thickness = options.thickness ?? 0.25
   const scale = options.scale ?? 1.0
+  const softness = options.softness ?? 0.65
   const samples = options.samples ?? 8
   const slices = options.slices ?? 3
-  const resolutionScale = options.resolutionScale ?? 0.5
+  const resolutionScale = options.resolutionScale ?? 1.0
   const sceneColor = options.sceneColor as { readonly rgb: TslVec3 }
   const depthNode = options.depthNode as { sample: (sampleUv: unknown) => { readonly r: TslScalar } }
   const normalNode = options.normalNode as { sample: (sampleUv: unknown) => { readonly rgb: TslVec3 } }
@@ -80,6 +81,7 @@ export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
     radius,
     thickness,
     scale,
+    softness,
     samples,
     slices,
     resolutionScale,
@@ -96,9 +98,15 @@ export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
     scene: options.scene,
     camera: options.camera,
   })
-  n8aoNode.configuration.aoRadius = radius
-  n8aoNode.configuration.distanceFalloff = Math.max(thickness, radius * 0.25)
-  n8aoNode.configuration.intensity = Math.max(1, scale)
+  n8aoNode.setQualityMode(samples <= 8 ? 'Medium' : samples <= 12 ? 'High' : 'Ultra')
+  n8aoNode.configuration.screenSpaceRadius = true
+  n8aoNode.configuration.aoRadius = Math.max(18, Math.min(48, radius * 58))
+  n8aoNode.configuration.distanceFalloff = 1
+  n8aoNode.configuration.intensity = Math.max(3.5, Math.min(6, scale * 5))
+  n8aoNode.configuration.denoiseIterations = 2
+  n8aoNode.configuration.denoiseRadius = 12
+  n8aoNode.configuration.aoTones = 0
+  n8aoNode.configuration.colorMultiply = true
   n8aoNode.configuration.gammaCorrection = false
   // n8ao-webgpu@0.1.0 targets three@^0.182.0. With three@0.184.0 its half-res
   // downsample shader fails WebGPU validation, so keep the comparison full-res.
@@ -106,7 +114,6 @@ export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
   n8aoNode.configuration.depthAwareUpsampling = true
   n8aoNode.configuration.accumulate = false
   n8aoNode.configuration.autoRenderBeauty = true
-  n8aoNode.setQualityMode(samples <= 8 ? 'Performance' : samples <= 16 ? 'Medium' : 'High')
 
   const gtaoTex = gtaoNode.getTextureNode()
   const vbaoTex = vbaoNode.getTextureNode()

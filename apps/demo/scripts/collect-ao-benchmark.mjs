@@ -30,10 +30,11 @@ const resolutions = process.env.AO_BENCHMARK_WIDTH
       { width: 1920, height: 1080 },
       { width: 1280, height: 720 },
     ]
-const modes = ['off', 'gtao', 'vbao']
+const modes = ['off', 'gtao', 'ssao', 'vbao', 'n8ao']
 const views = ['beauty', 'ao']
 const denoiseStates = [false, true]
 const vbaoResolutionStates = [false, true]
+const vbaoDemoSoftness = 0.45
 
 async function setMode(page, mode) {
   await page.evaluate((nextMode) => {
@@ -95,7 +96,62 @@ async function waitForLatest(page, expected) {
 }
 
 function shouldSkip(mode, denoiseEnabled) {
-  return mode === 'off' && denoiseEnabled
+  return (mode === 'off' && denoiseEnabled) || (mode === 'n8ao' && !denoiseEnabled)
+}
+
+function createVbaoPassTimingRows({ mode, denoise, fullResolutionVbao }) {
+  if (mode !== 'vbao') return []
+
+  const productOutput = denoise === true
+  const lowResolution = fullResolutionVbao === false
+  const cleanupEnabled = productOutput && lowResolution && vbaoDemoSoftness > 0
+  const resolveEnabled = productOutput && lowResolution
+  const polishEnabled =
+    productOutput &&
+    (lowResolution ? Math.max(0, vbaoDemoSoftness - 0.5) * 2 > 0 : vbaoDemoSoftness > 0)
+  const status = (enabled) => (enabled ? 'unmeasured' : 'skipped')
+  const reason = (enabled, skippedReason) =>
+    enabled
+      ? 'Pass participates in this product graph, but pass-level GPU timestamp measurement is not captured by this collector yet.'
+      : skippedReason
+
+  return [
+    {
+      pass: 'raw',
+      status: 'unmeasured',
+      gpuMs: null,
+      reason: 'Raw AO pass participates in both raw debug and product output paths.',
+    },
+    {
+      pass: 'cleanup',
+      status: status(cleanupEnabled),
+      gpuMs: null,
+      reason: reason(cleanupEnabled, productOutput ? 'Skipped for full-resolution output.' : 'Skipped for raw debug output.'),
+    },
+    {
+      pass: 'resolve',
+      status: status(resolveEnabled),
+      gpuMs: null,
+      reason: reason(resolveEnabled, productOutput ? 'Skipped for full-resolution output.' : 'Skipped for raw debug output.'),
+    },
+    {
+      pass: 'polish',
+      status: status(polishEnabled),
+      gpuMs: null,
+      reason: reason(
+        polishEnabled,
+        productOutput
+          ? 'Skipped because the configured softness budget does not fund full-resolution polish in this graph.'
+          : 'Skipped for raw debug output.',
+      ),
+    },
+    {
+      pass: 'total-product',
+      status: status(productOutput),
+      gpuMs: null,
+      reason: reason(productOutput, 'Skipped for raw debug output.'),
+    },
+  ]
 }
 
 await mkdir(screenshotRoot, { recursive: true })
@@ -158,6 +214,7 @@ try {
                       : 'VBAONode.getRawTextureNode() raw debug AO'
                     : 'n/a',
                 sampling: mode === 'vbao' ? (latest?.vbaoSamplingSchedule ?? 'phase-atlas-stable-hash') : 'n/a',
+                passTimings: createVbaoPassTimingRows({ mode, denoise, fullResolutionVbao }),
                 qualityMetrics,
                 screenshotPath,
                 latest,

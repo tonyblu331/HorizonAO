@@ -4,6 +4,82 @@ Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
 This file is the gate for later adaptive thickness, sampling, denoise, or depth
 hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
+## 2026-06-01 — Reference AO fixture gate started
+
+Status: **reference verifier started; no production quality promotion claimed**.
+
+What changed:
+
+- Added deterministic finite-radius ray-cast AO reference fixtures in
+  `packages/horizon-ao/src/reference/aoRaycastReference.ts`.
+- Added Vitest coverage in
+  `packages/horizon-ao/src/__tests__/aoRaycastReference.test.ts`.
+- Added report rows/summaries in
+  `packages/horizon-ao/src/reference/aoReferenceReport.ts` and
+  `packages/horizon-ao/src/__tests__/aoReferenceReport.test.ts`.
+- Added strict canonical VBAO lane in
+  `packages/horizon-ao/src/reference/canonicalVbaoReference.ts` and
+  `packages/horizon-ao/src/__tests__/canonicalVbaoReference.test.ts`.
+- Added canonical/product drift report in
+  `packages/horizon-ao/src/reference/vbaoCanonicalDriftReport.ts` and
+  `packages/horizon-ao/src/__tests__/vbaoCanonicalDriftReport.test.ts`.
+- Added `ssao` and single-row internally filtered `n8ao` capture support to
+  `apps/demo/scripts/collect-ao-benchmark.mjs` so future production screenshot
+  metrics can cover the baselines the lab exposes.
+- Fixtures cover:
+  - `flat-plane-open`
+  - `sphere-contact`
+  - `box-contact`
+  - `two-wall-corner`
+  - `thin-gap-separated-slabs`
+  - `far-object-outside-radius`
+
+Decision:
+
+- This is the first ADR-013 hardening task.
+- It does **not** prove current VBAO is closer to path tracing.
+- It does **not** promote current product tuning. Product rendering changes still
+  need curated screenshots plus GPU timings before promotion.
+- It creates the frozen reference family that future VBAO/GTAO/SSAO/N8AO rows
+  must compare against before quality claims.
+- Missing expected candidate rows produce missing or warning summaries, not passes.
+  This is intentional: if we do not have a readback/proxy row for a renderer, we
+  cannot claim it passed.
+- Canonical VBAO is now separate from product VBAO. Product corrections such as
+  sample-local thickness, CDF sectorization, stochastic thin-sector coverage, and
+  polish must beat the canonical lane in future evidence before being called
+  improvements.
+- The first drift report is intentionally harsh:
+  - `thin-separated`: canonical `0.8750`, product `1.0000`, abs diff `0.1250`.
+  - `thick-contact`: canonical `0.8750`, product `0.7500`, abs diff `0.1250`.
+  - summary verdict: `fail`, MAE `0.0625`.
+  This does **not** mean product VBAO is wrong; it means the product corrections
+  are materially different and need ray-cast/render evidence before being called
+  better.
+
+Validation:
+
+```sh
+node_modules\.bin\vitest run packages/horizon-ao/src/__tests__/aoRaycastReference.test.ts
+# 1 file / 5 tests passed
+
+node_modules\.bin\vitest run packages/horizon-ao/src/__tests__/aoReferenceReport.test.ts
+# 1 file / 4 tests passed
+
+node_modules\.bin\vitest run packages/horizon-ao/src/__tests__/canonicalVbaoReference.test.ts
+# 1 file / 5 tests passed
+
+node_modules\.bin\vitest run packages/horizon-ao/src/__tests__/vbaoCanonicalDriftReport.test.ts
+# 1 file / 4 tests passed
+
+node_modules\.bin\tsc -p packages\horizon-ao\tsconfig.json --noEmit
+node_modules\.bin\tsc -p apps\demo\tsconfig.json --noEmit
+node_modules\.bin\vitest run
+# 14 files / 101 tests passed
+```
+
+Production build was not run.
+
 
 ## Current VBAO State - 2026-05-27
 
@@ -14,7 +90,9 @@ Current production boundary:
 - `VBAONode` is the single public visibility-bitmask AO product node with selected GT-VBAO corrections; `getTextureNode()` returns final product AO and `getRawTextureNode()` is debug/readback only.
 - Cleanup, JBU resolve, and full-resolution polish are internal pass-elided reconstruction stages. Full-resolution raw output bypasses low-resolution resolve.
 - There is no public `VBAODenoiseNode` toolkit or hidden external blur in the package API; `softness` controls optional internal polish.
+- Default full-resolution polish uses the near 8-tap `POISSON8` stencil only; any wider full-resolution tap budget needs separate timing and screenshot evidence before it can become default.
 - Production sampling is single-scheme `phase-atlas-stable-hash` with live shader x² near-biased spacing.
+- Noise source changes are gated: the current stable hash atlas remains default until a committed matrix compares it against IGN, static STBN, or FAST-like candidates with timing and failure labels.
 - Slices are uniformly averaged after cosine-measure sectorization; projected-normal length is used to frame the CDF, not to weight slices.
 - `normalNode` remains required.
 - Runtime Museum/E2E/benchmark paths no longer expose the old research candidate controls.
@@ -1087,15 +1165,16 @@ Production build was not run.
 ## Required Production Capture Matrix (Current)
 
 The current production capture script is intentionally narrow and honest: it captures
-`off`, `gtao`, and `vbao` only. N8AO remains available in the live Museum UI, but it
-is not emitted as raw/denoised production evidence because the node exposes an
-internally filtered output rather than a true raw/filtered pair.
+`off`, `gtao`, `ssao`, `vbao`, and one internally filtered `n8ao` row per
+view/resolution. N8AO remains available in the live Museum UI, but it is not emitted
+as a raw/denoised pair because the node exposes an internally filtered output rather
+than a true raw/filtered pair.
 
 | Field | Required values |
 | --- | --- |
-| `algorithm` | `off`, `gtao`, `vbao` |
+| `algorithm` | `off`, `gtao`, `ssao`, `vbao`, `n8ao` |
 | `viewMode` | `beauty`, `ao` |
-| `denoise` | `raw`/`denoised` for GTAO; `raw-debug`/`product` semantics for VBAO via the same demo toggle; off is raw-only. For VBAO this toggles raw debug AO vs final product AO, not a public denoiser node. |
+| `denoise` | `raw`/`denoised` for GTAO and SSAO; a single internally filtered/denoised row for N8AO; `raw-debug`/`product` semantics for VBAO via the same demo toggle; off is raw-only. For VBAO this toggles raw debug AO vs final product AO, not a public denoiser node. |
 | `vbaoSamplingSchedule` | `phase-atlas-stable-hash` or `n/a` |
 | `resolution` | `1920x1080`, `1280x720` |
 | `failureLabels` | `none`, `noise`, `mud`, `halo`, `thin-gap`, `edge-bleed`, `scale-mismatch`, `false-curvature` |
@@ -1111,7 +1190,7 @@ or the locked public quality tiers.
 | --- | --- |
 | `scene` | `museum` |
 | `resolution` | Exact capture dimensions: `1920x1080` or `1280x720` |
-| `mode` | `off`, `gtao`, or `vbao` |
+| `mode` | `off`, `gtao`, `ssao`, `vbao`, or `n8ao` |
 | `view` / `viewMode` | `beauty` or `ao` |
 | `denoise` / `denoiseEnabled` | Demo output toggle state; for VBAO this means raw debug AO vs final product AO |
 | `productOutputContract` | For VBAO, either `VBAONode.getRawTextureNode() raw debug AO` or `VBAONode.getTextureNode() final product AO with internal reconstruction/polish` |
@@ -1131,10 +1210,11 @@ new current rows here.
 
 ## Benchmark Policy
 
-First-pass benchmark scope is WebGPU apples-to-apples only: Three `GTAONode` and
-`VBAONode` running inside the Museum route. Native XeGTAO, AMD CACAO, and N8AO are
-design/comparison references, not current raw-vs-denoised production evidence rows.
-Curated output files must be committed explicitly when promoted.
+First-pass benchmark scope is WebGPU apples-to-apples only inside the Museum route.
+Three `GTAONode`, SSAO, `VBAONode`, and N8AO may be captured there, with N8AO as a
+single internally filtered baseline rather than raw-vs-denoised production evidence.
+Native XeGTAO and AMD CACAO remain design/comparison references. Curated output
+files must be committed explicitly when promoted.
 
 VBAO only "wins" when it is a Pareto improvement: equal or faster at comparable
 visual quality, or visibly better at comparable cost. Do not claim a benchmark win

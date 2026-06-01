@@ -164,9 +164,10 @@ async function runVbaoLabScene(container: HTMLDivElement, signal: AbortSignal): 
         radius: 0.55,
         thickness: 0.12,
         scale: 1.0,
+        softness: 0.65,
         samples: 8,
         slices: 3,
-        resolutionScale: 0.5,
+        resolutionScale: 1.0,
       })
 
   let activeAo: AoMode = isWebGlFallback ? 'off' : 'vbao'

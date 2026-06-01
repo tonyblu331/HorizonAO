@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-05-22
-- **Related:** ADR-007 (pivot), ADR-008 (AO-only scope), ADR-009 (no legacy).
+- **Related:** ADR-007 (pivot), ADR-008 (AO-only scope), ADR-009 (no legacy), ADR-013 (quality hardening).
 
 ## Context
 

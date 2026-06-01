@@ -14,12 +14,14 @@ import {
   ACESFilmicToneMapping,
   PerspectiveCamera,
   RenderPipeline,
+  RenderTarget,
   Scene,
   SphereGeometry,
   TorusKnotGeometry,
   UnsignedByteType,
   Vector2,
   Vector3,
+  Vector4,
   WebGPURenderer,
 } from 'three/webgpu'
 import {
@@ -38,6 +40,7 @@ import {
   pass,
   sample,
   sqrt,
+  texture,
   uniform,
   uv,
   vec3,
@@ -448,45 +451,53 @@ function createReferencePipelines(
   const ssaoRawScalar = Fn(() => {
     const centerUv = uv()
     const centerDepth = prePassDepth.sample(centerUv).r.toVar()
-    centerDepth.greaterThanEqual(1).discard()
+    const aoValue = float(1).toVar()
 
-    const centerView = getViewPosition(centerUv, centerDepth, ssaoProjectionMatrixInverse).toVar()
-    const centerNormal = samplePrePassNormal(centerUv).toVar()
-    const occlusion = float(0).toVar()
-    const sampleCount = int(12)
+    If(centerDepth.lessThan(1), () => {
+      const centerView = getViewPosition(centerUv, centerDepth, ssaoProjectionMatrixInverse).toVar()
+      const centerNormal = samplePrePassNormal(centerUv).toVar()
+      const occlusion = float(0).toVar()
+      const sampleCount = int(12)
 
-    loopInt({ start: int(0), end: sampleCount, type: 'int', condition: '<' }, ({ i }) => {
-      const sampleIndex = float(i).add(0.5)
-      const angle = sampleIndex.div(float(sampleCount)).mul(PI.mul(2))
-      const sampleRadius = ssaoRadius
-        .div(centerView.z.abs().max(0.001))
-        .mul(sampleIndex.div(float(sampleCount)))
-        .mul(0.55)
-      const sampleUv = centerUv.add(vec3(angle.cos(), angle.sin(), 0).xy.mul(sampleRadius)).toVar()
-      const sampleDepth = prePassDepth.sample(sampleUv).r.toVar()
-      const sampleView = getViewPosition(sampleUv, sampleDepth, ssaoProjectionMatrixInverse).toVar()
-      const sampleDelta = sampleView.sub(centerView).toVar()
-      const sampleDistance = sqrt(sampleDelta.dot(sampleDelta)).toVar()
-      const rangeWeight = float(1).sub(sampleDistance.div(ssaoRadius)).clamp(0, 1)
-      const normalWeight = centerNormal.dot(sampleDelta.normalize()).max(0)
-      const sampleScreen = getScreenPosition(sampleView, ssaoProjectionMatrix)
+      loopInt({ start: int(0), end: sampleCount, type: 'int', condition: '<' }, ({ i }) => {
+        const sampleIndex = float(i).add(0.5)
+        const angle = sampleIndex.div(float(sampleCount)).mul(PI.mul(2))
+        const sampleRadius = ssaoRadius
+          .div(centerView.z.abs().max(0.001))
+          .mul(sampleIndex.div(float(sampleCount)))
+          .mul(0.55)
+        const sampleUv = centerUv
+          .add(vec3(angle.cos(), angle.sin(), 0).xy.mul(sampleRadius))
+          .toVar()
+        const sampleDepth = prePassDepth.sample(sampleUv).r.toVar()
+        const sampleView = getViewPosition(sampleUv, sampleDepth, ssaoProjectionMatrixInverse).toVar()
+        const sampleDelta = sampleView.sub(centerView).toVar()
+        const sampleDistance = sqrt(sampleDelta.dot(sampleDelta)).toVar()
+        const rangeWeight = float(1).sub(sampleDistance.div(ssaoRadius)).clamp(0, 1)
+        const normalWeight = centerNormal.dot(sampleDelta.normalize()).max(0)
+        const sampleScreen = getScreenPosition(sampleView, ssaoProjectionMatrix)
 
-      If(
-        sampleView.z
-          .greaterThan(centerView.z.add(ssaoBias))
-          .and(sampleScreen.x.greaterThanEqual(0))
-          .and(sampleScreen.x.lessThanEqual(1))
-          .and(sampleScreen.y.greaterThanEqual(0))
-          .and(sampleScreen.y.lessThanEqual(1)),
-        () => {
-          occlusion.addAssign(rangeWeight.mul(normalWeight))
-        },
+        If(
+          sampleView.z
+            .greaterThan(centerView.z.add(ssaoBias))
+            .and(sampleScreen.x.greaterThanEqual(0))
+            .and(sampleScreen.x.lessThanEqual(1))
+            .and(sampleScreen.y.greaterThanEqual(0))
+            .and(sampleScreen.y.lessThanEqual(1)),
+          () => {
+            occlusion.addAssign(rangeWeight.mul(normalWeight))
+          },
+        )
+      })
+
+      aoValue.assign(
+        float(1)
+          .sub(occlusion.div(float(sampleCount)).mul(ssaoIntensity))
+          .clamp(0, 1),
       )
     })
 
-    return float(1)
-      .sub(occlusion.div(float(sampleCount)).mul(ssaoIntensity))
-      .clamp(0, 1)
+    return aoValue
   })()
 
   const gtaoNode = gtao(prePassDepth, prePassNormal, camera)
@@ -551,6 +562,12 @@ function createReferencePipelines(
     readonly beautyDenoised: RenderPipeline
     readonly aoRaw: RenderPipeline
     readonly aoDenoised: RenderPipeline
+  }
+  type ComposeTarget = {
+    readonly renderTarget: RenderTarget
+    readonly copyPipeline: RenderPipeline
+    width: number
+    height: number
   }
   const ssaoDenoisedScalar = (ssaoDenoised as unknown as typeof gtaoRaw).r
   const gtaoDenoisedScalar = (gtaoDenoised as unknown as typeof gtaoRaw).r
@@ -648,10 +665,13 @@ function createReferencePipelines(
     return activeVbao.pipelines
   }
   const composeBufferSize = new Vector2()
+  const composeSavedViewport = new Vector4()
+  const composeSavedScissor = new Vector4()
   let composeBufferWidth = 0
   let composeBufferHeight = 0
   let composeSegmentCount = 0
   let composeSegments: { readonly x: number; readonly width: number }[] = []
+  let composeTarget: ComposeTarget | undefined
 
   const getComposeSegments = (segmentCount: number) => {
     renderer.getDrawingBufferSize(composeBufferSize)
@@ -674,6 +694,62 @@ function createReferencePipelines(
       return { x, width: nextX - x }
     })
     return composeSegments
+  }
+
+  const getComposeTarget = () => {
+    if (composeTarget === undefined) {
+      const renderTarget = new RenderTarget(1, 1, { depthBuffer: false })
+      renderTarget.texture.name = 'AO.Compose.Shared'
+      renderTarget.texture.generateMipmaps = false
+
+      const copyPipeline = new RenderPipeline(renderer, texture(renderTarget.texture))
+      // Source pipelines already write the display-ready output into the RT.
+      // The split blit must not apply tone mapping / color-space conversion again.
+      copyPipeline.outputColorTransform = false
+
+      composeTarget = {
+        renderTarget,
+        copyPipeline,
+        width: 1,
+        height: 1,
+      }
+    }
+
+    if (composeTarget.width !== composeBufferWidth || composeTarget.height !== composeBufferHeight) {
+      composeTarget.width = composeBufferWidth
+      composeTarget.height = composeBufferHeight
+      composeTarget.renderTarget.setSize(composeBufferWidth, composeBufferHeight)
+    }
+
+    return composeTarget
+  }
+
+  const renderPipelineToComposeTarget = (pipeline: RenderPipeline) => {
+    const target = getComposeTarget()
+    const previousRenderTarget = renderer.getRenderTarget()
+    const previousAutoClear = renderer.autoClear
+    const previousScissorTest = renderer.getScissorTest()
+
+    renderer.getViewport(composeSavedViewport)
+    renderer.getScissor(composeSavedScissor)
+
+    renderer.setRenderTarget(target.renderTarget)
+    renderer.setViewport(0, 0, composeBufferWidth, composeBufferHeight)
+    renderer.setScissor(0, 0, composeBufferWidth, composeBufferHeight)
+    renderer.setScissorTest(false)
+    renderer.autoClear = true
+
+    try {
+      pipeline.render()
+    } finally {
+      renderer.setRenderTarget(previousRenderTarget)
+      renderer.setViewport(composeSavedViewport)
+      renderer.setScissor(composeSavedScissor)
+      renderer.setScissorTest(previousScissorTest)
+      renderer.autoClear = previousAutoClear
+    }
+
+    return target.copyPipeline
   }
 
   const renderMode = (
@@ -727,18 +803,20 @@ function createReferencePipelines(
       renderer.clear(true, true, true)
 
       try {
-        renderer.setScissorTest(true)
         modes.forEach((mode, index) => {
           const segment = segments[index]
           if (segment === undefined) return
+
+          renderer.setScissorTest(false)
+          if (mode === 'n8ao') n8aoNode.setDisplayMode(viewMode === 'ao' ? 'AO' : 'Combined')
+          const pipeline =
+            mode === 'vbao' ? activeVbaoPipelines(fullResolutionVbao)[key] : pipelines[mode][key]
+          const copyPipeline = renderPipelineToComposeTarget(pipeline)
+
+          renderer.setScissorTest(true)
           renderer.setViewport(segment.x, 0, segment.width, composeBufferHeight)
           renderer.setScissor(segment.x, 0, segment.width, composeBufferHeight)
-          if (mode === 'n8ao') n8aoNode.setDisplayMode(viewMode === 'ao' ? 'AO' : 'Combined')
-          if (mode === 'vbao') {
-            activeVbaoPipelines(fullResolutionVbao)[key].render()
-            return
-          }
-          pipelines[mode][key].render()
+          copyPipeline.render()
         })
       } finally {
         renderer.autoClear = previousAutoClear
@@ -759,6 +837,8 @@ function createReferencePipelines(
       gtaoNode.dispose()
       disposeActiveVbao()
       n8aoNode.dispose()
+      composeTarget?.copyPipeline.dispose()
+      composeTarget?.renderTarget.dispose()
     },
   }
 }

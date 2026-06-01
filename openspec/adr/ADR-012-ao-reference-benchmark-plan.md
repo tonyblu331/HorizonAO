@@ -2,6 +2,8 @@
 
 Date: 2026-05-25
 
+Related: ADR-013 (VBAO quality hardening roadmap)
+
 ## Status
 
 Accepted

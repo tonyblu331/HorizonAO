@@ -181,7 +181,8 @@ export async function runVbaoGltfScene(
         slices: 3,
         thickness: 0.25,
         scale: 1.0,
-        resolutionScale: 0.5,
+        softness: 0.65,
+        resolutionScale: 1.0,
         ...cfg.vbao,
       })
 

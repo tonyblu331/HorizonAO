@@ -219,7 +219,8 @@ async function runVbaoScene(container: HTMLDivElement, signal: AbortSignal): Pro
         slices: 3,
         thickness: 0.25,
         scale: 1.0,
-        resolutionScale: 0.5, // half-res AO, upsampled at composite
+        softness: 0.65,
+        resolutionScale: 1.0,
       })
 
   let activeAo: AoMode = isWebGlFallback ? 'off' : 'vbao'

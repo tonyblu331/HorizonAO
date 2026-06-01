@@ -161,6 +161,8 @@ export class VBAOResolveNode extends TempNode<'float'> {
       const bilinearFrac = fract(rawCoord).toVar('vbaoResolveBilinearFrac')
       const weightedAo = float(0).toVar('vbaoResolveWeightedAo')
       const totalWeight = float(0).toVar('vbaoResolveTotalWeight')
+      const fallbackAo = float(0).toVar('vbaoResolveFallbackAo')
+      const fallbackWeight = float(0).toVar('vbaoResolveFallbackWeight')
       const centerValid = centerDepth
         .lessThan(float(1))
         .and(centerDepth.greaterThanEqual(float(0)))
@@ -183,6 +185,9 @@ export class VBAOResolveNode extends TempNode<'float'> {
               .and(tapUv.y.lessThanEqual(float(1))),
             () => {
               const tapAo = rawAo.sample(tapUv).r
+              fallbackAo.addAssign(tapAo.mul(bilinearWeight))
+              fallbackWeight.addAssign(bilinearWeight)
+
               const tapDepth = sampleDepth(tapUv).toVar('vbaoResolveTapDepth')
               const tapNormal = sampleNormal(tapUv).toVar('vbaoResolveTapNormal')
               const tapPosition = getViewPosition(
@@ -217,10 +222,10 @@ export class VBAOResolveNode extends TempNode<'float'> {
       })
 
       const resolvedAo = weightedAo.div(max(totalWeight, float(1e-6)))
-      const fallbackAo = rawAo.sample(uvNode).r
+      const fallbackResolvedAo = fallbackAo.div(max(fallbackWeight, float(1e-6)))
       return centerValid
         .and(totalWeight.greaterThan(float(1e-5)))
-        .select(clamp(resolvedAo, float(0), float(1)), fallbackAo)
+        .select(clamp(resolvedAo, float(0), float(1)), clamp(fallbackResolvedAo, float(0), float(1)))
     })
 
     this.material.fragmentNode = resolveKernel()

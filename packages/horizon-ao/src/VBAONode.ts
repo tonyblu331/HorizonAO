@@ -29,7 +29,6 @@ import {
   dot,
   float,
   floor,
-  fract,
   Fn,
   getScreenPosition,
   getViewPosition,
@@ -85,6 +84,12 @@ type SampleableNode = Node & {
   sample: (uvCoord: Node) => any
 }
 
+type VbaoRawLoopShape = {
+  readonly slices: number
+  readonly samples: number
+  readonly fixed: boolean
+}
+
 /** Visibility-bitmask ambient occlusion for Three.js TSL/WebGPU. */
 export class VBAONode extends TempNode<'float'> {
   static get type(): string {
@@ -121,6 +126,11 @@ export class VBAONode extends TempNode<'float'> {
   private outputTextureNode?: TextureNode
   private outputGraphKey = ''
   private outputGraphCreated = false
+  private rawLoopShape: VbaoRawLoopShape = {
+    slices: VBAO_DEFAULTS.slices,
+    samples: VBAO_DEFAULTS.samples,
+    fixed: false,
+  }
   private readonly cameraProjectionMatrix
   private readonly cameraProjectionMatrixInverse
   private readonly cameraNear
@@ -155,6 +165,20 @@ export class VBAONode extends TempNode<'float'> {
     this.configure(options)
   }
 
+  private resolveRawLoopShape(options: VBAONodeOptions, next: { slices: number; samples: number }): VbaoRawLoopShape {
+    const qualityName = options.quality ?? options.preset
+    const fixed =
+      qualityName !== undefined &&
+      options.slices === undefined &&
+      options.samples === undefined
+
+    return {
+      slices: next.slices,
+      samples: next.samples,
+      fixed,
+    }
+  }
+
   configure(options: VBAONodeOptions): void {
     const qualityName = options.quality ?? options.preset
     const quality =
@@ -182,13 +206,18 @@ export class VBAONode extends TempNode<'float'> {
       resolutionScale: options.resolutionScale ?? quality?.resolutionScale ?? fallback.resolutionScale,
     } satisfies VBAONodeOptions
     const next = clampVbaoNodeOptions(mergedOptions)
+    const nextLoopShape = this.resolveRawLoopShape(options, next)
 
     if (
       this.outputGraphCreated &&
-      (next.softness !== this.softness.value || next.resolutionScale !== this.resolutionScale)
+      (next.softness !== this.softness.value ||
+        next.resolutionScale !== this.resolutionScale ||
+        nextLoopShape.slices !== this.rawLoopShape.slices ||
+        nextLoopShape.samples !== this.rawLoopShape.samples ||
+        nextLoopShape.fixed !== this.rawLoopShape.fixed)
     ) {
       throw new Error(
-        'VBAONode.configure(): softness and resolutionScale affect the pass graph and are construction-time only after getTextureNode(); create a new VBAONode or rebuild downstream pipelines.',
+        'VBAONode.configure(): softness and resolutionScale affect the pass graph; product loop shape is construction-time only after getTextureNode(); create a new VBAONode or rebuild downstream pipelines.',
       )
     }
 
@@ -200,9 +229,22 @@ export class VBAONode extends TempNode<'float'> {
     this.slices.value = next.slices
     this.samples.value = next.samples
     this.resolutionScale = next.resolutionScale
+    this.rawLoopShape = nextLoopShape
   }
 
-  private getOrCreateHalfCleanupNode(input: TextureNode): VBAOHalfResCleanupNode {
+  private lowResolutionCleanupStrength(): number {
+    return this.resolutionScale < 0.99 ? this.softness.value : 0
+  }
+
+  private fullResolutionPolishStrength(): number {
+    if (this.resolutionScale < 0.99) {
+      return Math.max(0, this.softness.value - 0.5) * 2
+    }
+
+    return this.softness.value
+  }
+
+  private getOrCreateHalfCleanupNode(input: TextureNode, strength: number): VBAOHalfResCleanupNode {
     if (this.halfCleanupNode === undefined || this.halfCleanupNode.rawAoNode !== input) {
       this.halfCleanupNode?.dispose()
       this.halfCleanupNode = new VBAOHalfResCleanupNode(
@@ -213,14 +255,14 @@ export class VBAONode extends TempNode<'float'> {
         this.radius,
         {
           enabled: true,
-          strength: this.softness.value,
+          strength,
           resolutionScale: this.resolutionScale,
         },
       )
     } else {
       this.halfCleanupNode.configure({
         enabled: true,
-        strength: this.softness.value,
+        strength,
         resolutionScale: this.resolutionScale,
       })
     }
@@ -237,7 +279,7 @@ export class VBAONode extends TempNode<'float'> {
     return this.resolveNode
   }
 
-  private getOrCreateFullPolishNode(input: TextureNode): VBAOFullResPolishNode {
+  private getOrCreateFullPolishNode(input: TextureNode, strength: number): VBAOFullResPolishNode {
     if (this.fullPolishNode === undefined || this.fullPolishNode.aoNode !== input) {
       this.fullPolishNode?.dispose()
       this.fullPolishNode = new VBAOFullResPolishNode(
@@ -248,13 +290,13 @@ export class VBAONode extends TempNode<'float'> {
         this.radius,
         {
           enabled: true,
-          strength: this.softness.value,
+          strength,
         },
       )
     } else {
       this.fullPolishNode.configure({
         enabled: true,
-        strength: this.softness.value,
+        strength,
       })
     }
 
@@ -274,10 +316,12 @@ export class VBAONode extends TempNode<'float'> {
   }
 
   private currentOutputGraphKey(): string {
-    const wantsPolish = this.softness.value > 0
+    const cleanupStrength = this.lowResolutionCleanupStrength()
+    const polishStrength = this.fullResolutionPolishStrength()
     return [
       this.resolutionScale < 0.99 ? 'low' : 'full',
-      wantsPolish ? 'polish' : 'raw',
+      cleanupStrength > 0 ? 'cleanup' : 'raw',
+      polishStrength > 0 ? 'polish' : 'no-polish',
       this.resolutionScale.toFixed(4),
       this.softness.value.toFixed(4),
     ].join(':')
@@ -295,7 +339,8 @@ export class VBAONode extends TempNode<'float'> {
   }
 
   private rebuildOutputGraph(): void {
-    const wantsPolish = this.softness.value > 0
+    const cleanupStrength = this.lowResolutionCleanupStrength()
+    const polishStrength = this.fullResolutionPolishStrength()
     const graphKey = this.currentOutputGraphKey()
 
     if (graphKey === this.outputGraphKey && this.outputTextureNode !== undefined) return
@@ -303,8 +348,8 @@ export class VBAONode extends TempNode<'float'> {
     let output: TextureNode = this.textureNode
 
     if (this.resolutionScale < 0.99) {
-      if (wantsPolish) {
-        output = this.getOrCreateHalfCleanupNode(output).getTextureNode()
+      if (cleanupStrength > 0) {
+        output = this.getOrCreateHalfCleanupNode(output, cleanupStrength).getTextureNode()
       } else {
         this.halfCleanupNode?.dispose()
         this.halfCleanupNode = undefined
@@ -315,8 +360,8 @@ export class VBAONode extends TempNode<'float'> {
       this.disposeLowResGraph()
     }
 
-    if (wantsPolish) {
-      output = this.getOrCreateFullPolishNode(output).getTextureNode()
+    if (polishStrength > 0) {
+      output = this.getOrCreateFullPolishNode(output, polishStrength).getTextureNode()
     } else {
       this.disposeFullPolishGraph()
     }
@@ -368,6 +413,10 @@ export class VBAONode extends TempNode<'float'> {
 
   setup(builder: any): TextureNode {
     const uvNode = uv()
+    const sliceLoopEnd = this.rawLoopShape.fixed ? int(this.rawLoopShape.slices) : int(this.slices)
+    const sampleLoopEnd = this.rawLoopShape.fixed ? int(this.rawLoopShape.samples) : int(this.samples)
+    const sliceCount = this.rawLoopShape.fixed ? float(this.rawLoopShape.slices) : float(this.slices)
+    const sampleCount = this.rawLoopShape.fixed ? float(this.rawLoopShape.samples) : float(this.samples)
 
     const sampleDepth = (uvCoord: any) => {
       const d = this.depthNode.sample(uvCoord).r
@@ -511,11 +560,11 @@ export class VBAONode extends TempNode<'float'> {
       const weightedAccessibility = float(0).toVar('weightedAccessibility')
       const weightSum = float(0).toVar('weightSum')
 
-      ;(Loop as any)({ start: int(0), end: int(this.slices), type: 'int', condition: '<' }, ({ i }: any) => {
+      ;(Loop as any)({ start: int(0), end: sliceLoopEnd, type: 'int', condition: '<' }, ({ i }: any) => {
         // GT-VBAO++ axial slice orientation: mirrored two-sided sampling covers π, not 2π.
         const sliceNoiseTexel = sampleNoisePhase(i, int(0))
         const rotation = sliceNoiseTexel.x.toVar('vbaoSliceRotation')
-        const phi = float(i).add(rotation).div(float(this.slices)).mul(PI)
+        const phi = float(i).add(rotation).div(sliceCount).mul(PI)
         const S_i = (normalize((T0 as any).mul(cos(phi)).add((T1 as any).mul(sin(phi)))) as any).toVar('S_i')
         const B_i = (normalize(cross(S_i as any, V as any) as any) as any).toVar('B_i')
         const NprojRaw = N.sub(B_i.mul(dot(N, B_i))).toVar('NprojRaw')
@@ -537,13 +586,13 @@ export class VBAONode extends TempNode<'float'> {
             )
 
             ;(Loop as any)(
-              { start: int(0), end: int(this.samples), type: 'int', condition: '<', name: 'j' },
+              { start: int(0), end: sampleLoopEnd, type: 'int', condition: '<', name: 'j' },
               ({ j }: any) => {
                 If(occludedMask.notEqual(bitNot(uint(0))), () => {
                   const sampleNoiseTexel = sampleNoisePhase(i, j)
                   const stepJitter = sampleNoiseTexel.y.toVar('stepJitter')
                   const subsectorNoise = sampleNoiseTexel.z.toVar('vbaoSubsectorNoise')
-                  const stepT = float(j).add(stepJitter).div(float(this.samples))
+                  const stepT = float(j).add(stepJitter).div(sampleCount)
                   const stepFrac = stepT.mul(stepT)
                   const sampleScreenPos = uvNode
                     .add(sampleScreenEnd.sub(uvNode).mul(stepFrac))
