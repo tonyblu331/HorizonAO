@@ -6,6 +6,7 @@
   "scripts": {
     "benchmark:ao": "node scripts/collect-ao-benchmark.mjs",
     "benchmark:ao:gpu-readback": "node scripts/collect-ao-gpu-readback-baseline.mjs",
+    "benchmark:vbao-noise": "node scripts/collect-vbao-noise-source-comparison.mjs",
     "verify:vbao-temporal": "node scripts/verify-vbao-temporal-gate.mjs",
     "dev": "vite --host 127.0.0.1",
     "test": "vitest run --passWithNoTests --exclude e2e/**",

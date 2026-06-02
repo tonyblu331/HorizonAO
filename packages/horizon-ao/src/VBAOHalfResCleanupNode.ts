@@ -18,10 +18,8 @@ import {
 import {
   Fn,
   If,
-  abs,
   clamp,
   dot,
-  exp2,
   float,
   getViewPosition,
   logarithmicDepthToViewZ,
@@ -34,6 +32,8 @@ import {
   vec2,
   viewZToPerspectiveDepth,
 } from 'three/tsl'
+
+import { computeVbaoBilateralGeometryWeight } from './vbaoBilateralWeight'
 
 export interface VBAOHalfResCleanupNodeOptions {
   readonly enabled?: boolean
@@ -177,8 +177,6 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
   }
 
   setup(builder: any): TextureNode {
-    if (!this.enabled) return this.rawAoNode
-
     const uvNode = uv()
     const rawAo = this.rawAoNode as any
     const depthNode = this.depthNode as any
@@ -238,25 +236,15 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
               .lessThan(float(1))
               .and(tapDepth.greaterThanEqual(float(0)))
               .and(dot(tapNormal, tapNormal).greaterThan(float(0.001)))
-            const normalAgreement = clamp(dot(centerNormal, tapNormal), float(0), float(1))
-            const planeDistance = abs(dot(tapPosition.sub(centerPosition), centerNormal)).toVar(
-              `vbaoHalfResCleanupPlaneDistance${tapIndex}`,
+            const geometryWeight = computeVbaoBilateralGeometryWeight(
+              centerPosition,
+              centerNormal,
+              tapPosition,
+              tapNormal,
+              this.radiusNode,
+              `vbaoHalfResCleanup${tapIndex}`,
             )
-            const depthWeight = exp2(
-              planeDistance
-                .negate()
-                .mul(float(24))
-                .div(max(float(this.radiusNode as any), float(1e-3))),
-            )
-            const normal2 = normalAgreement
-              .mul(normalAgreement)
-              .toVar(`vbaoHalfResCleanupNormal2${tapIndex}`)
-            const normal4 = normal2.mul(normal2).toVar(`vbaoHalfResCleanupNormal4${tapIndex}`)
-            const normalWeight = normal4
-              .mul(normal4)
-              .toVar(`vbaoHalfResCleanupNormalWeight${tapIndex}`)
-            const tapWeight = depthWeight
-              .mul(normalWeight)
+            const tapWeight = geometryWeight
               .mul(float(spatialWeight))
               .toVar(`vbaoHalfResCleanupTapWeight${tapIndex}`)
 

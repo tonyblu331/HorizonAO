@@ -31,8 +31,8 @@ The remaining problems are implementation discipline problems:
   and polish independently.
 - The current hash phase atlas is useful, but not proven against IGN, STBN/static,
   or FAST-like alternatives.
-- Reference/report modules live beside runtime modules, even though they are not
-  package exports.
+- Reference/report modules must live outside runtime `src/`, even though they are
+  not package exports.
 
 ## Scope
 
@@ -68,8 +68,8 @@ The remaining problems are implementation discipline problems:
 | `packages/horizon-ao/src/vbaoConstants.ts` | Product tier values remain the source of fixed loop shapes |
 | `apps/demo/scripts/collect-ao-benchmark.mjs` | Pass-level timing schema |
 | `EVIDENCE.md` | Evidence rows for pass costs, noise source comparisons, and drift status |
-| `packages/horizon-ao/src/reference/` | Future home for reference/report modules |
-| `packages/horizon-ao/src/__tests__/` | Source-contract, reference, and evidence-contract tests |
+| `packages/horizon-ao/reference/` | Home for reference/report modules and reference-focused tests |
+| `packages/horizon-ao/src/__tests__/` | Runtime source-contract and production behavior tests |
 
 ## Success Criteria
 

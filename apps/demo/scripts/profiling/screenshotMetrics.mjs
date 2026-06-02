@@ -51,6 +51,10 @@ export async function analyzeScreenshotQuality(page, screenshotPath) {
     let dxSum = 0
     let dySum = 0
     let diffCount = 0
+    let thinGapSignal = 0
+    let thinGapCount = 0
+    let edgeBleedSignal = 0
+    let edgeBleedCount = 0
 
     for (let y = radius; y < height - radius; y++) {
       for (let x = radius; x < width - radius; x++) {
@@ -68,6 +72,23 @@ export async function analyzeScreenshotQuality(page, screenshotPath) {
         dxSum += Math.abs(luma[index] - luma[index - 1])
         dySum += Math.abs(luma[index] - luma[index - width])
         diffCount++
+
+        const horizontalGap = Math.max(0, luma[index] - (luma[index - 2] + luma[index + 2]) * 0.5)
+        const verticalGap = Math.max(
+          0,
+          luma[index] - (luma[index - 2 * width] + luma[index + 2 * width]) * 0.5,
+        )
+        thinGapSignal += Math.max(horizontalGap, verticalGap)
+        thinGapCount++
+
+        const nearContrast =
+          Math.abs(luma[index + 1] - luma[index - 1]) +
+          Math.abs(luma[index + width] - luma[index - width])
+        const farContrast =
+          Math.abs(luma[index + radius] - luma[index - radius]) +
+          Math.abs(luma[index + radius * width] - luma[index - radius * width])
+        edgeBleedSignal += Math.max(0, farContrast - nearContrast)
+        edgeBleedCount++
       }
     }
 
@@ -98,7 +119,8 @@ export async function analyzeScreenshotQuality(page, screenshotPath) {
     const std = (values) => {
       const mean = values.reduce((total, value) => total + value, 0) / Math.max(1, values.length)
       return Math.sqrt(
-        values.reduce((total, value) => total + (value - mean) ** 2, 0) / Math.max(1, values.length),
+        values.reduce((total, value) => total + (value - mean) ** 2, 0) /
+          Math.max(1, values.length),
       )
     }
 
@@ -107,7 +129,10 @@ export async function analyzeScreenshotQuality(page, screenshotPath) {
     const stripeScore = Math.max(horizontalStripeScore, verticalStripeScore)
     const meanAbsDx = dxSum / Math.max(1, diffCount)
     const meanAbsDy = dySum / Math.max(1, diffCount)
-    const directionalAnisotropy = Math.abs(meanAbsDx - meanAbsDy) / Math.max(meanAbsDx + meanAbsDy, 1e-6)
+    const directionalAnisotropy =
+      Math.abs(meanAbsDx - meanAbsDy) / Math.max(meanAbsDx + meanAbsDy, 1e-6)
+    const thinGapPreservationProxy = thinGapSignal / Math.max(1, thinGapCount)
+    const edgeBleedProxy = edgeBleedSignal / Math.max(1, edgeBleedCount)
 
     return {
       crop,
@@ -118,10 +143,12 @@ export async function analyzeScreenshotQuality(page, screenshotPath) {
       horizontalStripeScore,
       verticalStripeScore,
       directionalAnisotropy,
+      edgeBleedProxy,
+      thinGapPreservationProxy,
       meanAbsDx,
       meanAbsDy,
       basis:
-        'Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS.',
+        'Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast.',
     }
   }, base64)
 }

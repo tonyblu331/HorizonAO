@@ -3,10 +3,9 @@
  *
  * Pinned by `openspec/specs/vbao-node/spec.md` and `openspec/changes/vbao-pivot/design.md`.
  *
- * SECTOR_COUNT, the sector angle table, and the quality tier values are
- * **NOT user-adjustable** in v1. They are exposed here so callers can read
- * them for diagnostics and demo wiring, but they cannot be changed without
- * a new shader variant — and v1 ships exactly one.
+ * SECTOR_COUNT and the quality tier values are **NOT user-adjustable** in v1.
+ * Product quality presets now use fixed slice/sample loop shapes while
+ * preserving the same 32-sector bitmask contract.
  */
 
 /**
@@ -22,40 +21,6 @@ export const VBAO_THETA_MIN = -Math.PI * 0.5
 export const VBAO_THETA_MAX = Math.PI * 0.5
 export const VBAO_THETA_RANGE = Math.PI
 export const VBAO_THETA_STEP = VBAO_THETA_RANGE / SECTOR_COUNT
-
-/**
- * Sector center angles in radians, indexed by sector `k ∈ [0, SECTOR_COUNT)`.
- *
- * Sectors are uniformly distributed after the slice-local cosine-measure CDF,
- * so exported angles are reference/debug coordinates only:
- *
- *   `θ_k = (k + 0.5) · (π / SECTOR_COUNT) - π/2`
- *
- * Computed once at module load. NOT a uniform.
- */
-export const VBAO_SECTOR_ANGLES: readonly number[] = (() => {
-  const out = new Array<number>(SECTOR_COUNT)
-  for (let k = 0; k < SECTOR_COUNT; k++) {
-    out[k] = (k + 0.5) * VBAO_THETA_STEP + VBAO_THETA_MIN
-  }
-  return Object.freeze(out)
-})()
-
-/**
- * Cosine and sine tables for {@link VBAO_SECTOR_ANGLES}.
- *
- * Reference/debug cosine and sine tables for {@link VBAO_SECTOR_ANGLES}.
- *
- * Production sectorization uses cosine-measure CDF remapping and reduces by
- * popcount, so these tables are not part of the live shader hot path.
- */
-export const VBAO_SECTOR_COSINES: readonly number[] = Object.freeze(
-  VBAO_SECTOR_ANGLES.map((theta) => Math.cos(theta)),
-)
-
-export const VBAO_SECTOR_SINES: readonly number[] = Object.freeze(
-  VBAO_SECTOR_ANGLES.map((theta) => Math.sin(theta)),
-)
 
 /**
  * Default values for the public `VBAONode` uniforms.
@@ -95,7 +60,8 @@ export const VBAO_CLAMP_RANGES = Object.freeze({
 /**
  * Locked quality tier values.
  *
- * One sector count across all tiers (32) so v1 ships a single shader variant.
+ * One sector count across all tiers (32); product presets vary only the fixed
+ * slice/sample loop bounds.
  * Tier values are read by the demo and EVIDENCE capture; tier numbers are
  * pinned by `openspec/specs/vbao-node/spec.md` and any change requires a
  * spec amendment.

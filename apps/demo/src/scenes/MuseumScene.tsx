@@ -58,6 +58,8 @@ import { VBAONode } from '@horizonao/core'
 import { VBAOFullResPolishNode } from '../../../../packages/horizon-ao/src/VBAOFullResPolishNode'
 import { VBAOHalfResCleanupNode } from '../../../../packages/horizon-ao/src/VBAOHalfResCleanupNode'
 import { VBAOResolveNode } from '../../../../packages/horizon-ao/src/VBAOResolveNode'
+import { VBAOResolvePolishNode } from '../../../../packages/horizon-ao/src/VBAOResolvePolishNode'
+import { VBAOVelocityTemporalNode } from '../../../../packages/horizon-ao/src/VBAOVelocityTemporalNode'
 import { createGpuPassTimingProbe, type GpuPassTiming } from './gpuPassTimingProbe'
 import {
   VBAO_BENCHMARK_NOISE_SOURCES,
@@ -79,25 +81,16 @@ type VbaoBenchmarkOptions = NonNullable<ConstructorParameters<typeof VBAONode>[3
   readonly temporalMode?: VbaoTemporalMode
 }
 type VbaoSampleMode = 'product-preset' | 'debug-override' | 'spatial-ultra'
-type VbaoTemporalMode = 'off' | 'host' | 'internal'
+type VbaoTemporalMode = 'off' | 'host' | 'velocity-internal'
 type VbaoHostTaaMode = 'off' | 'traa'
+type VbaoCleanupMode = 'on' | 'skip'
+type VbaoResolvePolishMode = 'separate' | 'fused'
 type VbaoBenchmarkTemporalMode = VbaoTemporalMode | 'n/a'
 type VbaoBenchmarkHostTaaMode = VbaoHostTaaMode | 'n/a'
+type VbaoBenchmarkCleanupMode = VbaoCleanupMode | 'n/a'
+type VbaoBenchmarkResolvePolishMode = VbaoResolvePolishMode | 'n/a'
 type VbaoBenchmarkSamplePreset = 'quality' | 'debug-override' | 'spatial-ultra' | 'n/a'
-type VbaoBenchmarkTemporalDiagnostics =
-  | {
-      readonly enabled: boolean
-      readonly validationMode: string
-      readonly historyWeight: number
-      readonly depthContinuityThreshold: number
-      readonly normalContinuityThreshold: number
-      readonly cameraCutResetDistance: number
-      readonly historyResetPending: boolean
-      readonly pendingResetReason: string
-      readonly lastAppliedResetReason: string
-      readonly gpuRejectionCounters: string
-    }
-  | null
+type VbaoBenchmarkTemporalDiagnostics = null
 type VbaoReconstructionStage = 'raw' | 'cleanup' | 'resolve' | 'polish' | 'final'
 type TslIntLoop = (
   params: {
@@ -131,9 +124,12 @@ interface Stats {
   readonly vbaoNoiseSource: VbaoBenchmarkNoiseSource
   readonly vbaoTemporalMode: VbaoBenchmarkTemporalMode
   readonly vbaoHostTaaMode: VbaoBenchmarkHostTaaMode
+  readonly vbaoCleanupMode: VbaoBenchmarkCleanupMode
+  readonly vbaoResolvePolishMode: VbaoBenchmarkResolvePolishMode
   readonly vbaoTemporalDiagnostics: VbaoBenchmarkTemporalDiagnostics
   readonly vbaoSamplePreset: VbaoBenchmarkSamplePreset
   readonly vbaoReconstructionStage: VbaoReconstructionStage | 'n/a'
+  readonly vbaoSoftness: number
   readonly vbaoRadius: number
   readonly vbaoThickness: number
   readonly vbaoSamples: number
@@ -231,13 +227,28 @@ function getRequestedVbaoSampleMode(): VbaoSampleMode {
 
 function getRequestedVbaoTemporalMode(): VbaoTemporalMode {
   const requested = new URLSearchParams(window.location.search).get('vbaoTemporalMode')
-  if (requested === 'internal') return 'internal'
+  if (requested === 'velocity-internal') return 'velocity-internal'
   return requested === 'host' ? 'host' : 'off'
 }
 
 function getRequestedVbaoHostTaaMode(): VbaoHostTaaMode {
   const requested = new URLSearchParams(window.location.search).get('vbaoHostTaa')
   return requested === 'traa' ? 'traa' : 'off'
+}
+
+function getRequestedVbaoCleanupMode(): VbaoCleanupMode {
+  const requested = new URLSearchParams(window.location.search).get('vbaoCleanup')
+  return requested === 'skip' ? 'skip' : 'on'
+}
+
+function getRequestedVbaoResolvePolishMode(): VbaoResolvePolishMode {
+  const requested = new URLSearchParams(window.location.search).get('vbaoResolvePolish')
+  return requested === 'fused' ? 'fused' : 'separate'
+}
+
+function getRequestedVbaoSoftness(): number {
+  const requested = Number(new URLSearchParams(window.location.search).get('vbaoSoftness') ?? 0.45)
+  return Number.isFinite(requested) ? Math.max(0, Math.min(1, requested)) : 0.45
 }
 
 function getRequestedVbaoReconstructionStage(): VbaoReconstructionStage {
@@ -393,6 +404,9 @@ async function runGtaoReferenceScene(
   const vbaoSampleMode = getRequestedVbaoSampleMode()
   const vbaoTemporalMode = getRequestedVbaoTemporalMode()
   const vbaoHostTaaMode = getRequestedVbaoHostTaaMode()
+  const vbaoCleanupMode = getRequestedVbaoCleanupMode()
+  const vbaoResolvePolishMode = getRequestedVbaoResolvePolishMode()
+  const vbaoSoftness = getRequestedVbaoSoftness()
   let vbaoReconstructionStage = getRequestedVbaoReconstructionStage()
   const pipelines = isWebGlFallback
     ? undefined
@@ -404,6 +418,9 @@ async function runGtaoReferenceScene(
         vbaoSampleMode,
         vbaoTemporalMode,
         vbaoHostTaaMode,
+        vbaoCleanupMode,
+        vbaoResolvePolishMode,
+        vbaoSoftness,
         () => vbaoReconstructionStage,
       )
   let activeMode: CompareMode = 'off'
@@ -531,16 +548,16 @@ async function runGtaoReferenceScene(
       vbaoNoiseSource: usesVbao ? vbaoNoiseSource : 'n/a',
       vbaoTemporalMode: usesVbao ? vbaoTemporalMode : 'n/a',
       vbaoHostTaaMode: usesVbao ? vbaoHostTaaMode : 'n/a',
-      vbaoTemporalDiagnostics:
-        usesVbao && vbaoTemporalMode === 'internal' && pipelines !== undefined
-          ? (pipelines.getVbaoTemporalDiagnostics(fullResolutionVbao) ?? null)
-          : null,
+      vbaoCleanupMode: usesVbao ? vbaoCleanupMode : 'n/a',
+      vbaoResolvePolishMode: usesVbao ? vbaoResolvePolishMode : 'n/a',
+      vbaoTemporalDiagnostics: null,
       vbaoSamplePreset: usesVbao
         ? vbaoSampleMode !== 'product-preset'
           ? vbaoSampleMode
           : VBAO_PRODUCT_QUALITY
         : 'n/a',
       vbaoReconstructionStage: usesVbao ? vbaoReconstructionStage : 'n/a',
+      vbaoSoftness: usesVbao ? vbaoSoftness : 0,
       vbaoRadius: usesVbao ? VBAO_RADIUS_STRESS_PRESETS.baseline.radius : 0,
       vbaoThickness: usesVbao ? VBAO_RADIUS_STRESS_PRESETS.baseline.thickness : 0,
       vbaoSamples: usesVbao
@@ -609,6 +626,9 @@ function createReferencePipelines(
   vbaoSampleMode: VbaoSampleMode,
   vbaoTemporalMode: VbaoTemporalMode,
   vbaoHostTaaMode: VbaoHostTaaMode,
+  vbaoCleanupMode: VbaoCleanupMode,
+  vbaoResolvePolishMode: VbaoResolvePolishMode,
+  vbaoSoftness: number,
   getVbaoReconstructionStage: () => VbaoReconstructionStage,
 ) {
   const prePass = pass(scene, camera)
@@ -626,7 +646,11 @@ function createReferencePipelines(
   const samplePrePassNormal = (
     sampleUv: Parameters<ReturnType<typeof prePass.getTextureNode>['sample']>[0],
   ) => colorToDirection(prePass.getTextureNode().sample(sampleUv))
+  const previousPrePassNormal = sample((sampleUv) =>
+    colorToDirection(prePass.getPreviousTextureNode('output').sample(sampleUv)),
+  )
   const prePassDepth = prePass.getTextureNode('depth')
+  const previousPrePassDepth = prePass.getPreviousTextureNode('depth')
   const prePassVelocity = prePass.getTextureNode('velocity')
   const normalTexture = prePass.getTexture('output')
   normalTexture.type = UnsignedByteType
@@ -808,6 +832,8 @@ function createReferencePipelines(
   let activeVbao:
     | {
         readonly fullResolution: boolean
+        readonly cleanupMode: VbaoCleanupMode
+        readonly resolvePolishMode: VbaoResolvePolishMode
         readonly node: VBAONode
         readonly stageNodes: readonly {
           dispose: () => void
@@ -841,7 +867,7 @@ function createReferencePipelines(
       radius: baselineVbaoRadius.radius,
       thickness: baselineVbaoRadius.thickness,
       contrast: 0.85,
-      softness: 0.45,
+      softness: vbaoSoftness,
       resolutionScale: fullResolution ? 1.0 : 0.5,
       benchmark: { noiseTexture: createVbaoBenchmarkNoiseTexture(vbaoNoiseSource) },
       temporalMode: vbaoTemporalMode,
@@ -859,7 +885,91 @@ function createReferencePipelines(
     }
     const vbaoNode = new VBAONode(prePassDepth, prePassNormal, camera, vbaoOptions)
     const vbaoRawScalar = vbaoNode.getRawTextureNode().r
-    const vbaoProductScalar = vbaoNode.getTextureNode().r
+    let vbaoProductNode = fullResolution ? vbaoNode.getTextureNode() : vbaoNode.getRawTextureNode()
+    let vbaoProductScalar = vbaoProductNode.r
+    let stagePipelines: VbaoStagePipelineSet | undefined
+    const stageNodes: {
+      dispose: () => void
+    }[] = []
+
+    if (!fullResolution) {
+      const cleanupNode = new VBAOHalfResCleanupNode(
+        vbaoNode.getRawTextureNode(),
+        prePassDepth,
+        prePassNormal,
+        camera,
+        vbaoNode.radius,
+        {
+          enabled: vbaoCleanupMode === 'on',
+          strength: vbaoSoftness,
+          resolutionScale: 0.5,
+        },
+      )
+      const cleanupTextureNode = cleanupNode.getTextureNode()
+      const resolveNode = new VBAOResolveNode(
+        vbaoCleanupMode === 'on' ? cleanupTextureNode : vbaoNode.getRawTextureNode(),
+        prePassDepth,
+        prePassNormal,
+        camera,
+        vbaoNode.radius,
+      )
+      const polishStrength = Math.max(0, (vbaoOptions.softness ?? 0) - 0.5) * 2
+      const fusedResolvePolishNode =
+        vbaoResolvePolishMode === 'fused' && polishStrength > 0
+          ? new VBAOResolvePolishNode(
+              vbaoCleanupMode === 'on' ? cleanupTextureNode : vbaoNode.getRawTextureNode(),
+              prePassDepth,
+              prePassNormal,
+              camera,
+              vbaoNode.radius,
+              { strength: polishStrength },
+            )
+          : undefined
+      const polishNode = new VBAOFullResPolishNode(
+        resolveNode.getTextureNode(),
+        prePassDepth,
+        prePassNormal,
+        camera,
+        vbaoNode.radius,
+        {
+          enabled: polishStrength > 0,
+          strength: polishStrength,
+        },
+      )
+      const cleanupScalar = cleanupTextureNode.r
+      const resolveScalar = resolveNode.getTextureNode().r
+      const polishTextureNode = fusedResolvePolishNode?.getTextureNode() ?? polishNode.getTextureNode()
+      const polishScalar = polishTextureNode.r
+      vbaoProductNode = polishTextureNode
+      vbaoProductScalar = polishScalar
+      stageNodes.push(cleanupNode, resolveNode, polishNode)
+      if (fusedResolvePolishNode !== undefined) stageNodes.push(fusedResolvePolishNode)
+      stagePipelines = {
+        raw: makeAoPipeline(vbaoRawScalar),
+        cleanup: makeAoPipeline(cleanupScalar),
+        resolve: makeAoPipeline(resolveScalar),
+        polish: makeAoPipeline(polishScalar),
+        final: makeAoPipeline(vbaoProductScalar),
+      }
+    }
+
+    const vbaoVelocityTemporalNode =
+      vbaoTemporalMode === 'velocity-internal'
+        ? new VBAOVelocityTemporalNode(
+            vbaoProductNode,
+            prePassDepth,
+            prePassNormal,
+            prePassVelocity,
+            previousPrePassDepth,
+            previousPrePassNormal,
+            camera,
+          )
+        : undefined
+    if (vbaoVelocityTemporalNode !== undefined) {
+      vbaoProductScalar = vbaoVelocityTemporalNode.getTextureNode().r
+      stageNodes.push(vbaoVelocityTemporalNode)
+    }
+
     const useHostTaa = vbaoTemporalMode === 'host' && vbaoHostTaaMode === 'traa'
     const vbaoBeautyProductNode = useHostTaa
       ? traa(
@@ -877,60 +987,13 @@ function createReferencePipelines(
           camera,
         )
       : undefined
-    let stagePipelines: VbaoStagePipelineSet | undefined
-    const stageNodes: {
-      dispose: () => void
-    }[] = []
     if (vbaoBeautyProductNode !== undefined) stageNodes.push(vbaoBeautyProductNode)
     if (vbaoAoProductNode !== undefined) stageNodes.push(vbaoAoProductNode)
 
-    if (!fullResolution) {
-      const cleanupNode = new VBAOHalfResCleanupNode(
-        vbaoNode.getRawTextureNode(),
-        prePassDepth,
-        prePassNormal,
-        camera,
-        vbaoNode.radius,
-        {
-          enabled: true,
-          strength: 0.45,
-          resolutionScale: 0.5,
-        },
-      )
-      const resolveNode = new VBAOResolveNode(
-        cleanupNode.getTextureNode(),
-        prePassDepth,
-        prePassNormal,
-        camera,
-        vbaoNode.radius,
-      )
-      const polishStrength = Math.max(0, (vbaoOptions.softness ?? 0) - 0.5) * 2
-      const polishNode = new VBAOFullResPolishNode(
-        resolveNode.getTextureNode(),
-        prePassDepth,
-        prePassNormal,
-        camera,
-        vbaoNode.radius,
-        {
-          enabled: polishStrength > 0,
-          strength: polishStrength,
-        },
-      )
-      const cleanupScalar = cleanupNode.getTextureNode().r
-      const resolveScalar = resolveNode.getTextureNode().r
-      const polishScalar = polishNode.getTextureNode().r
-      stageNodes.push(cleanupNode, resolveNode, polishNode)
-      stagePipelines = {
-        raw: makeAoPipeline(vbaoRawScalar),
-        cleanup: makeAoPipeline(cleanupScalar),
-        resolve: makeAoPipeline(resolveScalar),
-        polish: makeAoPipeline(polishScalar),
-        final: makeAoPipeline(vbaoProductScalar),
-      }
-    }
-
     return {
       fullResolution,
+      cleanupMode: vbaoCleanupMode,
+      resolvePolishMode: vbaoResolvePolishMode,
       node: vbaoNode,
       stageNodes,
       pipelines: {
@@ -950,15 +1013,17 @@ function createReferencePipelines(
   }
 
   const activeVbaoPipelines = (fullResolutionVbao: boolean) => {
-    if (activeVbao?.fullResolution === fullResolutionVbao) return activeVbao.pipelines
+    if (
+      activeVbao?.fullResolution === fullResolutionVbao &&
+      activeVbao.cleanupMode === vbaoCleanupMode &&
+      activeVbao.resolvePolishMode === vbaoResolvePolishMode
+    ) {
+      return activeVbao.pipelines
+    }
     disposeActiveVbao()
     const nextVbao = createVbaoPipelines(fullResolutionVbao)
     activeVbao = nextVbao
     return nextVbao.pipelines
-  }
-  const getVbaoTemporalDiagnostics = (fullResolutionVbao: boolean) => {
-    activeVbaoPipelines(fullResolutionVbao)
-    return (activeVbao?.node as any).getInternalTemporalDiagnostics?.()
   }
   const composeBufferSize = new Vector2()
   const composeSavedViewport = new Vector4()
@@ -1089,7 +1154,6 @@ function createReferencePipelines(
         shaderPrograms: collectGeneratedShaderPrograms(renderer),
       }
     },
-    getVbaoTemporalDiagnostics,
     renderSingle: renderMode,
     renderComposeDebug: (
       modes: readonly ComposeDebugMode[],

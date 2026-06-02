@@ -65,7 +65,6 @@ import {
 import { VBAOFullResPolishNode } from './VBAOFullResPolishNode'
 import { VBAOHalfResCleanupNode } from './VBAOHalfResCleanupNode'
 import { VBAOResolveNode } from './VBAOResolveNode'
-import { VBAOTemporalAccumulationNode } from './VBAOTemporalAccumulationNode'
 import { VBAO_NOISE_TILE_SIZE, getSharedVbaoNoiseTexture } from './vbaoNoise'
 import {
   VBAO_PHASE_ATLAS_COLUMNS,
@@ -85,14 +84,17 @@ type SampleableNode = Node & {
 type VbaoRawLoopShape = {
   readonly slices: number
   readonly samples: number
-  readonly fixed: boolean
 }
 
-type VbaoInternalTemporalMode = 'off' | 'host' | 'internal'
+type VbaoInternalTemporalMode = 'off' | 'host'
 
 type VbaoInternalBenchmarkOptions = VBAONodeOptions & {
   readonly benchmark?: { readonly noiseTexture?: DataTexture }
-  readonly temporalMode?: VbaoInternalTemporalMode
+  readonly temporalMode?: VbaoInternalTemporalMode | 'velocity-internal'
+}
+
+function resolveInternalTemporalMode(mode: VbaoInternalBenchmarkOptions['temporalMode']): VbaoInternalTemporalMode {
+  return mode === 'host' ? 'host' : 'off'
 }
 
 /** Visibility-bitmask ambient occlusion for Three.js TSL/WebGPU. */
@@ -129,14 +131,12 @@ export class VBAONode extends TempNode<'float'> {
   private resolveNode?: VBAOResolveNode | undefined
   private halfCleanupNode?: VBAOHalfResCleanupNode | undefined
   private fullPolishNode?: VBAOFullResPolishNode | undefined
-  private temporalAccumulationNode?: VBAOTemporalAccumulationNode | undefined
   private outputTextureNode?: TextureNode
   private outputGraphKey = ''
   private outputGraphCreated = false
   private rawLoopShape: VbaoRawLoopShape = {
     slices: VBAO_DEFAULTS.slices,
     samples: VBAO_DEFAULTS.samples,
-    fixed: false,
   }
   private readonly cameraProjectionMatrix
   private readonly cameraProjectionMatrixInverse
@@ -171,23 +171,15 @@ export class VBAONode extends TempNode<'float'> {
     const internalOptions = options as VbaoInternalBenchmarkOptions
     this.noiseTexture = internalOptions.benchmark?.noiseTexture ?? getSharedVbaoNoiseTexture()
     this.noiseNode = texture(this.noiseTexture)
-    this.temporalMode = internalOptions.temporalMode ?? 'off'
+    this.temporalMode = resolveInternalTemporalMode(internalOptions.temporalMode)
 
     this.configure(options)
   }
 
-  private resolveRawLoopShape(
-    options: VBAONodeOptions,
-    next: { slices: number; samples: number },
-  ): VbaoRawLoopShape {
-    const qualityName = options.quality ?? options.preset
-    const fixed =
-      qualityName !== undefined && options.slices === undefined && options.samples === undefined
-
+  private resolveRawLoopShape(next: { slices: number; samples: number }): VbaoRawLoopShape {
     return {
       slices: next.slices,
       samples: next.samples,
-      fixed,
     }
   }
 
@@ -218,18 +210,17 @@ export class VBAONode extends TempNode<'float'> {
         options.resolutionScale ?? quality?.resolutionScale ?? fallback.resolutionScale,
     } satisfies VBAONodeOptions
     const next = clampVbaoNodeOptions(mergedOptions)
-    const nextLoopShape = this.resolveRawLoopShape(options, next)
+    const nextLoopShape = this.resolveRawLoopShape(next)
 
     if (
       this.outputGraphCreated &&
       (next.softness !== this.softness.value ||
         next.resolutionScale !== this.resolutionScale ||
         nextLoopShape.slices !== this.rawLoopShape.slices ||
-        nextLoopShape.samples !== this.rawLoopShape.samples ||
-        nextLoopShape.fixed !== this.rawLoopShape.fixed)
+        nextLoopShape.samples !== this.rawLoopShape.samples)
     ) {
       throw new Error(
-        'VBAONode.configure(): softness and resolutionScale affect the pass graph; product loop shape is construction-time only after getTextureNode(); create a new VBAONode or rebuild downstream pipelines.',
+        'VBAONode.configure(): softness, resolutionScale, and raw loop shape affect the pass graph and are construction-time only after getTextureNode(); create a new VBAONode or rebuild downstream pipelines.',
       )
     }
 
@@ -321,32 +312,6 @@ export class VBAONode extends TempNode<'float'> {
     return this.fullPolishNode
   }
 
-  private getOrCreateTemporalAccumulationNode(input: TextureNode): VBAOTemporalAccumulationNode {
-    if (
-      this.temporalAccumulationNode === undefined ||
-      this.temporalAccumulationNode.currentAoNode !== input
-    ) {
-      this.temporalAccumulationNode?.dispose()
-      this.temporalAccumulationNode = new VBAOTemporalAccumulationNode(
-        input,
-        this.depthNode,
-        this.normalNode,
-        this.camera,
-        {
-          enabled: true,
-          historyWeight: 0.8,
-        },
-      )
-    } else {
-      this.temporalAccumulationNode.configure({
-        enabled: true,
-        historyWeight: 0.8,
-      })
-    }
-
-    return this.temporalAccumulationNode
-  }
-
   private disposeLowResGraph(): void {
     this.resolveNode?.dispose()
     this.resolveNode = undefined
@@ -357,11 +322,6 @@ export class VBAONode extends TempNode<'float'> {
   private disposeFullPolishGraph(): void {
     this.fullPolishNode?.dispose()
     this.fullPolishNode = undefined
-  }
-
-  private disposeTemporalGraph(): void {
-    this.temporalAccumulationNode?.dispose()
-    this.temporalAccumulationNode = undefined
   }
 
   private currentOutputGraphKey(): string {
@@ -410,12 +370,6 @@ export class VBAONode extends TempNode<'float'> {
       this.disposeLowResGraph()
     }
 
-    if (this.temporalMode === 'internal') {
-      output = this.getOrCreateTemporalAccumulationNode(output).getTextureNode()
-    } else {
-      this.disposeTemporalGraph()
-    }
-
     if (polishStrength > 0) {
       output = this.getOrCreateFullPolishNode(output, polishStrength).getTextureNode()
     } else {
@@ -435,10 +389,6 @@ export class VBAONode extends TempNode<'float'> {
 
   getRawTextureNode(): TextureNode {
     return this.textureNode
-  }
-
-  private getInternalTemporalDiagnostics() {
-    return this.temporalAccumulationNode?.getInternalTemporalDiagnostics()
   }
 
   setSize(width: number, height: number): void {
@@ -479,16 +429,10 @@ export class VBAONode extends TempNode<'float'> {
 
   setup(builder: any): TextureNode {
     const uvNode = uv()
-    const sliceLoopEnd = this.rawLoopShape.fixed ? int(this.rawLoopShape.slices) : int(this.slices)
-    const sampleLoopEnd = this.rawLoopShape.fixed
-      ? int(this.rawLoopShape.samples)
-      : int(this.samples)
-    const sliceCount = this.rawLoopShape.fixed
-      ? float(this.rawLoopShape.slices)
-      : float(this.slices)
-    const sampleCount = this.rawLoopShape.fixed
-      ? float(this.rawLoopShape.samples)
-      : float(this.samples)
+    const sliceLoopEnd = int(this.rawLoopShape.slices)
+    const sampleLoopEnd = int(this.rawLoopShape.samples)
+    const sliceCount = float(this.rawLoopShape.slices)
+    const sampleCount = float(this.rawLoopShape.samples)
 
     const sampleDepth = (uvCoord: any) => {
       const d = this.depthNode.sample(uvCoord).r
@@ -796,7 +740,6 @@ export class VBAONode extends TempNode<'float'> {
     this.resolveNode?.dispose()
     this.halfCleanupNode?.dispose()
     this.fullPolishNode?.dispose()
-    this.temporalAccumulationNode?.dispose()
     this.renderTarget.dispose()
     this.material.dispose()
   }

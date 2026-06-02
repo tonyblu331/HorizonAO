@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm --filter @horizonao/demo dev",
-    "lint": "eslint .",
+    "lint": "oxlint . --deny-warnings",
     "format": "prettier --write .",
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @horizonao/demo test:e2e",
@@ -14,13 +14,11 @@
     "typecheck:tsgo": "pnpm -r typecheck:tsgo"
   },
   "devDependencies": {
-    "@eslint/js": "10.0.1",
     "@types/node": "25.8.0",
     "@typescript/native-preview": "7.0.0-dev.20260516.1",
-    "eslint": "10.4.0",
+    "oxlint": "1.67.0",
     "prettier": "3.8.3",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.59.3",
     "vitest": "4.1.6"
   }
 }

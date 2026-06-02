@@ -113,9 +113,26 @@ function isMissingPassTiming(passTiming) {
   return ['blocked', 'incomplete', 'missing', 'unexpected', 'unmeasured'].includes(passTiming.status)
 }
 
+function requiredPassesForEvidenceRow(row) {
+  if (!isHalfResolutionProductVbaoRow(row)) return null
+
+  switch (row.vbaoReconstructionStage) {
+    case 'raw':
+      return new Set(['raw', 'total-product'])
+    case 'cleanup':
+      return new Set(['raw', 'cleanup', 'total-product'])
+    case 'resolve':
+    case 'polish':
+    case 'final':
+    default:
+      return null
+  }
+}
+
 export function createEvidenceArtifactStatusRows(rows) {
   return rows.map((row) => {
     const missing = []
+    const requiredPasses = requiredPassesForEvidenceRow(row)
 
     if (typeof row.screenshotPath !== 'string' || row.screenshotPath.length === 0) {
       missing.push('screenshotPath')
@@ -130,6 +147,12 @@ export function createEvidenceArtifactStatusRows(rows) {
       missing.push('passTimings')
     }
     for (const passTiming of row.passTimings ?? []) {
+      if (requiredPasses !== null && !requiredPasses.has(passTiming.pass)) {
+        if (passTiming.status === 'unexpected') {
+          missing.push(`passTimings.${passTiming.pass}`)
+        }
+        continue
+      }
       if (isMissingPassTiming(passTiming)) {
         missing.push(`passTimings.${passTiming.pass ?? 'unknown'}`)
       }
@@ -207,28 +230,18 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
       )
     }
   }
-  const temporalDiagnosticRows = report.rows.filter(
-    (row) => row.mode === 'vbao' && row.temporalMode === 'internal',
-  )
   lines.push('')
-  lines.push('## VBAO Internal Temporal Diagnostics')
+  lines.push('## VBAO Temporal Architecture Status')
   lines.push('')
   lines.push(
-    'Internal temporal rows must disclose the validation mode and CPU-visible reset state. GPU rejection counters are only reported once instrumented; absence of counters is not treated as a measured rejection rate.',
+    'Camera-only AO-owned temporal accumulation remains removed. Velocity-backed internal temporal is private evidence plumbing only and requires same-cost plus motion/disocclusion gates before promotion.',
   )
   lines.push('')
-  lines.push('| Row | Validation | History weight | Depth threshold | Normal threshold | Pending reset | Last reset | GPU counters |')
-  lines.push('| --- | --- | ---: | ---: | ---: | --- | --- | --- |')
-  if (temporalDiagnosticRows.length === 0) {
-    lines.push('| n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |')
-  } else {
-    for (const row of temporalDiagnosticRows) {
-      const diagnostics = row.temporalDiagnostics ?? row.latest?.vbaoTemporalDiagnostics
-      lines.push(
-        `| ${row.label ?? 'n/a'} | ${diagnostics?.validationMode ?? 'missing'} | ${diagnostics?.historyWeight?.toFixed?.(2) ?? 'n/a'} | ${diagnostics?.depthContinuityThreshold?.toFixed?.(3) ?? 'n/a'} | ${diagnostics?.normalContinuityThreshold?.toFixed?.(2) ?? 'n/a'} | ${diagnostics?.pendingResetReason ?? 'n/a'} | ${diagnostics?.lastAppliedResetReason ?? 'n/a'} | ${diagnostics?.gpuRejectionCounters ?? 'n/a'} |`,
-      )
-    }
-  }
+  lines.push('| Mode | Status | Evidence boundary |')
+  lines.push('| --- | --- | --- |')
+  lines.push('| off | product baseline | temporal-free AO evidence |')
+  lines.push('| host | demo/evidence only | requires host TRAA and same-cost spatial comparison |')
+  lines.push('| velocity-internal | private candidate only | requires host previous guides, temporal pass timing, same-cost spatial comparison, and motion evidence |')
   const evidenceArtifactRows =
     report.evidenceArtifactRows ?? createEvidenceArtifactStatusRows(report.rows)
   lines.push('')

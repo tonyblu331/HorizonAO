@@ -1,11 +1,11 @@
 {
-  "generatedAt": "2026-06-01T21:35:28.619Z",
+  "generatedAt": "2026-06-02T10:35:04.464Z",
   "inputs": {
     "offJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-off-latest.json",
     "hostJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-host-latest.json",
     "hostTaaJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-host-traa-latest.json",
-    "alternativeJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-spatial-ultra-latest.json",
-    "internalJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-internal-latest.json"
+    "velocityJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-velocity-internal-smoke.json",
+    "alternativeJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-spatial-ultra-latest.json"
   },
   "thresholds": {
     "materialPatternWin": 0.0005,
@@ -18,20 +18,19 @@
   "hasHostTaaStripeRegression": true,
   "hasHostTaaBlockingFailureLabels": true,
   "sameCostAlternativeEvidence": true,
-  "internalTemporalEvidence": true,
+  "internalTemporalEvidence": false,
   "evaluatedInternalEvidence": true,
   "hasInternalMaterialPatternWin": false,
-  "hasInternalStripeRegression": false,
+  "hasInternalStripeRegression": true,
   "hasInternalEdgeRegression": false,
   "hasInternalThinGapRegression": false,
   "hasInternalBlockingFailureLabels": true,
   "internalTemporalPassesPromotion": false,
   "verdict": "reject-promotion",
   "internalTemporalAllowed": false,
-  "reason": "Internal temporal evidence is present, but it has blocking failure labels and no material product pattern/noise win.",
+  "reason": "Host sampling has host TAA/TRAA evidence, but it did not show a material product pattern/noise win without stripe regression.",
   "missingHostRows": [],
   "missingHostTaaRows": [],
-  "missingInternalRows": [],
   "comparisons": [
     {
       "key": "museum|1280x720|vbao|product-preset|full-res|beauty|raw-debug",
@@ -66,6 +65,8 @@
       },
       "materialPatternWin": false,
       "stripeRegression": false,
+      "edgeRegression": false,
+      "thinGapRegression": false,
       "evidenceComplete": true
     },
     {
@@ -101,6 +102,8 @@
       },
       "materialPatternWin": false,
       "stripeRegression": false,
+      "edgeRegression": false,
+      "thinGapRegression": false,
       "evidenceComplete": true
     },
     {
@@ -136,6 +139,8 @@
       },
       "materialPatternWin": false,
       "stripeRegression": false,
+      "edgeRegression": false,
+      "thinGapRegression": false,
       "evidenceComplete": true
     },
     {
@@ -171,6 +176,8 @@
       },
       "materialPatternWin": false,
       "stripeRegression": true,
+      "edgeRegression": false,
+      "thinGapRegression": false,
       "evidenceComplete": true
     }
   ],
@@ -208,6 +215,8 @@
       },
       "materialPatternWin": false,
       "stripeRegression": true,
+      "edgeRegression": false,
+      "thinGapRegression": false,
       "evidenceComplete": true
     },
     {
@@ -243,45 +252,12 @@
       },
       "materialPatternWin": false,
       "stripeRegression": true,
+      "edgeRegression": false,
+      "thinGapRegression": false,
       "evidenceComplete": true
     }
   ],
   "internalComparisons": [
-    {
-      "key": "museum|1280x720|vbao|product-preset|full-res|beauty|product",
-      "scene": "museum",
-      "resolution": {
-        "width": 1280,
-        "height": 720
-      },
-      "view": "beauty",
-      "output": "product",
-      "off": {
-        "patternNoiseScore": 0.03446893186721689,
-        "stripeScore": 0.15681961471997538,
-        "edgeBleedProxy": 0.028723616663225,
-        "thinGapPreservationProxy": 0.006121885730106851,
-        "totalProductGpuMs": 1.728512,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-off\\1280x720-museum-vbao-product-preset-off-full-res-product-beauty.png"
-      },
-      "host": {
-        "patternNoiseScore": 0.03446893186721689,
-        "stripeScore": 0.15681961471997538,
-        "edgeBleedProxy": 0.028723616663225,
-        "thinGapPreservationProxy": 0.006121885730106851,
-        "totalProductGpuMs": 1.2165119999999998,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-internal\\1280x720-museum-vbao-product-preset-internal-full-res-product-beauty.png"
-      },
-      "delta": {
-        "patternNoiseScore": 0,
-        "stripeScore": 0,
-        "edgeBleedProxy": 0,
-        "thinGapPreservationProxy": 0
-      },
-      "materialPatternWin": false,
-      "stripeRegression": false,
-      "evidenceComplete": true
-    },
     {
       "key": "museum|1280x720|vbao|product-preset|full-res|ao|product",
       "scene": "museum",
@@ -300,21 +276,23 @@
         "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-off\\1280x720-museum-vbao-product-preset-off-full-res-product-ao.png"
       },
       "host": {
-        "patternNoiseScore": 0.02304605396520259,
-        "stripeScore": 0.19013703327470569,
-        "edgeBleedProxy": 0.009691713304804058,
-        "thinGapPreservationProxy": 0.0030762807959085936,
-        "totalProductGpuMs": 1.860608,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-internal\\1280x720-museum-vbao-product-preset-internal-full-res-product-ao.png"
+        "patternNoiseScore": 0.022946087383882978,
+        "stripeScore": 0.19093708650012192,
+        "edgeBleedProxy": 0.008516504419658436,
+        "thinGapPreservationProxy": 0.0025579784251050686,
+        "totalProductGpuMs": 1.138688,
+        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-velocity-internal-smoke\\1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao.png"
       },
       "delta": {
-        "patternNoiseScore": 0,
-        "stripeScore": 0,
-        "edgeBleedProxy": 0,
-        "thinGapPreservationProxy": 0
+        "patternNoiseScore": -0.00009996658131961045,
+        "stripeScore": 0.0008000532254162362,
+        "edgeBleedProxy": -0.0011752088851456222,
+        "thinGapPreservationProxy": -0.000518302370803525
       },
       "materialPatternWin": false,
-      "stripeRegression": false,
+      "stripeRegression": true,
+      "edgeRegression": false,
+      "thinGapRegression": false,
       "evidenceComplete": true
     }
   ],

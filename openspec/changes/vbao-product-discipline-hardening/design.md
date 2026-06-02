@@ -136,13 +136,15 @@ Implementation rule:
 Reference and report modules should move away from runtime modules:
 
 ```txt
-packages/horizon-ao/src/
-  runtime product nodes
+packages/horizon-ao/
+  src/
+    runtime product nodes
   reference/
     aoRaycastReference.ts
     aoReferenceReport.ts
     canonicalVbaoReference.ts
     vbaoCanonicalDriftReport.ts
+    vbaoReference.ts
 ```
 
 The package `index.ts` must remain clean: no reference/report exports.

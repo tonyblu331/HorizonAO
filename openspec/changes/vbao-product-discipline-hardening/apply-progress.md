@@ -8,7 +8,7 @@ default full-resolution polish is back to the documented 8-tap budget, and
 low-resolution softness now funds cleanup before full-resolution polish. Product
 quality presets now use fixed raw shader loop shapes. Evidence capture now
 distinguishes included-but-unmeasured internal passes from skipped passes.
-Reference/report modules now live under `src/reference/`.
+Reference/report modules now live under `packages/horizon-ao/reference/`, outside runtime `src/`.
 
 ## Completed
 
@@ -42,8 +42,8 @@ Reference/report modules now live under `src/reference/`.
 - Added pass timing status output to the production quality markdown report.
 - Added an `EVIDENCE.md` noise-source comparison gate placeholder.
 - Moved `aoRaycastReference.ts`, `aoReferenceReport.ts`,
-  `canonicalVbaoReference.ts`, and `vbaoCanonicalDriftReport.ts` under
-  `packages/horizon-ao/src/reference/`.
+  `canonicalVbaoReference.ts`, `vbaoCanonicalDriftReport.ts`, and
+  `vbaoReference.ts` under `packages/horizon-ao/reference/`.
 - Updated tests and docs to use the new internal reference paths.
 - Kept `packages/horizon-ao/src/index.ts` free of reference/report exports.
 
@@ -66,7 +66,7 @@ Reference/report modules now live under `src/reference/`.
 - Passed:
   `node node_modules/typescript/bin/tsc --noEmit -p packages/horizon-ao/tsconfig.json`
 - Passed:
-  `node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoEvidenceContract.test.ts packages/horizon-ao/src/__tests__/aoRaycastReference.test.ts packages/horizon-ao/src/__tests__/aoReferenceReport.test.ts packages/horizon-ao/src/__tests__/canonicalVbaoReference.test.ts packages/horizon-ao/src/__tests__/vbaoCanonicalDriftReport.test.ts`
+  `node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/reference/__tests__/vbaoEvidenceContract.test.ts packages/horizon-ao/reference/__tests__/aoRaycastReference.test.ts packages/horizon-ao/reference/__tests__/aoReferenceReport.test.ts packages/horizon-ao/reference/__tests__/canonicalVbaoReference.test.ts packages/horizon-ao/reference/__tests__/vbaoCanonicalDriftReport.test.ts`
 - Passed:
   `node node_modules/typescript/bin/tsc --noEmit -p packages/horizon-ao/tsconfig.json`
 - Passed:
@@ -89,7 +89,7 @@ Reference/report modules now live under `src/reference/`.
 - Passed:
   `node --check apps/demo/scripts/profiling/productionReport.mjs`
 - Passed:
-  `node node_modules/vitest/vitest.mjs run packages/horizon-ao/src/__tests__/aoRaycastReference.test.ts packages/horizon-ao/src/__tests__/aoReferenceReport.test.ts packages/horizon-ao/src/__tests__/canonicalVbaoReference.test.ts packages/horizon-ao/src/__tests__/vbaoCanonicalDriftReport.test.ts packages/horizon-ao/src/__tests__/vbaoEvidenceContract.test.ts`
+  `node node_modules/vitest/vitest.mjs run packages/horizon-ao/reference/__tests__/aoRaycastReference.test.ts packages/horizon-ao/reference/__tests__/aoReferenceReport.test.ts packages/horizon-ao/reference/__tests__/canonicalVbaoReference.test.ts packages/horizon-ao/reference/__tests__/vbaoCanonicalDriftReport.test.ts packages/horizon-ao/reference/__tests__/vbaoEvidenceContract.test.ts`
 - Passed:
   `node node_modules/typescript/bin/tsc --noEmit -p packages/horizon-ao/tsconfig.json`
 - RED confirmed:

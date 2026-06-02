@@ -19,10 +19,8 @@ import {
   Fn,
   If,
   Loop,
-  abs,
   clamp,
   dot,
-  exp2,
   float,
   floor,
   fract,
@@ -38,6 +36,8 @@ import {
   vec2,
   viewZToPerspectiveDepth,
 } from 'three/tsl'
+
+import { computeVbaoBilateralGeometryWeight } from './vbaoBilateralWeight'
 
 const resolveQuadMesh = new QuadMesh()
 const resolveSize = new Vector2()
@@ -195,18 +195,15 @@ export class VBAOResolveNode extends TempNode<'float'> {
                 tapDepth,
                 this.cameraProjectionMatrixInverse,
               ).toVar('vbaoResolveTapPosition')
-              const normalAgreement = clamp(dot(centerNormal, tapNormal), float(0), float(1))
-              const planeDistance = abs(dot(tapPosition.sub(centerPosition), centerNormal))
-              const depthWeight = exp2(
-                planeDistance
-                  .negate()
-                  .mul(float(24))
-                  .div(max(float(this.radiusNode as any), float(1e-3))),
+              const geometryWeight = computeVbaoBilateralGeometryWeight(
+                centerPosition,
+                centerNormal,
+                tapPosition,
+                tapNormal,
+                this.radiusNode,
+                'vbaoResolve',
               )
-              const normal2 = normalAgreement.mul(normalAgreement).toVar('vbaoResolveNormal2')
-              const normal4 = normal2.mul(normal2).toVar('vbaoResolveNormal4')
-              const normalWeight = normal4.mul(normal4).toVar('vbaoResolveNormalWeight')
-              const tapWeight = bilinearWeight.mul(depthWeight).mul(normalWeight).toVar('vbaoResolveTapWeight')
+              const tapWeight = bilinearWeight.mul(geometryWeight).toVar('vbaoResolveTapWeight')
               const tapValid = tapDepth
                 .lessThan(float(1))
                 .and(tapDepth.greaterThanEqual(float(0)))

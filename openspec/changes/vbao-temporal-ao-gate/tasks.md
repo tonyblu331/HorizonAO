@@ -77,40 +77,31 @@
 - 2.3 is complete as a classification gate. Host temporal mode now has non-TAA
   smoke capture, host TRAA capture, and same-cost non-temporal `spatial-ultra`
   evidence.
-- Phase 3 is unblocked only for private internal prototyping. Host temporal
-  sampling is still not promoted because product stripe proxy regresses and the
-  material pattern/noise win is insufficient for a product claim.
-- 3.1, 3.2, 3.5, and 3.6 are complete for the first private prototype:
-  `VBAOTemporalAccumulationNode` owns AO history, resets on resize and camera
-  cuts, clamps history to the current 3x3 AO neighborhood, and blends with
-  history weight `0.8`.
-- 3.3 and 3.4 are complete for the private prototype. Internal temporal now
-  reprojects current depth into previous-frame UV, rejects out-of-viewport
-  history, persists previous depth/normal guide history, and validates depth and
-  normal continuity before blending.
-- 3.7 is complete. Benchmark JSON and Markdown now expose the internal temporal
-  validation mode, reset state/reason fields, conservative thresholds, and all
-  temporal/guide pass timings. GPU rejection counters remain explicitly
-  `not-instrumented` rather than being guessed.
+- Phase 3 produced a private internal prototype, but the evidence gate rejected
+  it. The runtime path is now removed rather than kept as private product
+  plumbing.
+- The removed prototype owned AO history and duplicated previous depth/normal
+  guide targets. That architecture is explicitly not the future contract.
+- Future AO-owned temporal work needs a fresh velocity-backed proposal and must
+  consume host-provided guide history instead of allocating duplicate guide
+  render targets.
 - `openspec/changes/vbao-temporal-ao-gate/sdd-plan.md` is the controlling SDD
   roadmap for remaining work. It splits 3.3, 3.4, diagnostics, internal evidence,
   verifier upgrade, failure review, API revisit, and release hardening into
   RED/GREEN/VERIFY gates.
 - Phase 4 is complete as a rejection gate. Temporal `off`, `host`,
-  host TRAA, same-cost `spatial-ultra`, and internal `beauty,ao` product rows
-  are captured. The upgraded verifier evaluates internal evidence and still
-  returns `reject-promotion`: internal temporal evidence is present, but
-  `internalTemporalPassesPromotion` is `false` because there is no material
-  pattern/noise win and blocking failure labels are present.
+  host TRAA, same-cost `spatial-ultra`, and historical internal product rows
+  were captured. The verifier is now host-first: internal temporal evidence is
+  no longer accepted for promotion because the AO-owned prototype was removed.
 - 5.1 decision: current evidence does not justify a public `temporal` option.
   Therefore 5.2 is satisfied by adding no public option, and 5.3 is satisfied by
   keeping all temporal/reprojection parameters out of the public API.
-- 6.1 is complete for this gate pass: internal temporal remains private and the
-  rejection rationale is recorded in `EVIDENCE.md`,
-  `vbao-temporal-gate-verdict.md`, and this task ledger. Removal is not required
-  yet, but `internalTemporalAllowed` is now `false`; future internal work needs
-  a fresh tuning fork and evidence matrix.
+- 6.1 is complete for this gate pass: the rejected internal temporal product
+  plumbing was removed from `VBAONode` and the demo/benchmark path. The rejection
+  rationale is recorded in `EVIDENCE.md`, `vbao-temporal-gate-verdict.md`, and
+  this task ledger. Future AO-owned temporal work needs a fresh velocity-backed
+  proposal and evidence matrix.
 - Closeout: the plan is complete as a gate run, not as a temporal feature
   promotion. The verifier outcome is `reject-promotion` and
   `internalTemporalAllowed` is `false`, so public API, quality promotion, and
-  prototype allowance remain blocked.
+  AO-owned prototype allowance remain blocked.

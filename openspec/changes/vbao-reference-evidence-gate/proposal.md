@@ -60,7 +60,7 @@ must turn that honesty into a hard gate.
 | `EVIDENCE.md` | Modified | Add reference gate rows, capture links, timing rows, and noise-source results |
 | `apps/demo/scripts/collect-ao-benchmark.mjs` | Modified | Emit comparison/timing fields needed by the gate |
 | `apps/demo/scripts/profiling/productionReport.mjs` | Modified | Report pass-level status and reference-gate summaries |
-| `packages/horizon-ao/src/reference/` | Modified | Feed gate rows from ray-cast and canonical/reference reports |
+| `packages/horizon-ao/reference/` | Modified | Feed gate rows from ray-cast and canonical/reference reports |
 | `packages/horizon-ao/src/__tests__/` | Modified | Add RED/GREEN evidence-contract tests |
 | `eslint.config.js` | Modified if needed | Document `.mjs` globals and scoped TSL typing policy |
 

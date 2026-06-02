@@ -31,17 +31,16 @@ function fract(value: number): number {
   return value - Math.floor(value)
 }
 
-function integerPixel(input: VbaoPhaseSamplingInput | VbaoSamplingInput): readonly [number, number] {
+function integerPixel(
+  input: VbaoPhaseSamplingInput | VbaoSamplingInput,
+): readonly [number, number] {
   return [Math.floor(input.pixel[0]), Math.floor(input.pixel[1])]
 }
 
 function resolvePhaseIndex(input: VbaoPhaseSamplingInput | VbaoSamplingInput): number {
   if ('phaseIndex' in input) return Math.floor(input.phaseIndex)
 
-  return (
-    Math.floor(input.sliceIndex) * VBAO_PHASE_STRIDE +
-    Math.floor(input.sampleIndex)
-  )
+  return Math.floor(input.sliceIndex) * VBAO_PHASE_STRIDE + Math.floor(input.sampleIndex)
 }
 
 function hashUnit(x: number, y: number, seed: number): number {
@@ -82,7 +81,8 @@ export function sampleVbaoPhaseChannels(
   const phaseX = phase % VBAO_PHASE_ATLAS_COLUMNS
   const phaseY = Math.floor(phase / VBAO_PHASE_ATLAS_COLUMNS)
   const phaseSeed = phaseX * 409 + phaseY * 811
-  const sliceIndex = 'sliceIndex' in input ? input.sliceIndex : Math.floor(phase / VBAO_PHASE_STRIDE)
+  const sliceIndex =
+    'sliceIndex' in input ? input.sliceIndex : Math.floor(phase / VBAO_PHASE_STRIDE)
   const sampleIndex = 'sampleIndex' in input ? input.sampleIndex : phase % VBAO_PHASE_STRIDE
 
   const rotation = fract(
@@ -101,8 +101,7 @@ export function sampleVbaoPhaseChannels(
       hashUnit(x + sampleIndex * 31, y + sliceIndex * 47, 131 + phaseSeed) * 0.33,
   )
   const polishRotation = fract(
-    hashUnit(x + phaseX * 191, y + phaseY * 223, 173 + phaseSeed) * 0.73 +
-      rotation * 0.27,
+    hashUnit(x + phaseX * 191, y + phaseY * 223, 173 + phaseSeed) * 0.73 + rotation * 0.27,
   )
 
   return {

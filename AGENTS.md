@@ -59,7 +59,7 @@ pnpm lint
 - Canvas and route smoke coverage belongs in Playwright.
 - E2E tests start Vite dev server; they do not require a production build.
 - PR-01 correctness tests (flat plane, full hemisphere, two-wall corner, thin occluder) live in
-  `packages/horizon-ao/src/__tests__/vbaoReference.test.ts`. These are the gate for any kernel work.
+  `packages/horizon-ao/reference/__tests__/vbaoReference.test.ts`. These are the gate for any kernel work.
 
 ## Evidence Notes
 

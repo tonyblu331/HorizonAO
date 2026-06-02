@@ -1,0 +1,52 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/test-results/**",
+    "**/playwright-report/**",
+    "**/archive/**",
+    "artifacts/**",
+    "output/**",
+    "apps/demo/src/routeTree.gen.ts"
+  ],
+  "env": {
+    "builtin": true
+  },
+  "rules": {
+    "eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "typescript/no-explicit-any": "error"
+  },
+  "overrides": [
+    {
+      "files": ["apps/demo/scripts/**/*.mjs"],
+      "env": {
+        "browser": true,
+        "node": true
+      },
+      "globals": {
+        "GPUBufferUsage": "readonly",
+        "GPUMapMode": "readonly"
+      },
+      "rules": {
+        "eslint/no-undef": "error"
+      }
+    },
+    {
+      "files": [
+        "packages/horizon-ao/src/VBAOFullResPolishNode.ts",
+        "packages/horizon-ao/src/VBAOHalfResCleanupNode.ts",
+        "packages/horizon-ao/src/VBAONode.ts",
+        "packages/horizon-ao/src/VBAOResolveNode.ts"
+      ],
+      "rules": {
+        "typescript/no-explicit-any": "off"
+      }
+    }
+  ]
+}

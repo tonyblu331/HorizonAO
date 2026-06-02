@@ -9,9 +9,10 @@ boundary. Resolve, cleanup, and polish passes are internal reconstruction stages
 not peer public products. The default product path SHALL remain temporal-free and
 SHALL NOT allocate history textures, reprojection passes, or TAA-dependent state.
 
-Future temporal behavior MAY be added only as an opt-in product mode after the
-evidence gate proves that it improves quality or same-quality performance against
-non-temporal alternatives.
+Future temporal behavior MAY be added only after the evidence gate proves that it
+improves quality or same-quality performance against non-temporal alternatives.
+Host temporal mode is the only current demo/evidence temporal mode. AO-owned
+temporal history requires a separate velocity-backed proposal.
 
 #### Scenario: Default product remains temporal-free
 
@@ -31,27 +32,22 @@ non-temporal alternatives.
 - AND quality claims SHALL state that integration depends on the host temporal
   antialiasing path
 
-#### Scenario: Internal temporal mode owns AO history
+#### Scenario: AO-owned internal temporal is removed
 
-- GIVEN internal temporal mode is enabled by internal evidence/demo plumbing or a
-  future public option
-- WHEN the product graph is built
-- THEN VBAO SHALL allocate and own AO history state
-- AND temporal accumulation SHALL happen after full-resolution resolve
-- AND history SHALL be validated with depth and normal continuity before blending
-- AND history SHALL be clamped to current-frame AO neighborhood bounds before
-  blending
-- AND resize, camera-cut, or invalid reprojection conditions SHALL reset or reject
-  history
+- GIVEN `VBAONode` receives internal/demo temporal plumbing
+- WHEN the requested mode is `internal`
+- THEN VBAO SHALL resolve it to temporal-free product output
+- AND it SHALL NOT allocate AO history
+- AND it SHALL NOT allocate previous depth or previous normal guide targets
+- AND it SHALL NOT expose internal temporal diagnostics
 
-#### Scenario: Low-resolution output resolves before temporal accumulation
+#### Scenario: Future AO-owned temporal requires velocity
 
-- GIVEN `resolutionScale < 0.99`
-- AND internal temporal mode is enabled
-- WHEN product AO is generated
-- THEN raw low-resolution AO SHALL be cleaned up and resolved to full output
-  resolution before temporal accumulation
-- AND this change SHALL NOT accumulate unresolved half-resolution raw AO directly
+- GIVEN AO-owned temporal history is proposed again
+- WHEN the proposal defines its input contract
+- THEN it SHALL require host-provided velocity or motion vectors
+- AND it SHALL consume host-provided guide history through an explicit contract
+- AND it SHALL NOT duplicate previous depth/normal guide render targets by default
 
 #### Scenario: Temporal mode must beat same-cost alternatives
 

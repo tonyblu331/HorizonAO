@@ -52,7 +52,7 @@
 
 ## Phase 6: Runtime/Reference Boundary
 
-- [x] 6.1 Move reference/report modules under `packages/horizon-ao/src/reference/`.
+- [x] 6.1 Move reference/report modules under `packages/horizon-ao/reference/`.
 - [x] 6.2 Update tests to import reference modules from the new internal paths.
 - [x] 6.3 Confirm `packages/horizon-ao/src/index.ts` still exports only `VBAONode`,
   `vbao`, and option types.

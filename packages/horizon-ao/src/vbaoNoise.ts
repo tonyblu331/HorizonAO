@@ -1,14 +1,10 @@
-import {
-  ClampToEdgeWrapping,
-  DataTexture,
-  NearestFilter,
-  NoColorSpace,
-} from 'three/webgpu'
+import { ClampToEdgeWrapping, DataTexture, NearestFilter, NoColorSpace } from 'three/webgpu'
 
 import {
   VBAO_PHASE_ATLAS_COLUMNS,
   VBAO_PHASE_ATLAS_PHASES,
   VBAO_PHASE_ATLAS_ROWS,
+  VBAO_SAMPLING_SCHEME,
   sampleVbaoPhaseChannels,
 } from './vbaoSampling'
 
@@ -52,6 +48,7 @@ export function createVbaoNoiseTexture(): DataTexture {
   tex.minFilter = NearestFilter
   tex.generateMipmaps = false
   tex.colorSpace = NoColorSpace
+  tex.name = `VBAO.Noise.${VBAO_SAMPLING_SCHEME}`
   tex.needsUpdate = true
   return tex
 }

@@ -43,7 +43,7 @@ export interface AoPipelineOptions extends Partial<VBAONodeOptions> {
 }
 
 export interface AoPipelines {
-  render: (mode: AoMode, viewMode: AoViewMode) => void
+  render: (mode: AoMode, viewMode: AoViewMode, productOutput?: boolean) => void
   dispose: () => void
 }
 
@@ -117,6 +117,7 @@ export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
 
   const gtaoTex = gtaoNode.getTextureNode()
   const vbaoTex = vbaoNode.getTextureNode()
+  const vbaoRawTex = vbaoNode.getRawTextureNode()
   const n8aoTex = n8aoNode.getTextureNode() as N8AOTextureNode
 
   const offPipeline = new RenderPipeline(options.renderer, vec4(sceneColor.rgb, float(1.0)))
@@ -131,6 +132,10 @@ export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
   const vbaoPipeline = new RenderPipeline(
     options.renderer,
     vec4(sceneColor.rgb.mul(vbaoTex.r), float(1.0)),
+  )
+  const vbaoRawPipeline = new RenderPipeline(
+    options.renderer,
+    vec4(sceneColor.rgb.mul(vbaoRawTex.r), float(1.0)),
   )
   const n8aoPipeline = new RenderPipeline(options.renderer, vec4(n8aoTex.rgb, n8aoTex.a))
   const offAoPipeline = new RenderPipeline(
@@ -149,15 +154,22 @@ export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
     options.renderer,
     vec4(vbaoTex.r, vbaoTex.r, vbaoTex.r, float(1.0)),
   )
+  const vbaoRawAoPipeline = new RenderPipeline(
+    options.renderer,
+    vec4(vbaoRawTex.r, vbaoRawTex.r, vbaoRawTex.r, float(1.0)),
+  )
   const n8aoAoPipeline = new RenderPipeline(options.renderer, vec4(n8aoTex.rgb, n8aoTex.a))
 
   return {
-    render: (mode, viewMode) => {
+    render: (mode, viewMode, productOutput = true) => {
       if (viewMode === 'ao') {
         if (mode === 'off') offAoPipeline.render()
         else if (mode === 'gtao') gtaoAoPipeline.render()
         else if (mode === 'ssao') ssaoAoPipeline.render()
-        else if (mode === 'vbao') vbaoAoPipeline.render()
+        else if (mode === 'vbao') {
+          if (productOutput) vbaoAoPipeline.render()
+          else vbaoRawAoPipeline.render()
+        }
         else {
           n8aoNode.setDisplayMode('AO')
           n8aoAoPipeline.render()
@@ -168,7 +180,10 @@ export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
       if (mode === 'off') offPipeline.render()
       else if (mode === 'gtao') gtaoPipeline.render()
       else if (mode === 'ssao') ssaoPipeline.render()
-      else if (mode === 'vbao') vbaoPipeline.render()
+      else if (mode === 'vbao') {
+        if (productOutput) vbaoPipeline.render()
+        else vbaoRawPipeline.render()
+      }
       else {
         n8aoNode.setDisplayMode('Combined')
         n8aoPipeline.render()
@@ -179,11 +194,13 @@ export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
       gtaoPipeline.dispose()
       ssaoPipeline.dispose()
       vbaoPipeline.dispose()
+      vbaoRawPipeline.dispose()
       n8aoPipeline.dispose()
       offAoPipeline.dispose()
       gtaoAoPipeline.dispose()
       ssaoAoPipeline.dispose()
       vbaoAoPipeline.dispose()
+      vbaoRawAoPipeline.dispose()
       n8aoAoPipeline.dispose()
       gtaoNode.dispose()
       vbaoNode.dispose()

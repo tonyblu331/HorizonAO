@@ -77,10 +77,6 @@ function physicalAccessibility(intervals) {
   return Math.max(0, Math.min(1, 1 - occludedMeasure))
 }
 
-function sectorIndexFromMeasure(u) {
-  return Math.max(0, Math.min(sectorCount - 1, Math.floor(u * sectorCount)))
-}
-
 function vbaoSectorAccessibility(intervals) {
   const bits = new Set()
   for (const [a, b] of normalizeIntervals(intervals)) {

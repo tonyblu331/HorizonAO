@@ -19,13 +19,13 @@ const hostTaaJsonPath = resolveRepoPath(
   process.env.VBAO_TEMPORAL_HOST_TAA_JSON,
   path.join(artifactRoot, 'vbao-temporal-host-traa-latest.json'),
 )
+const velocityJsonPath = resolveRepoPath(
+  process.env.VBAO_TEMPORAL_VELOCITY_JSON,
+  path.join(artifactRoot, 'vbao-temporal-velocity-internal-latest.json'),
+)
 const alternativeJsonPath = resolveRepoPath(
   process.env.VBAO_TEMPORAL_ALTERNATIVE_JSON,
   path.join(artifactRoot, 'vbao-temporal-spatial-ultra-latest.json'),
-)
-const internalJsonPath = resolveRepoPath(
-  process.env.VBAO_TEMPORAL_INTERNAL_JSON,
-  path.join(artifactRoot, 'vbao-temporal-internal-latest.json'),
 )
 const outputJsonPath = resolveRepoPath(
   process.env.VBAO_TEMPORAL_GATE_JSON,
@@ -170,19 +170,6 @@ function evidenceComplete(row) {
   return passTimingComplete(row)
 }
 
-function internalTemporalEvidenceComplete(row) {
-  const diagnostics = row.temporalDiagnostics ?? row.latest?.vbaoTemporalDiagnostics
-  if (!evidenceComplete(row)) return false
-  if (diagnostics?.validationMode !== 'reproject-depth-normal-clamp') return false
-  for (const passName of ['temporal', 'temporal-depth', 'temporal-normal']) {
-    const pass = row.passTimings?.find((candidate) => candidate.pass === passName)
-    if (pass?.status !== 'measured' || !finiteNumber(pass.gpuMs)) {
-      return false
-    }
-  }
-  return true
-}
-
 function totalProductGpuMs(row) {
   return row.passTimings?.find((pass) => pass.pass === 'total-product')?.gpuMs ?? null
 }
@@ -226,6 +213,8 @@ function compareRows(offRow, hostRow) {
     },
     materialPatternWin: patternDelta <= -MATERIAL_PATTERN_WIN,
     stripeRegression: stripeDelta > STRIPE_REGRESSION_TOLERANCE,
+    edgeRegression: edgeDelta > EDGE_REGRESSION_TOLERANCE,
+    thinGapRegression: thinGapDelta > THIN_GAP_REGRESSION_TOLERANCE,
     evidenceComplete: evidenceComplete(offRow) && evidenceComplete(hostRow),
   }
 }
@@ -233,14 +222,14 @@ function compareRows(offRow, hostRow) {
 const offReport = await readReport(offJsonPath)
 const hostReport = await readReport(hostJsonPath)
 const hostTaaReport = await readOptionalReport(hostTaaJsonPath)
+const velocityReport = await readOptionalReport(velocityJsonPath)
 const alternativeReport = await readOptionalReport(alternativeJsonPath)
-const internalReport = await readOptionalReport(internalJsonPath)
 existingScreenshotPaths = await createExistingScreenshotPathSet([
   offReport,
   hostReport,
   hostTaaReport,
+  velocityReport,
   alternativeReport,
-  internalReport,
 ])
 const offRows = offReport.rows.filter((row) => row.mode === 'vbao' && row.temporalMode === 'off')
 const hostRows = hostReport.rows.filter((row) => row.mode === 'vbao' && row.temporalMode === 'host')
@@ -251,16 +240,18 @@ const hostTaaRows =
       row.temporalMode === 'host' &&
       (row.hostTaaMode === 'traa' || row.latest?.vbaoHostTaaMode === 'traa'),
   ) ?? []
+const velocityRows =
+  velocityReport?.rows.filter(
+    (row) => row.mode === 'vbao' && row.temporalMode === 'velocity-internal',
+  ) ?? []
 const alternativeRows =
   alternativeReport?.rows.filter(
     (row) => row.mode === 'vbao' && row.temporalMode === 'off' && row.sampleMode !== 'product-preset',
   ) ?? []
-const internalRows =
-  internalReport?.rows.filter((row) => row.mode === 'vbao' && row.temporalMode === 'internal') ?? []
 const hostByKey = new Map(hostRows.map((row) => [comparisonKey(row), row]))
 const hostTaaByKey = new Map(hostTaaRows.map((row) => [comparisonKey(row), row]))
+const velocityByKey = new Map(velocityRows.map((row) => [comparisonKey(row), row]))
 const alternativeByKey = new Map(alternativeRows.map((row) => [alternativeComparisonKey(row), row]))
-const internalByKey = new Map(internalRows.map((row) => [comparisonKey(row), row]))
 const comparisons = offRows
   .map((offRow) => {
     const hostRow = hostByKey.get(comparisonKey(offRow))
@@ -274,9 +265,6 @@ const missingHostRows = offRows
 const productOffRows = offRows.filter((row) => outputName(row) === 'product')
 const missingHostTaaRows = productOffRows
   .filter((row) => !hostTaaByKey.has(comparisonKey(row)))
-  .map((row) => comparisonKey(row))
-const missingInternalRows = productOffRows
-  .filter((row) => !internalByKey.has(comparisonKey(row)))
   .map((row) => comparisonKey(row))
 const hostEvidenceComplete =
   missingHostRows.length === 0 && comparisons.every((row) => row.evidenceComplete)
@@ -294,6 +282,22 @@ const hostTaaEvidence =
 const hasHostTaaMaterialPatternWin = hostTaaComparisons.some((row) => row.materialPatternWin)
 const hasHostTaaStripeRegression = hostTaaComparisons.some((row) => row.stripeRegression)
 const hasHostTaaBlockingFailureLabels = hostTaaRows.some(hasBlockingFailureLabels)
+const velocityComparisons = productOffRows
+  .map((offRow) => {
+    const velocityRow = velocityByKey.get(comparisonKey(offRow))
+    return velocityRow === undefined ? undefined : compareRows(offRow, velocityRow)
+  })
+  .filter(Boolean)
+const velocityTemporalEvidence =
+  productOffRows.length > 0 &&
+  velocityRows.length > 0 &&
+  productOffRows.every((row) => velocityByKey.has(comparisonKey(row))) &&
+  velocityComparisons.every((row) => row.evidenceComplete)
+const hasVelocityMaterialPatternWin = velocityComparisons.some((row) => row.materialPatternWin)
+const hasVelocityStripeRegression = velocityComparisons.some((row) => row.stripeRegression)
+const hasVelocityEdgeRegression = velocityComparisons.some((row) => row.edgeRegression)
+const hasVelocityThinGapRegression = velocityComparisons.some((row) => row.thinGapRegression)
+const hasVelocityBlockingFailureLabels = velocityRows.some(hasBlockingFailureLabels)
 const alternativeComparisons = productOffRows
   .map((offRow) => {
     const alternativeRow = alternativeByKey.get(alternativeComparisonKey(offRow))
@@ -324,31 +328,14 @@ const sameCostAlternativeEvidence =
   productOffRows.length > 0 &&
   productOffRows.every((row) => alternativeByKey.has(alternativeComparisonKey(row))) &&
   alternativeComparisons.every((row) => row.evidenceComplete)
-const internalComparisons = productOffRows
-  .map((offRow) => {
-    const internalRow = internalByKey.get(comparisonKey(offRow))
-    return internalRow === undefined ? undefined : compareRows(offRow, internalRow)
-  })
-  .filter(Boolean)
-const internalTemporalEvidence =
-  productOffRows.length > 0 &&
-  missingInternalRows.length === 0 &&
-  internalComparisons.every((row) => row.evidenceComplete) &&
-  productOffRows.every((offRow) => {
-    const internalRow = internalByKey.get(comparisonKey(offRow))
-    return internalRow !== undefined && internalTemporalEvidenceComplete(internalRow)
-  })
 const hasMaterialPatternWin = productComparisons.some((row) => row.materialPatternWin)
 const hasStripeRegression = productComparisons.some((row) => row.stripeRegression)
-const hasInternalMaterialPatternWin = internalComparisons.some((row) => row.materialPatternWin)
-const hasInternalStripeRegression = internalComparisons.some((row) => row.stripeRegression)
-const hasInternalEdgeRegression = internalComparisons.some(
-  (row) => row.delta.edgeBleedProxy > EDGE_REGRESSION_TOLERANCE,
-)
-const hasInternalThinGapRegression = internalComparisons.some(
-  (row) => row.delta.thinGapPreservationProxy < -THIN_GAP_REGRESSION_TOLERANCE,
-)
-const hasInternalBlockingFailureLabels = internalRows.some(hasBlockingFailureLabels)
+const internalTemporalEvidence = velocityTemporalEvidence
+const hasInternalMaterialPatternWin = hasVelocityMaterialPatternWin
+const hasInternalStripeRegression = hasVelocityStripeRegression
+const hasInternalEdgeRegression = hasVelocityEdgeRegression
+const hasInternalThinGapRegression = hasVelocityThinGapRegression
+const hasInternalBlockingFailureLabels = hasVelocityBlockingFailureLabels
 
 const hostTaaPassesPromotion =
   hostTaaEvidence &&
@@ -356,17 +343,17 @@ const hostTaaPassesPromotion =
   !hasHostTaaStripeRegression &&
   !hasHostTaaBlockingFailureLabels
 const internalTemporalPassesPromotion =
-  internalTemporalEvidence &&
-  hasInternalMaterialPatternWin &&
-  !hasInternalStripeRegression &&
-  !hasInternalEdgeRegression &&
-  !hasInternalThinGapRegression &&
-  !hasInternalBlockingFailureLabels
-const complete = hostEvidenceComplete && sameCostAlternativeEvidence && internalTemporalEvidence
-const evaluatedInternalEvidence = internalTemporalEvidence && sameCostAlternativeEvidence
+  velocityTemporalEvidence &&
+  hasVelocityMaterialPatternWin &&
+  !hasVelocityStripeRegression &&
+  !hasVelocityEdgeRegression &&
+  !hasVelocityThinGapRegression &&
+  !hasVelocityBlockingFailureLabels
+const complete = hostEvidenceComplete && hostTaaEvidence && sameCostAlternativeEvidence
+const evaluatedInternalEvidence = velocityRows.length > 0
 
 const verdict =
-  complete && hostTaaPassesPromotion && internalTemporalPassesPromotion
+  complete && (hostTaaPassesPromotion || internalTemporalPassesPromotion)
     ? 'candidate'
     : complete
       ? 'reject-promotion'
@@ -378,8 +365,8 @@ const report = {
     offJsonPath,
     hostJsonPath,
     hostTaaJsonPath,
+    velocityJsonPath,
     alternativeJsonPath,
-    internalJsonPath,
   },
   thresholds: {
     materialPatternWin: MATERIAL_PATTERN_WIN,
@@ -401,23 +388,22 @@ const report = {
   hasInternalBlockingFailureLabels,
   internalTemporalPassesPromotion,
   verdict,
-  internalTemporalAllowed: verdict === 'candidate',
+  internalTemporalAllowed: internalTemporalPassesPromotion,
   reason:
     verdict === 'candidate'
-      ? 'Host TAA/TRAA evidence and internal temporal evidence both pass the material quality gate without tracked regressions.'
+      ? internalTemporalPassesPromotion
+        ? 'Velocity-backed internal temporal evidence passes the private candidate gate without tracked regressions.'
+        : 'Host TAA/TRAA evidence passes the material quality gate without tracked regressions; AO-owned velocity temporal remains private.'
       : verdict === 'reject-promotion'
-        ? hasInternalBlockingFailureLabels
-          ? 'Internal temporal evidence is present, but it has blocking failure labels and no material product pattern/noise win.'
-          : hostTaaEvidence
+        ? hostTaaEvidence
           ? 'Host sampling has host TAA/TRAA evidence, but it did not show a material product pattern/noise win without stripe regression.'
-          : 'Host sampling did not show a material product pattern/noise win without regression in the non-TAA smoke comparison.'
+          : 'Host TAA/TRAA evidence is missing.'
         : 'Temporal off/host evidence is incomplete.',
   missingHostRows,
   missingHostTaaRows,
-  missingInternalRows,
   comparisons,
   hostTaaComparisons,
-  internalComparisons,
+  internalComparisons: velocityComparisons,
   alternativeComparisons,
 }
 
@@ -455,18 +441,6 @@ if (hostTaaComparisons.length > 0) {
   }
   lines.push('')
 }
-if (internalComparisons.length > 0) {
-  lines.push('## Internal Temporal Comparison')
-  lines.push('')
-  lines.push('| View | Output | Pattern delta | Stripe delta | Edge delta | Thin-gap delta | Material win | Stripe regression |')
-  lines.push('| --- | --- | ---: | ---: | ---: | ---: | --- | --- |')
-  for (const row of internalComparisons) {
-    lines.push(
-      `| ${row.view} | ${row.output} | ${row.delta.patternNoiseScore.toFixed(5)} | ${row.delta.stripeScore.toFixed(5)} | ${row.delta.edgeBleedProxy.toFixed(5)} | ${row.delta.thinGapPreservationProxy.toFixed(5)} | ${row.materialPatternWin ? 'yes' : 'no'} | ${row.stripeRegression ? 'yes' : 'no'} |`,
-    )
-  }
-  lines.push('')
-}
 lines.push(`Host TAA/TRAA evidence: **${report.hostTaaEvidence ? 'present' : 'not present'}**.`)
 lines.push('')
 lines.push(
@@ -474,10 +448,10 @@ lines.push(
 )
 lines.push('')
 lines.push(
-  `Internal temporal evidence: **${report.internalTemporalEvidence ? 'present' : 'not present'}**; promotion pass: **${report.internalTemporalPassesPromotion ? 'yes' : 'no'}**.`,
+  `Velocity-backed internal temporal evidence: **${report.internalTemporalEvidence ? 'present' : 'not present'}**.`,
 )
 lines.push('')
-lines.push('This verifier cannot allow temporal AO unless host TAA/TRAA evidence is present, same-cost non-temporal comparisons are present, and internal temporal evidence produces a material win without blocking labels or stripe, edge, or thin-gap regression. Complete-but-failing evidence remains `reject-promotion`; internal temporal allowance is candidate-only.')
+lines.push('This verifier cannot allow temporal AO unless host TAA/TRAA or velocity-backed internal evidence and same-cost non-temporal comparisons produce a material win without blocking labels or tracked regressions. Complete-but-failing evidence remains `reject-promotion`; AO-owned temporal remains private unless the velocity-backed evidence reaches candidate.')
 lines.push('')
 await writeFile(outputMdPath, lines.join('\n'))
 

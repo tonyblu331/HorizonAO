@@ -19,13 +19,13 @@ not add internal AO history and it did not make temporal AO public API.
 | 5.1 | Done | Current evidence does not justify public temporal API. |
 | 5.2 | Done | No public `temporal` option was added. |
 | 5.3 | Done | Reprojection thresholds, clamp expansion, and history weights remain absent from public options. |
-| 3.7 | Done | Internal temporal benchmark rows expose validation mode, reset state/reasons, thresholds, and temporal/guide pass timing. |
-| 4.1 | Done | Captured internal `beauty,ao` product rows alongside existing off/host/host-TRAA and `spatial-ultra` rows. |
-| 4.2 | Done | Internal rows include measured raw, temporal, temporal-depth, temporal-normal, polish, and derived total-product GPU timings. |
-| 4.3 | Done | Verifier/reporting carries temporal failure labels and internal temporal comparison deltas. |
-| 4.4 | Done | Internal temporal is rejected for promotion because it shows no material pattern/noise win. |
-| 4.5 | Done | `verify:vbao-temporal` reads `vbao-temporal-internal-latest.json` before any candidate verdict. |
-| 6.1 | Done | Internal temporal remains private; rejection rationale is archived in evidence/verdict artifacts. |
+| 3.7 | Done | Historical internal temporal benchmark rows exposed validation mode, reset state/reasons, thresholds, and temporal/guide pass timing. |
+| 4.1 | Done | Captured historical internal `beauty,ao` product rows alongside existing off/host/host-TRAA and `spatial-ultra` rows. |
+| 4.2 | Done | Historical internal rows included measured raw, temporal, temporal-depth, temporal-normal, polish, and derived total-product GPU timings. |
+| 4.3 | Done | Verifier/reporting carries temporal failure labels; current promotion logic is host-first and no longer accepts internal rows. |
+| 4.4 | Done | Internal temporal is rejected and removed from runtime product plumbing because it shows no material pattern/noise win and duplicates guide history. |
+| 4.5 | Done | `verify:vbao-temporal` no longer accepts `vbao-temporal-internal-latest.json` as candidate evidence. |
+| 6.1 | Done | Internal temporal runtime plumbing was removed; rejection rationale is archived in evidence/verdict artifacts. |
 
 ## Evidence Captured
 
@@ -37,8 +37,8 @@ not add internal AO history and it did not make temporal AO public API.
 | `artifacts/benchmarks/vbao-temporal-host-traa-latest.json` | Captured matching host-mode rows through Three's WebGPU `TRAANode`. |
 | `artifacts/benchmarks/vbao-temporal-spatial-ultra-latest.json` | Captured 1280x720 Museum full-res non-temporal `spatial-ultra` rows as the higher-sample spatial alternative. |
 | `artifacts/benchmarks/vbao-temporal-gate-verdict.json` | Automated verdict is `reject-promotion`; `internalTemporalAllowed` is `false`; host TAA/TRAA evidence is present; same-cost alternative evidence is present; `VBAO_TEMPORAL_REQUIRE_CANDIDATE=1` still fails because promotion is not justified. |
-| `artifacts/benchmarks/vbao-temporal-internal-smoke.json` | Captured one 1280x720 Museum full-res AO product smoke row for private `internal` mode. The temporal pass emitted a measured GPU timestamp; this is runtime plumbing evidence, not a quality promotion. |
-| `artifacts/benchmarks/vbao-temporal-internal-latest.json` | Captured 1280x720 Museum full-res `beauty,ao` product rows for private `internal` mode with diagnostics and pass timings. |
+| `artifacts/benchmarks/vbao-temporal-internal-smoke.json` | Historical rejected prototype row. Kept only as rejection evidence; the runtime path is removed. |
+| `artifacts/benchmarks/vbao-temporal-internal-latest.json` | Historical rejected prototype rows. Kept only as rejection evidence; not accepted by the current verifier. |
 | `EVIDENCE.md` | Records the comparison as a non-TAA smoke gate and explicitly rejects promotion. |
 
 ## Verification
@@ -62,26 +62,21 @@ git diff --check -- openspec/changes/vbao-temporal-ao-gate packages/horizon-ao/s
 - The installed Three package provides WebGPU `TRAANode`; it is wired into the
   demo host path and captured as `vbao-temporal-host-traa-latest.json`, but the
   captured rows do not pass the promotion gate.
-- Internal temporal accumulation is evaluated and rejected for promotion. It
-  must carry the host stripe regression and internal blocking failure labels as
-  known risks, and cannot be used for public API, quality promotion, or a
-  prototype-allowed verdict.
-- The first internal prototype is wired after full-resolution resolve and before
-  full-resolution polish. It owns AO history, resets on resize and camera cuts,
-  clamps history to the current 3x3 AO neighborhood, and uses history weight
-  `0.8`.
-- Phase 3.3 and 3.4 are now implemented for the private prototype. History is
-  sampled through previous-frame UV, out-of-viewport history is rejected, and
-  previous depth/normal guide history is validated before blending.
+- Internal temporal accumulation was evaluated, rejected for promotion, and
+  removed from runtime product plumbing. It cannot be used for public API,
+  quality promotion, or a prototype-allowed verdict.
+- The rejected prototype duplicated previous depth/normal guide history and used
+  camera-only reprojection. Future AO-owned temporal work must start as a fresh
+  velocity-backed proposal instead.
 - `sdd-plan.md` now owns the remaining roadmap. Phase 3.7 and Phase 4 are
   complete as a rejection gate; remaining work is Phase 6 hardening or an
   explicit future tuning fork.
 
 ## Gate Closeout
 
-This change closes as an evidence-gated no-go for temporal promotion and no-go
-for prototype allowance. Host phase animation was implemented and captured with
-both non-TAA output and host TRAA output. The same-cost non-temporal
-`spatial-ultra` alternative was also captured. The verifier reports
-`reject-promotion` with `internalTemporalAllowed: false`, so further temporal
-work needs a fresh tuning fork and evidence matrix.
+This change closes as an evidence-gated no-go for AO-owned temporal promotion
+and no-go for prototype allowance. Host phase animation was implemented and
+captured with both non-TAA output and host TRAA output. The same-cost
+non-temporal `spatial-ultra` alternative was also captured. The verifier reports
+`reject-promotion` with `internalTemporalAllowed: false`, so further AO-owned
+temporal work needs a fresh velocity-backed proposal and evidence matrix.

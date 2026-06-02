@@ -1,0 +1,141 @@
+{
+  "generatedAt": "2026-06-02T09:42:19.551Z",
+  "baseUrl": "http://127.0.0.1:5205",
+  "scenes": [
+    "museum"
+  ],
+  "resolutions": [
+    {
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "passTimingSampleCount": 5,
+  "note": "Production-only local capture. This is not a formal EVIDENCE.md claim unless copied into EVIDENCE.md with timings review.",
+  "referenceGate": {
+    "basis": "Product AO rows must provide fixture observations before they can be compared against the ray-cast and canonical reports.",
+    "productRows": [
+      {
+        "label": "1280x720-museum-vbao-spatial-ultra-off-full-res-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "label": "1280x720-museum-vbao-spatial-ultra-off-full-res-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": true,
+      "vbaoResolution": "full-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "spatial-ultra",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "temporalDiagnostics": null,
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 2.335744,
+          "reason": "Median WebGPU timestamp from 5 steady-state samples; render target VBAO.Raw (1280x720)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "resolve",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "polish",
+          "status": "measured",
+          "gpuMs": 0.19968,
+          "reason": "Median WebGPU timestamp from 5 steady-state samples; render target VBAO.FullResPolish (1280x720)."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 2.535424,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish pass timestamps emitted for this graph."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.8458994619088298,
+        "stdLuma": 0.14161798752863128,
+        "patternNoiseScore": 0.023068454971904545,
+        "stripeScore": 0.19027658260457248,
+        "horizontalStripeScore": 0.19027658260457248,
+        "verticalStripeScore": 0.16087666060973974,
+        "directionalAnisotropy": 0.0887406384599531,
+        "edgeBleedProxy": 0.00979151722013291,
+        "thinGapPreservationProxy": 0.0030477678502276863,
+        "meanAbsDx": 0.0029293297127269105,
+        "meanAbsDy": 0.003499860123581127,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-fixed-loop-spatial-ultra\\1280x720-museum-vbao-spatial-ultra-off-full-res-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": true,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoSamplePreset": "spatial-ultra",
+        "vbaoReconstructionStage": "final",
+        "vbaoRadius": 0.35,
+        "vbaoThickness": 0.09,
+        "vbaoSamples": 10,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 1020.4081632523765,
+        "frameMs": 0.9800000000124176,
+        "avgFrameMs": 0.9800000000124176,
+        "medianFrameMs": 1,
+        "p95FrameMs": 1.199999999254942,
+        "reportIndex": 3,
+        "sampleCount": 30,
+        "timestamp": 3878.5999999996275
+      },
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ]
+    }
+  ]
+}

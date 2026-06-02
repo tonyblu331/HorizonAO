@@ -139,23 +139,23 @@ Deliverables:
 
 Started:
 
-- `packages/horizon-ao/src/reference/aoRaycastReference.ts` freezes deterministic
+- `packages/horizon-ao/reference/aoRaycastReference.ts` freezes deterministic
   cosine-hemisphere ray-cast fixtures for flat/open, sphere contact, box contact,
   two-wall corner, thin-gap slabs, and out-of-radius rejection.
-- `packages/horizon-ao/src/__tests__/aoRaycastReference.test.ts` verifies the
+- `packages/horizon-ao/reference/__tests__/aoRaycastReference.test.ts` verifies the
   fixture contract and deterministic reference accessibility ordering.
-- `packages/horizon-ao/src/reference/aoReferenceReport.ts` turns fixture observations into
+- `packages/horizon-ao/reference/aoReferenceReport.ts` turns fixture observations into
   pass/warn/fail candidate rows and algorithm summaries.
-- `packages/horizon-ao/src/__tests__/aoReferenceReport.test.ts` verifies that
+- `packages/horizon-ao/reference/__tests__/aoReferenceReport.test.ts` verifies that
   missing candidate rows warn instead of pretending a renderer passed.
-- `packages/horizon-ao/src/reference/canonicalVbaoReference.ts` adds a strict canonical
+- `packages/horizon-ao/reference/canonicalVbaoReference.ts` adds a strict canonical
   VBAO lane based on the paper/blog `UpdateSectors` model: constant pixel-view
   thickness, ceil-touch sector updates, and `1 - popcount(mask) / 32`.
-- `packages/horizon-ao/src/__tests__/canonicalVbaoReference.test.ts` verifies the
+- `packages/horizon-ao/reference/__tests__/canonicalVbaoReference.test.ts` verifies the
   canonical lane and makes the product-lane thickness drift observable.
-- `packages/horizon-ao/src/reference/vbaoCanonicalDriftReport.ts` compares canonical VBAO
+- `packages/horizon-ao/reference/vbaoCanonicalDriftReport.ts` compares canonical VBAO
   against the current product scalar VBAO lane on identical synthetic samples.
-- `packages/horizon-ao/src/__tests__/vbaoCanonicalDriftReport.test.ts` freezes
+- `packages/horizon-ao/reference/__tests__/vbaoCanonicalDriftReport.test.ts` freezes
   the drift cases and verifies that drift is surfaced as pass/warn/fail evidence,
   not hidden by product polish.
 

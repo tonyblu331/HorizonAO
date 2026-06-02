@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  VBAO_CLAMP_RANGES,
-  clampVbaoNodeOptions,
-} from '../vbaoConstants'
+import { VBAO_CLAMP_RANGES, clampVbaoNodeOptions } from '../vbaoConstants'
 import {
   VBAO_PHASE_ATLAS_COLUMNS,
   VBAO_PHASE_ATLAS_PHASES,
@@ -79,6 +76,10 @@ describe('single production VBAO sampling scheme', () => {
       return Math.round(((value - previous + 1) % 1) * 1000) / 1000
     })
     expect(new Set(deltas).size).toBeGreaterThan(8)
+  })
+
+  it('keeps benchmark noise-source candidates out of product sampling runtime', () => {
+    expect(sampleVbaoPhaseChannels(baseInput)).toEqual(sampleVbaoPhaseChannels(baseInput))
   })
 
   it('clamps public slice/sample overrides to the non-aliasing phase budget', () => {

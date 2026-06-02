@@ -1,14 +1,6 @@
 import {
-  HalfFloatType,
-  NearestFilter,
-  NodeMaterial,
   NodeUpdateType,
-  NoColorSpace,
   QuadMesh,
-  RedFormat,
-  RenderTarget,
-  RendererUtils,
-  TempNode,
   Vector2,
   type Camera,
   type Node,
@@ -19,18 +11,15 @@ import {
   Fn,
   If,
   PI,
-  abs,
   clamp,
   cos,
   dot,
-  exp2,
   float,
   fract,
   getViewPosition,
   logarithmicDepthToViewZ,
   max,
   min,
-  passTexture,
   reference,
   sin,
   textureSize,
@@ -39,6 +28,9 @@ import {
   vec2,
   viewZToPerspectiveDepth,
 } from 'three/tsl'
+
+import { computeVbaoBilateralGeometryWeight } from './vbaoBilateralWeight'
+import { VBAOEffectPass } from './VBAOEffectPass'
 
 export interface VBAOFullResPolishNodeOptions {
   readonly enabled?: boolean
@@ -58,7 +50,6 @@ const POISSON8 = Object.freeze([
 
 const fullResPolishQuadMesh = new QuadMesh()
 const fullResPolishSize = new Vector2()
-let fullResPolishRendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
 
 type SampleableNode = Node & {
   sample: (uvCoord: Node) => any
@@ -75,7 +66,7 @@ function clamp01(value: number): number {
  * rotated isotropic stencil and tangent-plane geometry rejection so low-slice
  * VBAO structure is softened without locking the filter to screen axes.
  */
-export class VBAOFullResPolishNode extends TempNode<'float'> {
+export class VBAOFullResPolishNode extends VBAOEffectPass {
   static get type(): string {
     return 'VBAOFullResPolishNode'
   }
@@ -91,13 +82,6 @@ export class VBAOFullResPolishNode extends TempNode<'float'> {
   enabled: boolean
   strength: number
 
-  protected readonly renderTarget = new RenderTarget(1, 1, {
-    depthBuffer: false,
-    format: RedFormat,
-    type: HalfFloatType,
-  })
-  protected readonly material = new NodeMaterial()
-  protected readonly textureNode: TextureNode
   private readonly cameraProjectionMatrixInverse
   private readonly cameraNear
   private readonly cameraFar
@@ -110,7 +94,7 @@ export class VBAOFullResPolishNode extends TempNode<'float'> {
     radiusNode: Node = uniform(1),
     options: VBAOFullResPolishNodeOptions = {},
   ) {
-    super('float')
+    super('VBAO.FullResPolish', 'VBAOFullResPolish')
 
     this.aoNode = aoNode
     this.depthNode = depthNode as SampleableNode
@@ -120,13 +104,6 @@ export class VBAOFullResPolishNode extends TempNode<'float'> {
     this.enabled = options.enabled ?? true
     this.strength = clamp01(options.strength ?? 1)
     this.strengthUniform.value = this.strength
-    this.renderTarget.texture.name = 'VBAO.FullResPolish'
-    this.renderTarget.texture.magFilter = NearestFilter
-    this.renderTarget.texture.minFilter = NearestFilter
-    this.renderTarget.texture.generateMipmaps = false
-    this.renderTarget.texture.colorSpace = NoColorSpace
-    this.material.name = 'VBAOFullResPolish'
-    this.textureNode = passTexture(this as never, this.renderTarget.texture)
     this.cameraProjectionMatrixInverse = uniform(camera.projectionMatrixInverse)
     this.cameraNear = reference('near', 'float', camera)
     this.cameraFar = reference('far', 'float', camera)
@@ -139,36 +116,18 @@ export class VBAOFullResPolishNode extends TempNode<'float'> {
   }
 
   getTextureNode(): TextureNode {
-    return this.enabled ? this.textureNode : this.aoNode
-  }
-
-  setSize(width: number, height: number): void {
-    this.renderTarget.setSize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)))
+    return this.enabled ? this.getPassTextureNode() : this.aoNode
   }
 
   updateBefore(frame: NodeFrame): boolean | undefined {
     if (!this.enabled) return undefined
 
-    const renderer = frame.renderer
-    if (renderer === null || renderer === undefined) return undefined
-
-    fullResPolishRendererState = RendererUtils.resetRendererState(
-      renderer,
-      fullResPolishRendererState as never,
+    return this.renderFullscreenPass(
+      frame,
+      fullResPolishSize,
+      fullResPolishQuadMesh,
+      'VBAOFullResPolish',
     )
-
-    const drawingBufferSize = renderer.getDrawingBufferSize(fullResPolishSize)
-    this.setSize(drawingBufferSize.width, drawingBufferSize.height)
-
-    fullResPolishQuadMesh.material = this.material
-    fullResPolishQuadMesh.name = 'VBAOFullResPolish'
-
-    renderer.setClearColor(0xffffff, 1)
-    renderer.setRenderTarget(this.renderTarget)
-    fullResPolishQuadMesh.render(renderer)
-
-    RendererUtils.restoreRendererState(renderer, fullResPolishRendererState)
-    return true
   }
 
   setup(builder: any): TextureNode {
@@ -251,25 +210,15 @@ export class VBAOFullResPolishNode extends TempNode<'float'> {
               .lessThan(float(1))
               .and(tapDepth.greaterThanEqual(float(0)))
               .and(dot(tapNormal, tapNormal).greaterThan(float(0.001)))
-            const normalAgreement = max(float(0), dot(centerNormal, tapNormal))
-            const planeDistance = abs(dot(tapPosition.sub(centerPosition), centerNormal)).toVar(
-              `vbaoFullResPolishPlaneDistance${tapIndex}`,
+            const geometryWeight = computeVbaoBilateralGeometryWeight(
+              centerPosition,
+              centerNormal,
+              tapPosition,
+              tapNormal,
+              this.radiusNode,
+              `vbaoFullResPolish${tapIndex}`,
             )
-            const depthWeight = exp2(
-              planeDistance
-                .negate()
-                .mul(float(24))
-                .div(max(float(this.radiusNode as any), float(1e-3))),
-            )
-            const normal2 = normalAgreement
-              .mul(normalAgreement)
-              .toVar(`vbaoFullResPolishNormal2${tapIndex}`)
-            const normal4 = normal2.mul(normal2).toVar(`vbaoFullResPolishNormal4${tapIndex}`)
-            const normalWeight = normal4
-              .mul(normal4)
-              .toVar(`vbaoFullResPolishNormalWeight${tapIndex}`)
-            const tapWeight = depthWeight
-              .mul(normalWeight)
+            const tapWeight = geometryWeight
               .mul(float(spatialWeight))
               .toVar(`vbaoFullResPolishTapWeight${tapIndex}`)
 
@@ -304,11 +253,6 @@ export class VBAOFullResPolishNode extends TempNode<'float'> {
     this.material.fragmentNode = polishKernel()
     this.material.needsUpdate = true
 
-    return this.textureNode
-  }
-
-  dispose(): void {
-    this.renderTarget.dispose()
-    this.material.dispose()
+    return this.getPassTextureNode()
   }
 }

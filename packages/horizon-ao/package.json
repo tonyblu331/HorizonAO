@@ -16,9 +16,9 @@
   ],
   "scripts": {
     "build": "tsdown",
-    "test": "vitest run --root ../.. packages/horizon-ao/src",
-    "typecheck": "tsc --noEmit",
-    "typecheck:tsgo": "tsgo --noEmit"
+    "test": "vitest run --root ../.. packages/horizon-ao/src packages/horizon-ao/reference",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.reference.json",
+    "typecheck:tsgo": "tsgo --noEmit && tsgo --noEmit -p tsconfig.reference.json"
   },
   "peerDependencies": {
     "three": ">=0.184.0"

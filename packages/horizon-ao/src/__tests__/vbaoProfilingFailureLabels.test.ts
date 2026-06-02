@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { AO_FAILURE_LABELS, classifyFailureLabels } from '../../../../apps/demo/scripts/profiling/productionReport.mjs'
+import {
+  AO_FAILURE_LABELS,
+  VBAO_RECONSTRUCTION_STAGES,
+  createEvidenceArtifactStatusRows,
+  createReferenceGateStatusRows,
+  createVbaoReconstructionStageStatusRows,
+  classifyFailureLabels,
+} from '../../../../apps/demo/scripts/profiling/productionReport.mjs'
 
 describe('VBAO profiling failure labels', () => {
   it('keeps the evidence label vocabulary explicit', () => {
@@ -10,8 +17,20 @@ describe('VBAO profiling failure labels', () => {
       'halo',
       'thin-gap',
       'edge-bleed',
+      'ghosting',
+      'disocclusion',
       'scale-mismatch',
       'false-curvature',
+    ])
+  })
+
+  it('keeps the half-resolution reconstruction stage vocabulary explicit', () => {
+    expect(VBAO_RECONSTRUCTION_STAGES).toEqual([
+      'raw',
+      'cleanup',
+      'resolve',
+      'polish',
+      'final',
     ])
   })
 
@@ -55,5 +74,241 @@ describe('VBAO profiling failure labels', () => {
         vbaoDenoiseFilter: 'legacy',
       }),
     ).toEqual(['noise', 'mud', 'thin-gap', 'edge-bleed'])
+  })
+
+  it('marks product AO rows without fixture observations as reference gate misses', () => {
+    const rows = createReferenceGateStatusRows([
+      { label: 'vbao raw beauty', mode: 'vbao', view: 'beauty', denoise: false },
+      { label: 'vbao product ao', mode: 'vbao', view: 'ao', denoise: true },
+      {
+        label: 'gtao denoised ao',
+        mode: 'gtao',
+        view: 'ao',
+        denoise: true,
+        referenceObservations: [{ fixtureId: 'flat-plane-open' }],
+      },
+      { label: 'n8ao ao', mode: 'n8ao', view: 'ao', denoise: true },
+    ])
+
+    expect(rows).toEqual([
+      {
+        label: 'vbao product ao',
+        algorithm: 'vbao',
+        output: 'product',
+        observedFixtureCount: 0,
+        status: 'missing-reference-observation',
+      },
+      {
+        label: 'gtao denoised ao',
+        algorithm: 'gtao',
+        output: 'denoised',
+        observedFixtureCount: 1,
+        status: 'compared',
+      },
+      {
+        label: 'n8ao ao',
+        algorithm: 'n8ao',
+        output: 'internally-filtered',
+        observedFixtureCount: 0,
+        status: 'missing-reference-observation',
+      },
+    ])
+  })
+
+  it('marks rows with missing screenshots or timing as incomplete evidence', () => {
+    const rows = createEvidenceArtifactStatusRows([
+      {
+        label: 'vbao complete',
+        mode: 'vbao',
+        screenshotPath: 'artifacts/benchmarks/screenshots-ao-production/vbao.png',
+        latest: { medianFrameMs: 1.25, p95FrameMs: 2.5 },
+        passTimings: [
+          { pass: 'raw', status: 'measured', gpuMs: 0.25 },
+          { pass: 'total-product', status: 'derived', gpuMs: 0.25 },
+        ],
+      },
+      {
+        label: 'missing screenshot',
+        mode: 'gtao',
+        latest: { medianFrameMs: 1.25, p95FrameMs: 2.5 },
+      },
+      {
+        label: 'missing frame timing',
+        mode: 'ssao',
+        screenshotPath: 'artifacts/benchmarks/screenshots-ao-production/ssao.png',
+        latest: { medianFrameMs: 1.25 },
+      },
+      {
+        label: 'missing pass timing',
+        mode: 'vbao',
+        screenshotPath: 'artifacts/benchmarks/screenshots-ao-production/vbao-missing.png',
+        latest: { medianFrameMs: 1.25, p95FrameMs: 2.5 },
+        passTimings: [{ pass: 'raw', status: 'missing', gpuMs: null }],
+      },
+      {
+        label: 'half-res-reconstruction-gate missing reconstruction stages',
+        mode: 'vbao',
+        denoise: true,
+        fullResolutionVbao: false,
+        screenshotPath: 'artifacts/benchmarks/screenshots-ao-production/vbao-half-res.png',
+        latest: { medianFrameMs: 1.25, p95FrameMs: 2.5 },
+        passTimings: [
+          { pass: 'raw', status: 'measured', gpuMs: 0.25 },
+          { pass: 'cleanup', status: 'measured', gpuMs: 0.1 },
+          { pass: 'resolve', status: 'measured', gpuMs: 0.12 },
+          { pass: 'polish', status: 'skipped', gpuMs: null },
+          { pass: 'total-product', status: 'derived', gpuMs: 0.47 },
+        ],
+        reconstructionStages: [{ stage: 'raw', failureLabels: ['noise'] }],
+      },
+    ])
+
+    expect(rows).toEqual([
+      {
+        label: 'vbao complete',
+        status: 'complete',
+        missing: [],
+      },
+      {
+        label: 'missing screenshot',
+        status: 'incomplete',
+        missing: ['screenshotPath'],
+      },
+      {
+        label: 'missing frame timing',
+        status: 'incomplete',
+        missing: ['latest.p95FrameMs'],
+      },
+      {
+        label: 'missing pass timing',
+        status: 'incomplete',
+        missing: ['passTimings.raw'],
+      },
+      {
+        label: 'half-res-reconstruction-gate missing reconstruction stages',
+        status: 'incomplete',
+        missing: [
+          'reconstructionStages.cleanup',
+          'reconstructionStages.resolve',
+          'reconstructionStages.polish',
+          'reconstructionStages.final',
+        ],
+      },
+    ])
+  })
+
+  it('does not require downstream pass timings for intermediate VBAO reconstruction stages', () => {
+    const rows = createEvidenceArtifactStatusRows([
+      {
+        label: 'half-res raw stage',
+        mode: 'vbao',
+        denoise: true,
+        fullResolutionVbao: false,
+        vbaoReconstructionStage: 'raw',
+        screenshotPath: 'artifacts/benchmarks/screenshots-ao-production/vbao-raw.png',
+        latest: { medianFrameMs: 1.25, p95FrameMs: 2.5 },
+        passTimings: [
+          { pass: 'raw', status: 'measured', gpuMs: 0.25 },
+          { pass: 'cleanup', status: 'missing', gpuMs: null },
+          { pass: 'resolve', status: 'missing', gpuMs: null },
+          { pass: 'polish', status: 'skipped', gpuMs: null },
+          { pass: 'total-product', status: 'derived', gpuMs: 0.25 },
+        ],
+      },
+      {
+        label: 'half-res cleanup stage',
+        mode: 'vbao',
+        denoise: true,
+        fullResolutionVbao: false,
+        vbaoReconstructionStage: 'cleanup',
+        screenshotPath: 'artifacts/benchmarks/screenshots-ao-production/vbao-cleanup.png',
+        latest: { medianFrameMs: 1.25, p95FrameMs: 2.5 },
+        passTimings: [
+          { pass: 'raw', status: 'measured', gpuMs: 0.25 },
+          { pass: 'cleanup', status: 'measured', gpuMs: 0.1 },
+          { pass: 'resolve', status: 'missing', gpuMs: null },
+          { pass: 'polish', status: 'skipped', gpuMs: null },
+          { pass: 'total-product', status: 'derived', gpuMs: 0.35 },
+        ],
+      },
+      {
+        label: 'half-res raw stage unexpected downstream pass',
+        mode: 'vbao',
+        denoise: true,
+        fullResolutionVbao: false,
+        vbaoReconstructionStage: 'raw',
+        screenshotPath: 'artifacts/benchmarks/screenshots-ao-production/vbao-raw-unexpected.png',
+        latest: { medianFrameMs: 1.25, p95FrameMs: 2.5 },
+        passTimings: [
+          { pass: 'raw', status: 'measured', gpuMs: 0.25 },
+          { pass: 'cleanup', status: 'unexpected', gpuMs: 0.1 },
+          { pass: 'total-product', status: 'derived', gpuMs: 0.35 },
+        ],
+      },
+    ])
+
+    expect(rows).toEqual([
+      {
+        label: 'half-res raw stage',
+        status: 'complete',
+        missing: [],
+      },
+      {
+        label: 'half-res cleanup stage',
+        status: 'complete',
+        missing: [],
+      },
+      {
+        label: 'half-res raw stage unexpected downstream pass',
+        status: 'incomplete',
+        missing: ['passTimings.cleanup'],
+      },
+    ])
+  })
+
+  it('requires half-resolution product rows to provide every reconstruction stage label', () => {
+    const rows = createVbaoReconstructionStageStatusRows([
+      {
+        label: 'half-res complete',
+        mode: 'vbao',
+        denoise: true,
+        fullResolutionVbao: false,
+        reconstructionStages: [
+          { stage: 'raw', failureLabels: ['noise'] },
+          { stage: 'cleanup', failureLabels: ['noise'] },
+          { stage: 'resolve', failureLabels: ['noise', 'false-curvature'] },
+          { stage: 'polish', failureLabels: ['noise', 'false-curvature'] },
+          { stage: 'final', failureLabels: ['noise', 'false-curvature'] },
+        ],
+      },
+      {
+        label: 'half-res missing stages',
+        mode: 'vbao',
+        denoise: true,
+        fullResolutionVbao: false,
+        reconstructionStages: [{ stage: 'raw', failureLabels: ['noise'] }],
+      },
+      {
+        label: 'full-res product',
+        mode: 'vbao',
+        denoise: true,
+        fullResolutionVbao: true,
+      },
+    ])
+
+    expect(rows).toEqual([
+      {
+        label: 'half-res complete',
+        status: 'complete',
+        missingStages: [],
+        firstFailingStage: 'raw',
+      },
+      {
+        label: 'half-res missing stages',
+        status: 'incomplete',
+        missingStages: ['cleanup', 'resolve', 'polish', 'final'],
+        firstFailingStage: 'raw',
+      },
+    ])
   })
 })

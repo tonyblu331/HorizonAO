@@ -4,7 +4,7 @@
 
 The gate connects three existing threads:
 
-1. scalar/ray-cast reference fixtures under `packages/horizon-ao/src/reference/`;
+1. scalar/ray-cast reference fixtures under `packages/horizon-ao/reference/`;
 2. product benchmark/report scripts under `apps/demo/scripts/`;
 3. committed evidence in `EVIDENCE.md`.
 

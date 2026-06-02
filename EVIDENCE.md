@@ -4,6 +4,160 @@ Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
 This file is the gate for later adaptive thickness, sampling, denoise, or depth
 hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
+## 2026-06-02 — VBAO pass topology audit
+
+Status: **partial refactor kept, topology deletions rejected**.
+
+This audit tested whether the low-resolution VBAO reconstruction graph should
+collapse files/passes after the over-engineering review. The evidence supports
+only the shared internal pass boilerplate extraction. It does not support
+removing half-resolution cleanup or fusing resolve with full-resolution polish.
+
+Artifacts:
+
+- `openspec/changes/vbao-pass-topology-audit/`
+- `artifacts/benchmarks/vbao-pass-topology-baseline.json`
+- `artifacts/benchmarks/vbao-pass-topology-polish-base.json`
+- `artifacts/benchmarks/vbao-cleanup-on.json`
+- `artifacts/benchmarks/vbao-cleanup-skip.json`
+- `artifacts/benchmarks/vbao-resolve-polish-preflight.json`
+- `artifacts/benchmarks/vbao-resolve-polish-fused.json`
+
+Decisions:
+
+- Keep `VBAOEffectPass` as private boilerplate extraction for fullscreen scalar
+  AO passes.
+- Keep `VBAOHalfResCleanupNode`. Skipping cleanup saved about 0.05-0.10 ms in
+  the tested half-resolution rows, but regressed noise, stripe, and edge-bleed
+  proxies across comparable captures.
+- Keep `VBAOResolveNode` and `VBAOFullResPolishNode` separate. At high softness
+  (`0.75`), fused resolve-polish preserved labels but was slower:
+  - 1920x1080 AO: separate resolve+polish 0.288 ms, fused 3.468 ms.
+  - 1280x720 AO: separate resolve+polish 0.125 ms, fused 0.381 ms.
+- Do not add public cleanup, denoise, temporal, velocity, or resolve-polish API
+  options from this audit.
+
+Outcome:
+
+- The folder stays larger than the pasted simplification proposal wanted, but
+  the retained modules are earning their keep. Deleting or fusing them moves
+  cost and complexity into worse places.
+- Future velocity temporal, multi-bounce, bent-normal, directional occlusion,
+  and public API work are split into separate proposal notes under
+  `openspec/changes/vbao-pass-topology-audit/future-work-proposals.md`.
+
+## 2026-06-02 — VBAO velocity temporal private smoke
+
+Status: **private smoke only, not promoted**.
+
+This capture verifies that `velocity-internal` can render a full-resolution
+Museum AO product row using host-owned previous depth/normal guides from
+`PassNode.getPreviousTextureNode(...)`, emit a separate measured temporal pass,
+and keep the temporal gate at `reject-promotion`.
+
+Command:
+
+```sh
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='ao'; $env:AO_BENCHMARK_DENOISE_STATES='true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='velocity-internal'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='1'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-temporal-velocity-internal-smoke.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-temporal-velocity-internal-smoke.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-temporal-velocity-internal-smoke'; $env:AO_BENCHMARK_PORT='5206'; pnpm --filter @horizonao/demo benchmark:ao
+
+pnpm --filter @horizonao/demo verify:vbao-temporal
+```
+
+Artifacts:
+
+- `artifacts/benchmarks/vbao-temporal-velocity-internal-smoke.json`
+- `artifacts/benchmarks/vbao-temporal-velocity-internal-smoke.md`
+- `artifacts/benchmarks/screenshots-vbao-temporal-velocity-internal-smoke/`
+- `artifacts/benchmarks/vbao-temporal-gate-verdict.json`
+- `artifacts/benchmarks/vbao-temporal-gate-verdict.md`
+
+| Resolution | View | Output | Raw GPU ms | Polish GPU ms | Temporal GPU ms | Total product GPU ms | Pattern/noise ↓ | Stripe ↓ | Edge bleed ↓ | Thin-gap ↑ |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1280x720 | ao | product | 1.007 | 0.090 | 0.042 | 1.139 | 0.02295 | 0.19094 | 0.00852 | 0.00256 |
+
+Outcome:
+
+- The private `VBAOVelocityTemporalNode` renders under WebGPU.
+- The host provides previous guide history; VBAO does not allocate previous
+  depth/normal guide targets.
+- Temporal cost is visible as its own measured pass.
+- The verifier remains `reject-promotion`; this is not a same-cost matrix and
+  has no motion/disocclusion evidence.
+
+## 2026-06-02 — Fixed raw loop shader inspection for preset and explicit shapes
+
+Status: **pass**.
+
+This generated-shader inspection verifies both the product `quality` preset and
+the explicit `spatial-ultra` sample override path. The second row is the guard
+for the old dynamic-uniform fallback: it passes explicit `samples/slices` and
+must still produce fixed shader loop bounds.
+
+Command:
+
+```sh
+$env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5203'; $env:PLAYWRIGHT_TEST_PORT='5203'; pnpm --filter @horizonao/demo exec node scripts/collect-vbao-generated-shader-inspection.mjs
+```
+
+Artifacts:
+
+- `artifacts/benchmarks/vbao-generated-shader-inspection-latest.json`
+- `artifacts/benchmarks/vbao-generated-shader-inspection-summary.md`
+
+| Sample mode | Shape | Slice loop | Sample loop | Dynamic slice uniform loop | Dynamic sample uniform loop | Console diagnostics | Result |
+| --- | --- | ---: | ---: | --- | --- | ---: | --- |
+| product-preset | quality-preset | 4 | 8 | no | no | 0 | pass |
+| spatial-ultra | explicit-override | 4 | 10 | no | no | 0 | pass |
+
+Outcome:
+
+- Both generated raw AO shaders use fixed loop bounds.
+- The explicit override path no longer falls back to uniform-driven loop limits.
+- The inspection saw no unexpected full-res JBU, no unexpected wide polish, no
+  surprise pass count, and no VBAO duplicate declaration warnings.
+- Two known Chromium Windows `powerPreference` warnings were recorded per row as
+  ignored platform diagnostics; they are outside shader generation.
+
+## 2026-06-02 — Fixed raw loop timing for preset and explicit shapes
+
+Status: **captured**.
+
+This capture measures the same Museum full-resolution AO product row for the
+fixed product preset shape and the explicit `spatial-ultra` shape. It is timing
+evidence for fixed loop shapes after shader inspection proved both paths compile
+to fixed loop bounds.
+
+Commands:
+
+```sh
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='ao'; $env:AO_BENCHMARK_DENOISE_STATES='true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='off'; $env:AO_BENCHMARK_VBAO_SAMPLE_MODE='product-preset'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='5'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-fixed-loop-product-preset-timing.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-fixed-loop-product-preset-timing.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-fixed-loop-product-preset'; $env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5204'; $env:PLAYWRIGHT_TEST_PORT='5204'; pnpm --filter @horizonao/demo benchmark:ao
+
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='ao'; $env:AO_BENCHMARK_DENOISE_STATES='true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='off'; $env:AO_BENCHMARK_VBAO_SAMPLE_MODE='spatial-ultra'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='5'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-fixed-loop-spatial-ultra-timing.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-fixed-loop-spatial-ultra-timing.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-fixed-loop-spatial-ultra'; $env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5205'; $env:PLAYWRIGHT_TEST_PORT='5205'; pnpm --filter @horizonao/demo benchmark:ao
+```
+
+Artifacts:
+
+- `artifacts/benchmarks/vbao-fixed-loop-product-preset-timing.json`
+- `artifacts/benchmarks/vbao-fixed-loop-product-preset-timing.md`
+- `artifacts/benchmarks/screenshots-vbao-fixed-loop-product-preset/`
+- `artifacts/benchmarks/vbao-fixed-loop-spatial-ultra-timing.json`
+- `artifacts/benchmarks/vbao-fixed-loop-spatial-ultra-timing.md`
+- `artifacts/benchmarks/screenshots-vbao-fixed-loop-spatial-ultra/`
+
+| Sample mode | Loop shape | Raw GPU ms | Polish GPU ms | Total product GPU ms | Pattern/noise ↓ | Stripe ↓ | Edge bleed ↓ | Thin-gap ↑ |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| product-preset | 4 slices x 8 samples | 1.053 | 0.094 | 1.147 | 0.02305 | 0.19014 | 0.00969 | 0.00308 |
+| spatial-ultra | 4 slices x 10 samples | 2.336 | 0.200 | 2.535 | 0.02307 | 0.19028 | 0.00979 | 0.00305 |
+
+Outcome:
+
+- The explicit fixed `4x10` shape is substantially more expensive than the
+  product `4x8` shape on this Museum AO product row.
+- Screenshot proxy metrics did not show a material quality win for
+  `spatial-ultra`; pattern/noise and stripe are slightly worse in this capture.
+- This supports keeping `quality` as the product preset while preserving
+  explicit fixed-shape overrides for controlled benchmark/evidence runs.
+
 ## 2026-06-02 — VBAO temporal host gate smoke
 
 Status: **host temporal sampling is wired, but not promoted**.
@@ -153,29 +307,27 @@ Artifacts:
 | 1280x720 | beauty | product | 0.03447 | 0.15682 | 0.02872 | 0.00612 | 1.047 | 0.046 | 0.030 | 0.094 | 1.217 |
 | 1280x720 | ao | product | 0.02305 | 0.19014 | 0.00969 | 0.00308 | 1.606 | 0.068 | 0.045 | 0.142 | 1.861 |
 
-Diagnostics:
+Historical prototype diagnostics:
 
 - `validationMode`: `reproject-depth-normal-clamp`
 - `historyWeight`: `0.8`
 - `depthContinuityThreshold`: `0.01`
 - `normalContinuityThreshold`: `0.8`
 - `gpuRejectionCounters`: `not-instrumented`
-- `verify:vbao-temporal`: `reject-promotion`;
+- previous `verify:vbao-temporal`: `reject-promotion`;
   `internalTemporalEvidence: true`;
   `internalTemporalPassesPromotion: false`;
   `internalTemporalAllowed: false`.
 
 Outcome:
 
-- The private temporal node is wired after full-resolution resolve and before
-  full-resolution polish.
-- The pass owns AO history, resets on resize/camera cuts, reprojects current
-  depth into previous-frame UV, rejects out-of-viewport history, validates
-  previous depth/normal guide history, clamps history to the current 3x3 AO
-  neighborhood, and starts with history weight `0.8`.
-- Phase 3.7 diagnostics are complete for this prototype gate. Benchmark output
-  exposes validation mode, reset state/reasons, thresholds, and temporal guide
-  timings. GPU rejection counters are explicitly `not-instrumented`.
+- The private temporal node was rejected and removed from runtime product
+  plumbing.
+- The rejected pass owned AO history, duplicated previous depth/normal guide
+  history, used camera-only reprojection, clamped history to the current 3x3 AO
+  neighborhood, and started with history weight `0.8`.
+- Those diagnostics remain useful as rejection evidence only. Future AO-owned
+  temporal work requires a fresh velocity-backed proposal and evidence matrix.
 - Phase 4 is complete as a rejection gate. Internal temporal evidence is
   present, but it has no material pattern/noise win and carries blocking failure
   labels, so promotion and prototype allowance are both blocked by the verifier.
