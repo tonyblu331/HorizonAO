@@ -40,6 +40,252 @@ The upgraded verifier reads internal temporal evidence and reports
 Remaining plan work is limited to future hardening or an explicit tuning fork;
 public API promotion remains blocked.
 
+## External Performance Feedback Contrast
+
+This revision contrasts a pasted architectural review against the current SDD
+plan and code state. The review has useful pressure in the right places, but it
+also assumes an engine-level G-buffer/history system that this package does not
+own.
+
+### Accepted As Already Covered
+
+- Terminology: the pasted review misframes VBAO as Vector-Based AO. Keep the
+  repo identity anchored to Visibility Bitmask AO / SSILVB arXiv:2301.11376,
+  with GTAO compatibility as an integration shape. Do not rename the active work
+  back to GTAO/HBAO.
+- Fixed hot loops: product presets already resolve construction-time loop shapes
+  in `VBAONode`; only explicit `slices`/`samples` debug overrides use uniform
+  loop bounds. No new temporal work should weaken that.
+- Temporal stays private: the SDD already blocks public `temporal` API promotion
+  until evidence reaches `candidate`.
+- Same-cost comparison: the evidence matrix already requires internal temporal
+  to beat temporal-off and same-cost non-temporal rows, not merely look smoother.
+- Pass cost visibility: temporal, cleanup, resolve, polish, and guide-copy costs
+  must be counted as product cost when present.
+
+### Accepted As Future Measurement Gates
+
+- Reprojection ALU: the current temporal prototype reconstructs world/previous
+  clip position through current inverse projection, current world, previous
+  view, and previous projection uniforms. A CPU-composed
+  `previousViewProjection * currentInverseViewProjection` uniform is a valid
+  tuning hypothesis, but only after the current rejected prototype has separate
+  pass timings and generated shader evidence.
+- Guide history cost: `previousDepthRenderTarget` and
+  `previousNormalRenderTarget` are valid current prototype costs, not free
+  architecture. The collector already maps `VBAO.TemporalAccumulation`,
+  `VBAO.TemporalPreviousDepth`, and `VBAO.TemporalPreviousNormal` to separate
+  timing rows, and the temporal verifier already requires them for complete
+  internal evidence. The next hardening slice should audit those existing rows
+  and add VRAM/lifetime inventory before any tuning fork.
+- Neighborhood clamp cost: the current 3x3 clamp is intentionally conservative.
+  Manual 9-tap unrolling or a 4-tap cross clamp is allowed only as a measured
+  tuning hypothesis after the rejection reasons are understood.
+- Log-depth conversion cost: repeated logarithmic-depth conversion in temporal,
+  cleanup, resolve, and polish taps is a legitimate shader-cost concern. Treat
+  pre-linearized depth or center-only conversion as a future performance
+  experiment with visual edge-regression checks.
+- Bilateral weight duplication: `VBAOHalfResCleanupNode`, `VBAOResolveNode`, and
+  `VBAOFullResPolishNode` repeat similar depth/normal rejection math. A helper
+  extraction is acceptable only if generated shader inspection stays clean and
+  behavior remains source-contract covered.
+- Pass consolidation: merging resolve/polish or deleting half-res cleanup is a
+  performance candidate, not an immediate refactor. It must beat the existing
+  path on pass timings and failure labels.
+- Polish stability mask: making full-res polish conditional on temporal
+  stability is only meaningful if internal temporal first becomes a `candidate`.
+  Until then, full-res polish remains a temporal-free reconstruction stage, not
+  a disocclusion-only temporal fallback.
+
+### Rejected Or Deferred Assumptions
+
+- Do not allocate private guide history again. `@horizonao/core` is a
+  package-level node, not a full renderer; any future AO-owned temporal path must
+  accept host-provided velocity and guide history through an explicit contract.
+- Do not reopen camera-only internal temporal. Motion vectors are required for
+  any future AO-owned temporal path because dynamic and animated geometry is part
+  of the correctness target.
+- Do not merge JBU resolve and full-res polish in this SDD by default. The
+  temporal gate is deciding whether AO-owned history deserves to exist; pass
+  fusion belongs to a separate performance SDD after correctness/evidence gates.
+- Do not remove half-res cleanup from the existing low-resolution path just
+  because temporal exists. Temporal must not hide raw or reconstruction defects.
+- Do not make dynamic history weight the first fix. The current `0.8` weight is
+  intentionally held steady while reprojection, validation, and failure labels
+  are audited; tuning the blend before proving the topology is cargo-culting.
+
+### Revised Gate Priority
+
+The next valid slice is no longer generic "tuning". It is a cost-and-topology
+audit:
+
+1. Measure internal temporal as separate AO accumulation, guide-depth, and
+   guide-normal passes.
+2. Compare `off`, `internal`, and same-cost non-temporal rows with failure
+   labels unchanged.
+3. If temporal remains `reject-promotion`, archive the rationale and keep/remove
+   private code explicitly.
+4. Only if temporal shows a real quality win, test one topology hypothesis at a
+   time: CPU-composed reprojection matrix, manual clamp unroll, 4-tap clamp,
+   packed guide target, guide-history reuse hook, pre-linearized depth, temporal
+   stability mask, or resolve/polish fusion.
+
+The principle is simple: performance feedback becomes an evidence gate, not a
+license to reshape the graph blind.
+
+## Research-Informed Optimization Plan
+
+Detailed peer-review artifact:
+`openspec/changes/vbao-temporal-ao-gate/optimization-peer-review-plan.md`.
+
+This plan folds the external feedback into the current VBAO gates using AO
+production lessons from XeGTAO, CACAO, GTAO, and SAO:
+
+- production AO implementations keep the hot path to a small number of explicit
+  passes;
+- depth hierarchy or depth prefiltering is the common bandwidth lever;
+- temporal accumulation is useful only when the host integration can validate
+  history cheaply enough;
+- denoise must preserve depth/normal discontinuities and prove it beats spending
+  the same budget on more current-frame samples.
+
+Research traceability:
+
+- XeGTAO: https://github.com/GameTechDev/XeGTAO - explicit depth prefilter,
+  main AO, and denoise passes; host TAA is leveraged when available instead of
+  unconditionally owning temporal history.
+- SAO: https://diglib.eg.org/items/8c96d57d-3df3-43da-8663-07b3ecd60dde -
+  architecture-aware gains from depth prefiltering, bandwidth reduction, and
+  efficient position/normal reconstruction.
+- CACAO: https://gpuopen.com/fidelityfx-cacao/ - optimized quality/performance
+  tiers for ambient occlusion across hardware.
+- GTAO report:
+  https://research.activision.com/publications/2020-03/practical-real-time-strategies-for-accurate-indirect-occlusion -
+  radiometrically grounded AO baseline; useful for comparison without replacing
+  the visibility-bitmask core.
+
+### Phase O1: Pass Cost Truth
+
+Goal: make every candidate optimization accountable before changing topology.
+
+RED:
+
+- Extend collector/report coverage that already distinguishes:
+  - raw VBAO;
+  - half-resolution cleanup;
+  - JBU resolve;
+  - internal temporal AO accumulation;
+  - temporal depth-guide copy;
+  - temporal normal-guide copy;
+  - full-resolution polish;
+  - final total.
+- Keep verifier rejection when temporal evidence lacks measured guide-copy
+  timing, and add fixture coverage if this contract is not already frozen.
+
+GREEN:
+
+- Audit the current pass-timing instrumentation without changing visual output.
+- Keep `skipped`, `unmeasured`, and measured rows distinct.
+- Record VRAM target inventory per topology: target name, resolution scale,
+  format, and lifetime.
+
+Acceptance:
+
+- A row cannot claim temporal or pass-topology benefit without pass-level cost.
+- Guide history cost is visible as its own tax.
+
+### Phase O2: Temporal Topology Decision
+
+Goal: decide whether private AO-owned temporal survives.
+
+Candidates:
+
+- current separate depth/normal guide history;
+- packed private guide target;
+- host-provided previous guide hook, still private/internal;
+- remove internal temporal and keep only host temporal noise mode.
+
+Acceptance:
+
+- Internal temporal survives only if it shows a quality win over temporal-off and
+  same-cost non-temporal rows after guide cost is included.
+- A host-provided guide hook must be optional; `@horizonao/core` must still work
+  without renderer-specific previous G-buffer ownership.
+
+Stop:
+
+- If internal temporal only matches spatial output while adding guide-copy cost,
+  reject it and archive/remove the prototype.
+
+### Phase O3: Spatial Graph Reduction
+
+Goal: reduce full-screen round trips without hiding raw-signal defects.
+
+Candidates, one at a time:
+
+- remove half-resolution cleanup for low-res output;
+- fuse JBU resolve plus 8-tap polish into one resolve-polish pass;
+- skip full-res polish when low-res cleanup already consumes the softness
+  budget;
+- extract shared bilateral weighting only if shader generation remains clean.
+
+Acceptance:
+
+- Candidate must improve total timing or target count.
+- Candidate must not regress `noise`, `edge-bleed`, `thin-gap`, `mud`, `halo`, or
+  `scale-mismatch`.
+
+### Phase O4: Depth Hierarchy / Prefilter Evidence
+
+Goal: test the optimization family that SAO and XeGTAO both rely on: sampling a
+depth representation that is cheaper and more stable at distance.
+
+Scope:
+
+- internal demo/evidence path first;
+- no public option until it wins;
+- start with linear-depth MIP or min/max/weighted depth hierarchy compatible with
+  WebGPU/TSL constraints.
+
+Acceptance:
+
+- Larger-radius rows must get cheaper or cleaner without losing thin occluders.
+- If depth hierarchy improves scale stability but damages contact detail, keep it
+  as an experimental path only.
+
+### Phase O5: Current-Frame Denoise Before Public Temporal
+
+Goal: prefer robust current-frame quality before public history.
+
+Candidates:
+
+- 4-tap/cross clamp as a cheaper temporal neighborhood bound;
+- confidence/support metadata from the bitmask kernel;
+- confidence-aware spatial polish;
+- noise atlas comparison under frozen cameras.
+
+Acceptance:
+
+- Improve one named failure label and regress none.
+- Beat same-cost alternatives, especially more slices/samples or the existing
+  8-tap polish.
+
+### Phase O6: Public API Decision
+
+Goal: expose only what evidence justifies.
+
+Allowed outcomes:
+
+- no temporal API, host temporal noise remains private/demo-only;
+- narrow `temporal?: "off" | "internal"` only after candidate evidence;
+- separate future SDD for velocity or host guide-history integration.
+
+Forbidden:
+
+- AO-owned temporal without a velocity requirement;
+- public threshold knobs;
+- renderer-specific previous G-buffer assumptions in the core contract.
+
 ## SDD Rules
 
 Every remaining phase follows this loop:
@@ -58,18 +304,15 @@ Production build commands remain forbidden unless explicitly requested.
 
 ## Phase 3.3: Reprojection Coordinates
 
-Goal: make internal temporal history sample the correct previous-frame UV.
+Goal: archived. The camera-only internal temporal prototype was rejected and
+removed. Future reprojection work belongs in a fresh velocity-backed proposal.
 
 ### RED
 
-- Add source-contract coverage that `VBAOTemporalAccumulationNode` owns:
-  - current inverse view-projection uniform;
-  - current view-projection uniform;
-  - previous view-projection uniform;
-  - previous matrix update after the pass completes.
-- Add source-contract coverage that same-pixel history sampling is no longer the
-  only path once reprojection is enabled.
-- Add a small pure matrix helper test if reprojection math is factored outside
+- Keep source-contract coverage proving `VBAOTemporalAccumulationNode` is absent
+  from runtime source and public exports.
+- Add future source-contract coverage only after a velocity-backed proposal
+  exists.
   TSL. If it stays inline TSL, source-contract coverage is acceptable for the
   first pass.
 
@@ -121,9 +364,9 @@ Goal: reject stale history with current and previous-frame continuity checks.
 
 ### GREEN
 
-- Persist previous depth/normal guide data alongside AO history, or pack the
-  minimum guide data needed into a dedicated private history target.
-- Validate reprojected history only when:
+- Do not persist previous depth/normal guide data in private render targets.
+- Future validation must use host-provided velocity and guide history, and only
+  then validate reprojected history when:
   - previous UV is inside viewport;
   - previous depth agrees with current projected depth within conservative
     tolerance;
@@ -346,14 +589,16 @@ Required before reopening:
 - pass cost is justified against same-cost non-temporal rows;
 - docs can explain when temporal helps and when it does not.
 
-If reopened, the only acceptable first public shape is:
+If host temporal is reopened for public API, the only acceptable first public
+shape is:
 
 ```ts
-temporal?: 'off' | 'internal'
+temporal?: 'off' | 'host'
 ```
 
-Do not expose thresholds, clamp expansion, history weight, previous matrix
-hooks, or reset knobs without a separate evidence gate.
+AO-owned history is a separate future API and requires a velocity-backed proposal
+before thresholds, clamp expansion, history weight, previous matrix hooks, or
+reset knobs are discussed.
 
 ## Phase 6: Release Hardening
 
@@ -361,8 +606,7 @@ Goal: make the selected decision stable for future contributors.
 
 ### If Temporal Is Rejected
 
-- Keep `VBAOTemporalAccumulationNode` private or remove it if it becomes dead
-  research code.
+- Keep `VBAOTemporalAccumulationNode` removed from runtime source.
 - Archive evidence under the change directory.
 - Add an ADR or update `ADR-013` explaining why temporal stayed private/rejected.
 - Keep the verifier result as `reject-promotion`.
@@ -402,13 +646,17 @@ Production build remains out of scope unless explicitly requested.
 ## Next Immediate Slice
 
 No public API or quality promotion work is valid from the current evidence. The
-next valid slice is either:
+next valid slice is Phase 6 hardening plus a narrow topology/cost audit:
 
-1. Phase 6 hardening: keep the prototype private, add only smoke coverage, and
-   archive the no-promotion rationale.
-2. A future tuning fork: define one explicit quality hypothesis, then capture a
-   new internal evidence matrix against temporal-off and same-cost non-temporal
-   rows.
+- keep the prototype private and archive the no-promotion rationale;
+- audit the existing split internal temporal timing for AO accumulation,
+  guide-depth copy, and guide-normal copy, then add VRAM/lifetime inventory;
+- preserve the existing failure labels and same-cost non-temporal comparison;
+- decide whether guide history stays, becomes packed/reused through a private
+  host hook, or is removed with the prototype.
+
+Only after that audit may a tuning fork define one explicit hypothesis, such as
+4-tap clamp instead of 3x3, packed guide history, or resolve/polish fusion.
 
 Do not tune thresholds casually. Temporal bugs are expensive because they can
 look good in still screenshots and fail brutally in motion.
