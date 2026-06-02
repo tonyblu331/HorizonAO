@@ -2,27 +2,30 @@
 
 ## Current State
 
-The temporal gate is in `reject-promotion` state.
+The temporal gate is in `reject-promotion` state. The camera-only AO-owned
+internal temporal prototype was rejected and removed from `VBAONode`. This plan
+is historical for internal prototype evidence; current valid work is host-first
+(`off`/`host`) evidence, or a fresh future velocity-backed AO-owned temporal
+proposal that consumes host-provided velocity and guide history.
 
 What is allowed:
 
-- Keep `internal` temporal plumbing private for inspection and removal/tuning
-  decisions.
-- Capture internal-mode smoke evidence.
-- Add reprojection, validation, reset, and diagnostics behind internal/demo
-  plumbing.
+- Keep historical internal-mode evidence as rejection evidence.
+- Capture host-mode and host-TRAA evidence.
+- Open a new velocity-backed proposal if AO-owned temporal is revisited.
 
 What is still blocked:
 
 - Public `temporal` API.
 - Product quality promotion.
 - Claims that temporal improves AO quality.
+- Reintroducing camera-only AO-owned internal temporal.
 - Using history to hide raw/reference/reconstruction defects.
 
-The first internal prototype owns AO history, resets on resize/camera cuts,
-reprojects current depth into previous-frame UV, validates previous depth/normal
-guide history, clamps history to the current 3x3 AO neighborhood, and blends at
-history weight `0.8`.
+The first internal prototype owned AO history, reset on resize/camera cuts,
+reprojected current depth into previous-frame UV, validated previous depth/normal
+guide history, clamped history to the current 3x3 AO neighborhood, and blended
+at history weight `0.8`. It is no longer runtime product plumbing.
 
 ## Current Gate Result
 
