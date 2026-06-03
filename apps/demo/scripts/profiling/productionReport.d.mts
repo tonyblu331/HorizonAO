@@ -83,6 +83,41 @@ export function createReferenceGateStatusRows(
   rows: AOReportRowForReferenceGate[],
 ): AOReferenceGateStatusRow[]
 
+export interface AORenderedThinGeometryProxyInputRow {
+  label?: string
+  mode: string
+  view?: string
+  denoise?: boolean
+  vbaoResolution?: string
+  fullResolutionVbao?: boolean
+  productOutputContract?: string
+  vbaoFilter?: string
+  vbaoDenoiseFilter?: string
+  failureLabels?: string[]
+  qualityMetrics?: {
+    thinGapPreservationProxy?: number
+    edgeBleedProxy?: number
+    stripeScore?: number
+  }
+}
+
+export interface AORenderedThinGeometryProxyRow {
+  label?: string
+  view?: string
+  output: string
+  vbaoResolution: string
+  thinGapProxy: number | null
+  edgeBleedProxy: number | null
+  stripeScore: number | null
+  failureLabels: string[]
+  status: 'complete' | 'incomplete'
+  missing: string[]
+}
+
+export function createRenderedThinGeometryProxyRows(
+  rows: AORenderedThinGeometryProxyInputRow[],
+): AORenderedThinGeometryProxyRow[]
+
 export interface AOEvidenceArtifactStatusInputRow {
   label?: string
   mode?: string
@@ -124,6 +159,7 @@ export function writeProductionQualityReports(args: {
     referenceGate?: {
       productRows?: AOReferenceGateStatusRow[]
     }
+    thinGeometryProxyRows?: AORenderedThinGeometryProxyRow[]
     rows: Array<{
       label?: string
       mode: string

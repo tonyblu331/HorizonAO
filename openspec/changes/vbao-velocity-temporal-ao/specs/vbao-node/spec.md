@@ -31,8 +31,9 @@ temporal accumulation SHALL NOT be a valid product path.
 - **THEN** it SHALL read previous AO history from a separate texture
 - **AND** write current temporal output to a distinct render target
 - **AND** copy accepted output into AO history after rendering
-- **AND** reset history on first frame, resize, device/format change, camera cut,
-  or host reset.
+- **AND** reset history on first frame and resize
+- **AND** expose a host reset hook for camera cuts, device/format changes, or
+  explicit host resets before promotion.
 
 #### Scenario: Temporal remains evidence-gated
 

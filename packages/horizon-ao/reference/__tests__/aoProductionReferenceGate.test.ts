@@ -105,6 +105,36 @@ describe('AO production reference gate', () => {
     )
   })
 
+  it('keeps absent thin-slab product observations visible as missing coverage', () => {
+    const report = createAoProductionReferenceGateReport(
+      [
+        {
+          label: 'vbao product ao',
+          mode: 'vbao',
+          view: 'ao',
+          denoise: true,
+          referenceObservations: [
+            {
+              fixtureId: 'flat-plane-open',
+              accessibility: flatPlaneReference.accessibility,
+              source: 'gpu-readback',
+            },
+          ],
+        },
+      ],
+      {
+        generatedAt: '2026-06-01T00:00:00.000Z',
+        sampleCount: 1024,
+      },
+    )
+
+    const vbaoSummary = report.raycastReport.summary.find((item) => item.algorithm === 'vbao')
+
+    expect(report.productRows[0]?.status).toBe('compared')
+    expect(vbaoSummary?.missingFixtureIds).toContain('thin-gap-separated-slabs')
+    expect(vbaoSummary?.verdict).toBe('warn')
+  })
+
   it('includes the canonical/product VBAO drift report beside the ray-cast gate', () => {
     const report = createAoProductionReferenceGateReport([], {
       generatedAt: '2026-06-01T00:00:00.000Z',
@@ -115,6 +145,7 @@ describe('AO production reference gate', () => {
       'thin-separated',
       'thick-contact',
       'perspective-thickness',
+      'grazing-normal',
     ])
     expect(report.canonicalVbaoDriftReport.summary.verdict).toBe('fail')
   })

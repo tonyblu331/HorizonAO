@@ -716,8 +716,8 @@ export class VBAONode extends TempNode<'float'> {
           const sliceAccessibility = float(1)
             .sub(blockedSectors.div(float(SECTOR_COUNT)))
             .toVar('sliceAccessibility')
-          weightedAccessibility.addAssign(sliceAccessibility)
-          weightSum.addAssign(float(1))
+          weightedAccessibility.addAssign(sliceAccessibility.mul(NprojLen))
+          weightSum.addAssign(NprojLen)
         },
       )
 

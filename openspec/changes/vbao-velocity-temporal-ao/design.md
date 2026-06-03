@@ -118,9 +118,10 @@ Benchmark/verifier owns:
 - Keep previous guide inputs sampled as textures, not copied private pass
   targets.
 - Do not sample from a texture that is also the active render target.
-- Recreate history targets on size, format, or device changes.
-- Reset history on resize, camera cut, invalid previous guide, first frame, or
-  host reset.
+- Recreate history targets on size changes in the private smoke path.
+- Reset history on first frame and resize now.
+- Treat device/format changes, camera cuts, invalid previous guides, and host
+  resets as promotion-blocking evidence gaps until wired and captured.
 - Count every extra pass in product timing.
 - Keep log-depth conversion cost visible; pre-linearized guide depth is a later
   measured optimization, not a hidden requirement.

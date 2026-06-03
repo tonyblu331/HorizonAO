@@ -1,231 +1,189 @@
 # SDD Plan: Velocity-Backed VBAO Temporal AO
 
-## Assumptions
+## Current State
 
-- Current `vbao-temporal-ao-gate` rejection stands.
-- Camera-only internal temporal stays forbidden.
-- The first valid future implementation consumes velocity and host-provided
-  previous guide history.
-- `VBAONode` default output remains temporal-free.
+There is a real temporal implementation now. The correct move is not to fight
+it, delete it by taste, or promote it by enthusiasm.
 
-## No Stubs Policy
+Verified source shape:
 
-Every implementation slice must either add complete, testable behavior or add
-evidence that blocks the next slice. Do not add placeholder nodes, unused types,
-public options, or TODO pass slots.
-
-## Earliest Blocking Gate
-
-The missing gate is not shader code. It is the integration contract and the
-ability to measure it:
+- `VBAOVelocityTemporalNode` exists in `packages/horizon-ao/src`.
+- It is private: `packages/horizon-ao/src/index.ts` does not export it.
+- It consumes current AO, current depth/normal, velocity, previous depth, and
+  previous normal.
+- It owns only AO history, not previous depth/normal guide history.
+- It uses Three TRAA velocity convention:
 
 ```txt
-Can the demo/host provide current velocity plus previous depth/normal guide
-history without VBAO copying private guide targets?
+offsetUv = velocity.xy * vec2(0.5, -0.5)
+historyUv = uv - offsetUv
 ```
 
-If no, stop at host temporal sampling and spatial hardening. Do not write a
-temporal node hoping the guide contract appears later.
+Verified evidence shape:
 
-## Phase 0: Decision Record And Rejection Baseline
+- WebGPU smoke evidence exists for `velocity-internal`.
+- The temporal pass emits measurable GPU timing.
+- The verifier still returns `reject-promotion`.
+- Motion/disocclusion evidence is still missing.
+- Rejection diagnostics are not rich enough yet.
 
-### RED
+## Decision
 
-- Add or keep source-contract tests proving no runtime
-  `VBAOTemporalAccumulationNode` and no public `temporal` option.
-- Add a documentation check that this change names the old camera-only path as
-  rejected, not pending.
+Keep velocity-backed temporal as a private candidate line and work with it
+properly.
 
-### GREEN
+That means:
 
-- Record the rejection as the baseline for this new change.
-- Add the ADR closeout before any new temporal implementation work.
+- do not remove it just because temporal was previously rejected;
+- do not add a public temporal API until the gate reaches `candidate`;
+- do not hide temporal inside `VBAONodeOptions`;
+- do not claim quality improvement from static screenshots alone;
+- do build the missing evidence and diagnostics that would let temporal earn
+  promotion.
 
-### VERIFY
+## Product Model
+
+The product shape remains:
+
+```txt
+VBAONode
+  temporal-free final AO by default
+
+private velocity temporal candidate
+  current resolved AO
+  + host velocity
+  + host previous depth/normal guides
+  + private AO history
+  -> candidate final AO only after evidence
+```
+
+Public API stays unchanged until a separate promotion review proves otherwise.
+
+## Plan
+
+### Phase 1: Contract Reconciliation
+
+Goal: align docs/spec/tests with the fact that private velocity temporal exists.
+
+Tasks:
+
+- Update language that says "runtime internal temporal is absent" to distinguish
+  rejected camera-only temporal from current private velocity temporal.
+- Keep public `VBAONodeOptions` temporal-free.
+- Keep source-contract tests proving no public export exists.
+
+Acceptance:
+
+- `VBAOVelocityTemporalNode` is acknowledged as private runtime candidate code.
+- Public API remains temporal-free.
+- Camera-only temporal remains rejected.
+
+### Phase 2: Host Ownership Inventory
+
+Goal: make the host contract auditable.
+
+Tasks:
+
+- Record previous depth/normal ownership and lifetime.
+- Record velocity convention and units.
+- Record reset/camera-cut/resize/DPR/device-change behavior.
+- Add target inventory for AO history and host guide textures.
+
+Acceptance:
+
+- No temporal evidence row can claim promotion without target/lifetime inventory.
+- The host owns previous guide history; VBAO owns only AO history.
+
+### Phase 3: Reset And Validity Diagnostics
+
+Goal: stop tuning blind.
+
+Tasks:
+
+- Add diagnostics for rejected history reason:
+  - reset;
+  - viewport;
+  - depth;
+  - normal;
+  - velocity;
+  - clamp.
+- Surface aggregate diagnostics in benchmark rows.
+- Verify resize and explicit reset clear history.
+
+Acceptance:
+
+- Temporal failures are explainable by reason, not only visible as worse
+  screenshots.
+- Camera cuts and resize do not reuse stale AO history.
+
+### Phase 4: Same-Cost Static Matrix
+
+Goal: compare against fair alternatives.
+
+Tasks:
+
+- Capture temporal `off`.
+- Capture host temporal.
+- Capture host TRAA.
+- Capture `velocity-internal`.
+- Capture same-cost non-temporal spatial alternative.
+
+Acceptance:
+
+- Rows include screenshots, metrics, pass timings, failure labels, and artifact
+  status.
+- Temporal must show a material pattern/noise win without stripe, edge, or
+  thin-gap regression.
+
+### Phase 5: Motion And Disocclusion Matrix
+
+Goal: prove temporal does not just win still images.
+
+Tasks:
+
+- Add or use motion/disocclusion scenes.
+- Capture camera-motion, object-motion, and disocclusion rows.
+- Verify ghosting/disocclusion labels block promotion.
+
+Acceptance:
+
+- No candidate verdict without motion/disocclusion evidence.
+- Any ghosting, disocclusion, mud, halo, edge-bleed, or thin-gap regression
+  blocks promotion.
+
+### Phase 6: Promotion Decision
+
+Goal: decide, do not drift.
+
+Possible outcomes:
+
+- `reject-promotion`: keep private only, or delete if maintenance cost is not
+  justified.
+- `private-candidate`: keep internal evidence path, still no public API.
+- `promotion-review`: open a separate SDD for public/host integration.
+
+Acceptance:
+
+- Public API changes happen only in a separate review.
+- README/product claims change only after `candidate`.
+
+## Guardrails
+
+- No public `temporal` option in this SDD.
+- No camera-only temporal resurrection.
+- No previous depth/normal guide copies inside `@horizonao/core`.
+- No temporal tuning without diagnostics.
+- No static-only promotion.
+- No production build unless explicitly requested.
+
+## Verification
 
 ```sh
-pnpm --filter @horizonao/core test -- --run packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts
+pnpm --filter @horizonao/core test -- --run packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/src/__tests__/vbaoProfilingFailureLabels.test.ts
+pnpm --filter @horizonao/core typecheck
+pnpm --filter @horizonao/demo typecheck
 pnpm --filter @horizonao/demo verify:vbao-temporal
 git diff --check
 ```
 
-## Phase 1: Host Velocity Contract
-
-### RED
-
-- Add source-contract coverage requiring velocity-backed temporal proposals to
-  mention velocity, previous depth, previous normal, reset, and same-cost gate.
-- Add a fixture or smoke route that proves the velocity convention maps current
-  UV to previous UV. Direction mistakes here produce convincing garbage.
-
-### GREEN
-
-- Add demo-only plumbing that can expose velocity and previous guide nodes from
-  the host scene pass.
-- Do not allocate private previous depth/normal targets inside VBAO.
-- Record target lifetime and format inventory for current depth, current normal,
-  velocity, previous depth, and previous normal.
-
-### VERIFY
-
-```sh
-pnpm --filter @horizonao/demo typecheck
-node --check apps/demo/scripts/collect-ao-benchmark.mjs
-pnpm --filter @horizonao/demo test -- --run apps/demo/src/evidence/evidenceCameras.test.ts
-```
-
-### Exit Criteria
-
-- Velocity convention documented.
-- Previous guide ownership documented.
-- Benchmark can report temporal input availability.
-- No VBAO-owned guide copy exists.
-
-## Phase 2: Complete Private AO History Pass
-
-### RED
-
-- Add tests/source contracts for:
-  - `VBAOVelocityTemporalNode`;
-  - separate AO history target;
-  - no guide-history ownership;
-  - no public export.
-
-### GREEN
-
-- Implement a private node that fully renders a temporal output.
-- Allocate only AO history as an `R16F` render target.
-- Recreate AO history on size/device changes.
-- Keep the first version visually identical to current AO when history is
-  disabled or invalid.
-- Do not add a stub node that exists only to be wired later.
-
-### VERIFY
-
-```sh
-pnpm --filter @horizonao/core test -- --run packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts
-pnpm --filter @horizonao/core typecheck
-```
-
-## Phase 3: Reprojection And Validation
-
-### RED
-
-- Add tests/source contracts for viewport rejection, velocity use, depth
-  continuity, normal continuity, reset fallback, and finite velocity rejection.
-
-### GREEN
-
-- Compute `prevUv` from velocity.
-- Validate previous guide samples.
-- Use current AO when history is invalid.
-- Keep thresholds private constants.
-- Emit diagnostics for rejection reason counts if the WebGPU path can expose
-  them without adding another full-screen product pass. Otherwise keep labels in
-  the benchmark classifier.
-
-### VERIFY
-
-```sh
-pnpm --filter @horizonao/core test -- --run packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts
-pnpm --filter @horizonao/core typecheck
-pnpm --filter @horizonao/demo typecheck
-```
-
-## Phase 4: Clamp And Blend
-
-### RED
-
-- Add source-contract coverage for local AO neighborhood clamp before blend.
-- Add failure labels for `ghosting`, `disocclusion`, and `history-smear`.
-
-### GREEN
-
-- Start with 3x3 min/max clamp and `baseWeight = 0.8`.
-- Do not add public knobs.
-- Do not tune weight until validation diagnostics explain rejection.
-- Do not add adaptive weight until fixed-weight evidence identifies a specific
-  failure that adaptive weighting can address.
-- Do not split validation/clamp helpers unless the node becomes unreadable or
-  real duplication appears.
-
-### VERIFY
-
-```sh
-pnpm --filter @horizonao/core test
-pnpm --filter @horizonao/core typecheck
-pnpm --filter @horizonao/demo typecheck
-```
-
-## Phase 5: Benchmark And Diagnostics
-
-### RED
-
-- Make verifier reject if temporal rows lack screenshots, pass timings,
-  same-cost spatial alternatives, or blocking failure labels.
-
-### GREEN
-
-- Capture rows for:
-  - `off` product;
-  - `host`;
-  - `host + TRAA`;
-  - velocity-backed private internal;
-  - same-cost spatial alternative.
-- Include AO-only and beauty views.
-- Include at least one motion/disocclusion scene before any candidate verdict.
-- Include pass timing and VRAM/target inventory.
-
-### VERIFY
-
-```sh
-pnpm --filter @horizonao/demo benchmark:ao
-pnpm --filter @horizonao/demo verify:vbao-temporal
-```
-
-## Phase 6: Promotion Decision
-
-### Candidate
-
-Promote only if velocity-backed temporal has a material pattern/noise win, lower
-or justified total product cost, and no blocking labels.
-
-Candidate also requires a motion-scene pass. Static museum screenshots are
-necessary but not sufficient.
-
-### Reject
-
-Reject if it only matches spatial output, adds pass cost, or introduces
-ghosting, disocclusion, stripe, edge bleed, thin-gap loss, mud, halo, or scale
-mismatch.
-
-### Public API
-
-Only after candidate evidence:
-
-```ts
-temporal?: "off" | "host"
-```
-
-AO-owned velocity temporal needs a separate public API review after private
-candidate status.
-
-## Principal Risks
-
-- Velocity convention mismatch creates stable-looking but wrong history.
-- TSL `velocity` availability may not cover all demo/object paths.
-- Host guide history may cost more than the temporal win.
-- Temporal may hide current-frame raw defects and make screenshots look better
-  while motion gets worse.
-- Extra render targets may move WebGPU memory pressure before frame time shows
-  the problem.
-
-## Explicit Non-Goals
-
-- Solving moving/skinned object identity with material IDs in v1.
-- Confidence history.
-- Resolve/polish fusion.
-- Depth hierarchy or pre-linearized depth.
-- Public temporal API.
-- README quality claims.
-- Extra helper modules for imagined reuse.
+Benchmark/evidence commands are phase-specific and must write named artifacts.

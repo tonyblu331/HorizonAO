@@ -42,7 +42,10 @@
         "packages/horizon-ao/src/VBAOFullResPolishNode.ts",
         "packages/horizon-ao/src/VBAOHalfResCleanupNode.ts",
         "packages/horizon-ao/src/VBAONode.ts",
-        "packages/horizon-ao/src/VBAOResolveNode.ts"
+        "packages/horizon-ao/src/VBAOResolvePolishNode.ts",
+        "packages/horizon-ao/src/VBAOResolveNode.ts",
+        "packages/horizon-ao/src/VBAOVelocityTemporalNode.ts",
+        "packages/horizon-ao/src/vbaoBilateralWeight.ts"
       ],
       "rules": {
         "typescript/no-explicit-any": "off"

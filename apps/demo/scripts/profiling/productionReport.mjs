@@ -105,6 +105,47 @@ export function createReferenceGateStatusRows(rows) {
   })
 }
 
+function outputLabelForRow(row) {
+  if (row.mode === 'vbao') return row.denoise ? 'product' : 'raw-debug'
+  return row.denoise ? 'denoised' : 'raw'
+}
+
+export function createRenderedThinGeometryProxyRows(rows) {
+  return rows
+    .filter((row) => row.mode === 'vbao' && (row.view === 'beauty' || row.view === 'ao'))
+    .map((row) => {
+      const metrics = row.qualityMetrics
+      const failureLabels = row.failureLabels ?? classifyFailureLabels(row)
+      const missing = []
+
+      if (!isFiniteNumber(metrics?.thinGapPreservationProxy)) {
+        missing.push('qualityMetrics.thinGapPreservationProxy')
+      }
+      if (!isFiniteNumber(metrics?.edgeBleedProxy)) {
+        missing.push('qualityMetrics.edgeBleedProxy')
+      }
+      if (!isFiniteNumber(metrics?.stripeScore)) {
+        missing.push('qualityMetrics.stripeScore')
+      }
+      if (!Array.isArray(failureLabels)) {
+        missing.push('failureLabels')
+      }
+
+      return {
+        label: row.label,
+        view: row.view,
+        output: outputLabelForRow(row),
+        vbaoResolution: row.vbaoResolution ?? 'n/a',
+        thinGapProxy: metrics?.thinGapPreservationProxy ?? null,
+        edgeBleedProxy: metrics?.edgeBleedProxy ?? null,
+        stripeScore: metrics?.stripeScore ?? null,
+        failureLabels: Array.isArray(failureLabels) ? failureLabels : [],
+        status: missing.length === 0 ? 'complete' : 'incomplete',
+        missing,
+      }
+    })
+}
+
 function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value)
 }
@@ -266,6 +307,8 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
     report.referenceGate?.productRows ?? createReferenceGateStatusRows(report.rows)
   const reconstructionStageRows =
     report.reconstructionGate?.stageRows ?? createVbaoReconstructionStageStatusRows(report.rows)
+  const thinGeometryRows =
+    report.thinGeometryProxyRows ?? createRenderedThinGeometryProxyRows(report.rows)
   lines.push('')
   lines.push('## VBAO Half-Resolution Reconstruction Stage Status')
   lines.push('')
@@ -281,6 +324,24 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
     for (const row of reconstructionStageRows) {
       lines.push(
         `| ${row.label ?? 'n/a'} | ${row.status} | ${row.missingStages.length === 0 ? 'none' : row.missingStages.join(',')} | ${row.firstFailingStage ?? 'none'} |`,
+      )
+    }
+  }
+  lines.push('')
+  lines.push('## VBAO Rendered Thin-Geometry Proxy Status')
+  lines.push('')
+  lines.push(
+    'This section is rendered screenshot evidence only. It tracks thin-gap, edge-bleed, mud, and stripe proxy signals; it does not replace scalar thin diff or ray-cast thin diff evidence.',
+  )
+  lines.push('')
+  lines.push('| Row | View | Output | VBAO res | Status | Labels | Thin-gap proxy ↑ | Edge bleed proxy ↓ | Stripe ↓ | Missing |')
+  lines.push('| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- |')
+  if (thinGeometryRows.length === 0) {
+    lines.push('| n/a | n/a | n/a | n/a | incomplete | n/a | n/a | n/a | n/a | vbao-rendered-row |')
+  } else {
+    for (const row of thinGeometryRows) {
+      lines.push(
+        `| ${row.label ?? 'n/a'} | ${row.view ?? 'n/a'} | ${row.output ?? 'n/a'} | ${row.vbaoResolution ?? 'n/a'} | ${row.status} | ${row.failureLabels.length === 0 ? 'none' : row.failureLabels.join(',')} | ${row.thinGapProxy === null ? 'n/a' : row.thinGapProxy.toFixed(5)} | ${row.edgeBleedProxy === null ? 'n/a' : row.edgeBleedProxy.toFixed(5)} | ${row.stripeScore === null ? 'n/a' : row.stripeScore.toFixed(5)} | ${row.missing.length === 0 ? 'none' : row.missing.join(',')} |`,
       )
     }
   }

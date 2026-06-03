@@ -23,6 +23,10 @@ const velocityJsonPath = resolveRepoPath(
   process.env.VBAO_TEMPORAL_VELOCITY_JSON,
   path.join(artifactRoot, 'vbao-temporal-velocity-internal-latest.json'),
 )
+const motionJsonPath =
+  process.env.VBAO_TEMPORAL_MOTION_JSON === undefined
+    ? undefined
+    : resolveRepoPath(process.env.VBAO_TEMPORAL_MOTION_JSON, '')
 const alternativeJsonPath = resolveRepoPath(
   process.env.VBAO_TEMPORAL_ALTERNATIVE_JSON,
   path.join(artifactRoot, 'vbao-temporal-spatial-ultra-latest.json'),
@@ -48,6 +52,7 @@ const BLOCKING_FAILURE_LABELS = new Set([
   'edge-bleed',
   'thin-gap',
 ])
+const MOTION_EVIDENCE_KINDS = new Set(['camera-motion', 'object-motion', 'disocclusion'])
 const requireCandidate = process.env.VBAO_TEMPORAL_REQUIRE_CANDIDATE === '1'
 
 function resolveRepoPath(value, fallback) {
@@ -60,6 +65,7 @@ async function readReport(filePath) {
 }
 
 async function readOptionalReport(filePath) {
+  if (filePath === undefined) return undefined
   try {
     await access(filePath)
     return await readReport(filePath)
@@ -67,6 +73,14 @@ async function readOptionalReport(filePath) {
     if (err instanceof Error && 'code' in err && err.code === 'ENOENT') return undefined
     throw err
   }
+}
+
+function hasMotionEvidenceKind(row) {
+  return MOTION_EVIDENCE_KINDS.has(row.motionEvidenceKind)
+}
+
+function hasMotionEvidenceSource(row) {
+  return row.motionEvidenceSource === 'ao-benchmark-motion'
 }
 
 function outputName(row) {
@@ -91,6 +105,19 @@ function alternativeComparisonKey(row) {
     row.scene,
     `${row.resolution?.width}x${row.resolution?.height}`,
     row.mode,
+    row.vbaoResolution,
+    row.view,
+    outputName(row),
+  ].join('|')
+}
+
+function motionEvidenceKey(row) {
+  return [
+    row.scene,
+    `${row.resolution?.width}x${row.resolution?.height}`,
+    row.mode,
+    row.sampleMode,
+    'velocity-internal',
     row.vbaoResolution,
     row.view,
     outputName(row),
@@ -223,12 +250,14 @@ const offReport = await readReport(offJsonPath)
 const hostReport = await readReport(hostJsonPath)
 const hostTaaReport = await readOptionalReport(hostTaaJsonPath)
 const velocityReport = await readOptionalReport(velocityJsonPath)
+const motionReport = await readOptionalReport(motionJsonPath)
 const alternativeReport = await readOptionalReport(alternativeJsonPath)
 existingScreenshotPaths = await createExistingScreenshotPathSet([
   offReport,
   hostReport,
   hostTaaReport,
   velocityReport,
+  motionReport,
   alternativeReport,
 ])
 const offRows = offReport.rows.filter((row) => row.mode === 'vbao' && row.temporalMode === 'off')
@@ -268,7 +297,6 @@ const missingHostTaaRows = productOffRows
   .map((row) => comparisonKey(row))
 const hostEvidenceComplete =
   missingHostRows.length === 0 && comparisons.every((row) => row.evidenceComplete)
-const productComparisons = comparisons.filter((row) => row.output === 'product')
 const hostTaaComparisons = productOffRows
   .map((offRow) => {
     const hostTaaRow = hostTaaByKey.get(comparisonKey(offRow))
@@ -328,8 +356,27 @@ const sameCostAlternativeEvidence =
   productOffRows.length > 0 &&
   productOffRows.every((row) => alternativeByKey.has(alternativeComparisonKey(row))) &&
   alternativeComparisons.every((row) => row.evidenceComplete)
-const hasMaterialPatternWin = productComparisons.some((row) => row.materialPatternWin)
-const hasStripeRegression = productComparisons.some((row) => row.stripeRegression)
+const motionRows =
+  motionReport?.rows.filter(
+    (row) =>
+      row.mode === 'vbao' &&
+      row.temporalMode === 'velocity-internal' &&
+      hasMotionEvidenceKind(row) &&
+      hasMotionEvidenceSource(row),
+  ) ??
+  []
+const motionByKey = new Map(motionRows.map((row) => [motionEvidenceKey(row), row]))
+const missingMotionRows = productOffRows
+  .filter((row) => !motionByKey.has(motionEvidenceKey(row)))
+  .map((row) => motionEvidenceKey(row))
+const motionEvidenceRows = productOffRows
+  .map((row) => motionByKey.get(motionEvidenceKey(row)))
+  .filter(Boolean)
+const motionDisocclusionEvidence =
+  productOffRows.length > 0 &&
+  missingMotionRows.length === 0 &&
+  motionEvidenceRows.every(evidenceComplete) &&
+  !motionEvidenceRows.some(hasBlockingFailureLabels)
 const internalTemporalEvidence = velocityTemporalEvidence
 const hasInternalMaterialPatternWin = hasVelocityMaterialPatternWin
 const hasInternalStripeRegression = hasVelocityStripeRegression
@@ -344,6 +391,7 @@ const hostTaaPassesPromotion =
   !hasHostTaaBlockingFailureLabels
 const internalTemporalPassesPromotion =
   velocityTemporalEvidence &&
+  motionDisocclusionEvidence &&
   hasVelocityMaterialPatternWin &&
   !hasVelocityStripeRegression &&
   !hasVelocityEdgeRegression &&
@@ -361,11 +409,23 @@ const verdict =
 
 const report = {
   generatedAt: new Date().toISOString(),
+  reproducibility: {
+    cleanCheckout:
+      process.env.VBAO_TEMPORAL_OFF_JSON !== undefined &&
+      process.env.VBAO_TEMPORAL_HOST_JSON !== undefined &&
+      process.env.VBAO_TEMPORAL_HOST_TAA_JSON !== undefined &&
+      process.env.VBAO_TEMPORAL_VELOCITY_JSON !== undefined &&
+      (motionReport === undefined || process.env.VBAO_TEMPORAL_MOTION_JSON !== undefined) &&
+      process.env.VBAO_TEMPORAL_ALTERNATIVE_JSON !== undefined,
+    basis:
+      'Default *-latest benchmark inputs are local generated artifacts ignored by git; provide explicit tracked input paths or rerun the full matrix before treating this verdict as clean-checkout reproducible.',
+  },
   inputs: {
     offJsonPath,
     hostJsonPath,
     hostTaaJsonPath,
     velocityJsonPath,
+    motionJsonPath,
     alternativeJsonPath,
   },
   thresholds: {
@@ -379,6 +439,7 @@ const report = {
   hasHostTaaStripeRegression,
   hasHostTaaBlockingFailureLabels,
   sameCostAlternativeEvidence,
+  motionDisocclusionEvidence,
   internalTemporalEvidence,
   evaluatedInternalEvidence,
   hasInternalMaterialPatternWin,
@@ -401,6 +462,7 @@ const report = {
         : 'Temporal off/host evidence is incomplete.',
   missingHostRows,
   missingHostTaaRows,
+  missingMotionRows,
   comparisons,
   hostTaaComparisons,
   internalComparisons: velocityComparisons,
@@ -416,6 +478,10 @@ lines.push('')
 lines.push(`Generated: ${report.generatedAt}`)
 lines.push('')
 lines.push(`Verdict: **${report.verdict}**`)
+lines.push('')
+lines.push(`Clean-checkout reproducible: **${report.reproducibility.cleanCheckout ? 'yes' : 'no'}**`)
+lines.push('')
+lines.push(report.reproducibility.basis)
 lines.push('')
 lines.push(`Internal temporal allowed: **${report.internalTemporalAllowed ? 'yes' : 'no'}**`)
 lines.push('')
@@ -451,7 +517,11 @@ lines.push(
   `Velocity-backed internal temporal evidence: **${report.internalTemporalEvidence ? 'present' : 'not present'}**.`,
 )
 lines.push('')
-lines.push('This verifier cannot allow temporal AO unless host TAA/TRAA or velocity-backed internal evidence and same-cost non-temporal comparisons produce a material win without blocking labels or tracked regressions. Complete-but-failing evidence remains `reject-promotion`; AO-owned temporal remains private unless the velocity-backed evidence reaches candidate.')
+lines.push(
+  `Velocity motion/disocclusion evidence: **${report.motionDisocclusionEvidence ? 'present' : 'not present'}**.`,
+)
+lines.push('')
+lines.push('This verifier cannot allow temporal AO unless host TAA/TRAA or velocity-backed internal evidence and same-cost non-temporal comparisons produce a material win without blocking labels or tracked regressions. Velocity-backed internal temporal additionally requires motion/disocclusion evidence. Complete-but-failing evidence remains `reject-promotion`; AO-owned temporal remains private unless the velocity-backed evidence reaches candidate.')
 lines.push('')
 await writeFile(outputMdPath, lines.join('\n'))
 

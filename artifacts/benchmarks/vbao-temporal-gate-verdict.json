@@ -1,5 +1,9 @@
 {
-  "generatedAt": "2026-06-02T10:35:04.464Z",
+  "generatedAt": "2026-06-02T21:35:14.187Z",
+  "reproducibility": {
+    "cleanCheckout": false,
+    "basis": "Default *-latest benchmark inputs are local generated artifacts ignored by git; provide explicit tracked input paths or rerun the full matrix before treating this verdict as clean-checkout reproducible."
+  },
   "inputs": {
     "offJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-off-latest.json",
     "hostJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-host-latest.json",
@@ -18,6 +22,7 @@
   "hasHostTaaStripeRegression": true,
   "hasHostTaaBlockingFailureLabels": true,
   "sameCostAlternativeEvidence": true,
+  "motionDisocclusionEvidence": false,
   "internalTemporalEvidence": false,
   "evaluatedInternalEvidence": true,
   "hasInternalMaterialPatternWin": false,
@@ -280,7 +285,7 @@
         "stripeScore": 0.19093708650012192,
         "edgeBleedProxy": 0.008516504419658436,
         "thinGapPreservationProxy": 0.0025579784251050686,
-        "totalProductGpuMs": 1.138688,
+        "totalProductGpuMs": 1.4161920000000001,
         "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-velocity-internal-smoke\\1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao.png"
       },
       "delta": {

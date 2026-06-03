@@ -54,6 +54,7 @@ import { ao as gtao } from 'three/addons/tsl/display/GTAONode.js'
 import { denoise } from 'three/addons/tsl/display/DenoiseNode.js'
 import { traa } from 'three/addons/tsl/display/TRAANode.js'
 import { N8AONode, createN8AOScenePass } from 'n8ao-webgpu'
+import { createDebugViewportPlan, createDebugViewportRects } from 'threejs-debug-compose'
 import { VBAONode } from '@horizonao/core'
 import { VBAOFullResPolishNode } from '../../../../packages/horizon-ao/src/VBAOFullResPolishNode'
 import { VBAOHalfResCleanupNode } from '../../../../packages/horizon-ao/src/VBAOHalfResCleanupNode'
@@ -161,6 +162,15 @@ const VBAO_PRODUCT_QUALITY = 'quality' as const
 const VBAO_PRODUCT_PRESET_SHAPE = { samples: 8, slices: 4 } as const
 const VBAO_DEBUG_OVERRIDE_SHAPE = VBAO_PRODUCT_PRESET_SHAPE
 const VBAO_SPATIAL_ULTRA_SHAPE = { samples: 10, slices: 4 } as const
+const AO_COMPARISON_PRESET = {
+  radius: 0.35,
+  thickness: 0.09,
+  contrast: 0.85,
+  samples: 16,
+  denoiseRadius: 4,
+  denoiseDepthPhi: 3,
+  denoiseNormalPhi: 8,
+} as const
 const VBAO_RADIUS_STRESS_PRESETS = {
   baseline: { radius: 0.35, thickness: 0.09 },
 } as const
@@ -359,13 +369,15 @@ async function runGtaoReferenceScene(
   const canvas = document.createElement('canvas')
   canvas.className = 'scene-canvas'
   container.appendChild(canvas)
+  const trackGpuPassTiming =
+    new URLSearchParams(window.location.search).get('gpuPassTiming') === '1'
 
   const renderer = new WebGPURenderer({
     canvas,
     antialias: true,
     forceWebGL: false,
     powerPreference: 'high-performance',
-    trackTimestamp: true,
+    trackTimestamp: trackGpuPassTiming,
   })
   renderer.toneMapping = ACESFilmicToneMapping
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
@@ -658,9 +670,9 @@ function createReferencePipelines(
   const scenePass = pass(scene, camera)
   const sceneColor = scenePass.getTextureNode('output')
 
-  const ssaoRadius = uniform(0.35)
-  const ssaoBias = uniform(0.025)
-  const ssaoIntensity = uniform(1.25)
+  const ssaoRadius = uniform(AO_COMPARISON_PRESET.radius)
+  const ssaoBias = uniform(AO_COMPARISON_PRESET.thickness)
+  const ssaoIntensity = uniform(AO_COMPARISON_PRESET.contrast)
   const ssaoProjectionMatrix = uniform(camera.projectionMatrix)
   const ssaoProjectionMatrixInverse = uniform(camera.projectionMatrixInverse)
   const ssaoRawScalar = Fn(() => {
@@ -672,7 +684,7 @@ function createReferencePipelines(
       const centerView = getViewPosition(centerUv, centerDepth, ssaoProjectionMatrixInverse).toVar()
       const centerNormal = samplePrePassNormal(centerUv).toVar()
       const occlusion = float(0).toVar()
-      const sampleCount = int(12)
+      const sampleCount = int(AO_COMPARISON_PRESET.samples)
 
       loopInt({ start: int(0), end: sampleCount, type: 'int', condition: '<' }, ({ i }) => {
         const sampleIndex = float(i).add(0.5)
@@ -720,13 +732,13 @@ function createReferencePipelines(
   })()
 
   const gtaoNode = gtao(prePassDepth, prePassNormal, camera)
-  gtaoNode.samples.value = 16
+  gtaoNode.samples.value = AO_COMPARISON_PRESET.samples
   gtaoNode.distanceExponent.value = 1
   gtaoNode.distanceFallOff.value = 1
-  gtaoNode.radius.value = 0.25
-  gtaoNode.scale.value = 0.5
-  gtaoNode.thickness.value = 1
-  gtaoNode.resolutionScale = 0.5
+  gtaoNode.radius.value = AO_COMPARISON_PRESET.radius
+  gtaoNode.scale.value = AO_COMPARISON_PRESET.contrast
+  gtaoNode.thickness.value = AO_COMPARISON_PRESET.thickness
+  gtaoNode.resolutionScale = 1.0
   gtaoNode.useTemporalFiltering = false
 
   const baselineVbaoRadius = VBAO_RADIUS_STRESS_PRESETS.baseline
@@ -743,12 +755,12 @@ function createReferencePipelines(
     camera,
   })
   n8aoNode.setQualityMode('Medium')
-  n8aoNode.configuration.screenSpaceRadius = true
-  n8aoNode.configuration.aoRadius = 32
+  n8aoNode.configuration.screenSpaceRadius = false
+  n8aoNode.configuration.aoRadius = AO_COMPARISON_PRESET.radius
   n8aoNode.configuration.distanceFalloff = 1
-  n8aoNode.configuration.intensity = 5
+  n8aoNode.configuration.intensity = AO_COMPARISON_PRESET.contrast
   n8aoNode.configuration.denoiseIterations = 2
-  n8aoNode.configuration.denoiseRadius = 12
+  n8aoNode.configuration.denoiseRadius = AO_COMPARISON_PRESET.denoiseRadius
   n8aoNode.configuration.aoTones = 0
   n8aoNode.configuration.colorMultiply = true
   n8aoNode.configuration.gammaCorrection = false
@@ -767,12 +779,12 @@ function createReferencePipelines(
     camera,
   )
   const gtaoDenoised = denoise(vec4(vec3(gtaoRaw.r), float(1)), prePassDepth, prePassNormal, camera)
-  ssaoDenoised.radius.value = 4
-  gtaoDenoised.radius.value = 4
-  ssaoDenoised.depthPhi.value = 3
-  gtaoDenoised.depthPhi.value = 3
-  ssaoDenoised.normalPhi.value = 8
-  gtaoDenoised.normalPhi.value = 8
+  ssaoDenoised.radius.value = AO_COMPARISON_PRESET.denoiseRadius
+  gtaoDenoised.radius.value = AO_COMPARISON_PRESET.denoiseRadius
+  ssaoDenoised.depthPhi.value = AO_COMPARISON_PRESET.denoiseDepthPhi
+  gtaoDenoised.depthPhi.value = AO_COMPARISON_PRESET.denoiseDepthPhi
+  ssaoDenoised.normalPhi.value = AO_COMPARISON_PRESET.denoiseNormalPhi
+  gtaoDenoised.normalPhi.value = AO_COMPARISON_PRESET.denoiseNormalPhi
   const gtaoRawScalar = gtaoRaw.r
   type TslScalar = typeof gtaoRaw.r
   type TslVec3 = typeof sceneColor.rgb
@@ -866,7 +878,7 @@ function createReferencePipelines(
       quality: VBAO_PRODUCT_QUALITY,
       radius: baselineVbaoRadius.radius,
       thickness: baselineVbaoRadius.thickness,
-      contrast: 0.85,
+      contrast: AO_COMPARISON_PRESET.contrast,
       softness: vbaoSoftness,
       resolutionScale: fullResolution ? 1.0 : 0.5,
       benchmark: { noiseTexture: createVbaoBenchmarkNoiseTexture(vbaoNoiseSource) },
@@ -1046,13 +1058,18 @@ function createReferencePipelines(
     composeBufferWidth = composeBufferSize.width
     composeBufferHeight = composeBufferSize.height
     composeSegmentCount = segmentCount
-    composeSegments = Array.from({ length: segmentCount }, (_, index) => {
-      const x = Math.floor((index * composeBufferWidth) / segmentCount)
-      const nextX =
-        index === segmentCount - 1
-          ? composeBufferWidth
-          : Math.floor(((index + 1) * composeBufferWidth) / segmentCount)
-      return { x, width: nextX - x }
+    const plan = createDebugViewportPlan({
+      views: Array.from({ length: segmentCount }, (_, index) => ({
+        label: `slot-${index}`,
+        source: 'beauty',
+        mode: 'passthrough',
+      })),
+      layout: { mode: 'row', slots: segmentCount },
+    })
+    composeSegments = createDebugViewportRects(plan).map((rect) => {
+      const x = Math.round(rect.scissor.x * composeBufferWidth)
+      const width = Math.round(rect.scissor.width * composeBufferWidth)
+      return { x, width }
     })
     return composeSegments
   }

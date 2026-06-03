@@ -11,6 +11,7 @@ import {
 
 const PIXEL: Vec3 = [0, 0, -1]
 const NORMAL: Vec3 = [0, 0, 1]
+const GRAZING_NORMAL: Vec3 = [0, Math.sin(1.05), Math.cos(1.05)]
 
 function angularSamples(
   theta0: number,
@@ -107,5 +108,24 @@ describe('PR-01 VBAO scalar reference correctness gate', () => {
     expect(sectorPopcount(thin.sliceMasks[0] ?? 0)).toBeLessThan(4)
     expect(sectorPopcount(thick.sliceMasks[0] ?? 0)).toBeGreaterThan(REFERENCE_SECTOR_COUNT / 3)
     expect(thin.accessibility).toBeGreaterThan(thick.accessibility)
+  })
+
+  it('uses projected-normal weighting for multi-slice accessibility', () => {
+    const result = evaluateScalarVbaoReference({
+      pixelPosition: PIXEL,
+      normal: GRAZING_NORMAL,
+      radius: 1,
+      thickness: 0.16,
+      slices: 4,
+      sampleProvider: ({ sliceIndex, sliceDir, viewDir }) =>
+        sliceIndex === 0
+          ? angularSamples(-1.1, 1.1, 96, 0.8)({ sliceDir, viewDir })
+          : [],
+    })
+
+    expect(result.sliceWeights[0]).toBeGreaterThan(result.sliceWeights[2] ?? 0)
+    expect(result.uniformAccessibility).toBeGreaterThan(result.accessibility)
+    expect(result.uniformAccessibility - result.accessibility).toBeGreaterThan(0.03)
+    expect(result.projectedWeightedAccessibility).toBe(result.accessibility)
   })
 })

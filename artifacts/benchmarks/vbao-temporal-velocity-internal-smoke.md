@@ -1,6 +1,6 @@
 # AO Production Screenshot Quality Summary
 
-Generated: 2026-06-02T10:15:09.960Z
+Generated: 2026-06-02T21:34:42.803Z
 
 This is an image-quality benchmark companion to screenshot capture. Lower pattern/noise and stripe scores are better, but this is not a physical AO reference; use `ao-ground-truth-summary.md` and `ao-gpu-readback-summary.md` for reference-accuracy baselines.
 
@@ -14,12 +14,13 @@ Skipped passes are not zero-cost passes; `skipped` means the pass is elided from
 
 | Resolution | Algorithm | VBAO sample mode | VBAO temporal | Host TAA | VBAO res | View | Output | Pass | Status | GPU ms |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: |
-| 1280x720 | vbao | product-preset | velocity-internal | off | full-res | ao | product | raw | measured | 1.007 |
+| 1280x720 | vbao | product-preset | velocity-internal | off | full-res | ao | product | raw | measured | 1.287 |
 | 1280x720 | vbao | product-preset | velocity-internal | off | full-res | ao | product | cleanup | skipped | n/a |
 | 1280x720 | vbao | product-preset | velocity-internal | off | full-res | ao | product | resolve | skipped | n/a |
-| 1280x720 | vbao | product-preset | velocity-internal | off | full-res | ao | product | polish | measured | 0.090 |
-| 1280x720 | vbao | product-preset | velocity-internal | off | full-res | ao | product | temporal | measured | 0.042 |
-| 1280x720 | vbao | product-preset | velocity-internal | off | full-res | ao | product | total-product | derived | 1.139 |
+| 1280x720 | vbao | product-preset | velocity-internal | off | full-res | ao | product | polish | measured | 0.085 |
+| 1280x720 | vbao | product-preset | velocity-internal | off | full-res | ao | product | resolve-polish | skipped | n/a |
+| 1280x720 | vbao | product-preset | velocity-internal | off | full-res | ao | product | temporal | measured | 0.044 |
+| 1280x720 | vbao | product-preset | velocity-internal | off | full-res | ao | product | total-product | derived | 1.416 |
 
 ## VBAO Temporal Architecture Status
 

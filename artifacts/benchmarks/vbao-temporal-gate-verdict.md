@@ -1,8 +1,12 @@
 # VBAO Temporal Gate Verdict
 
-Generated: 2026-06-02T10:35:04.464Z
+Generated: 2026-06-02T21:35:14.187Z
 
 Verdict: **reject-promotion**
+
+Clean-checkout reproducible: **no**
+
+Default *-latest benchmark inputs are local generated artifacts ignored by git; provide explicit tracked input paths or rerun the full matrix before treating this verdict as clean-checkout reproducible.
 
 Internal temporal allowed: **no**
 
@@ -28,4 +32,6 @@ Same-cost non-temporal alternative evidence: **present**.
 
 Velocity-backed internal temporal evidence: **not present**.
 
-This verifier cannot allow temporal AO unless host TAA/TRAA or velocity-backed internal evidence and same-cost non-temporal comparisons produce a material win without blocking labels or tracked regressions. Complete-but-failing evidence remains `reject-promotion`; AO-owned temporal remains private unless the velocity-backed evidence reaches candidate.
+Velocity motion/disocclusion evidence: **not present**.
+
+This verifier cannot allow temporal AO unless host TAA/TRAA or velocity-backed internal evidence and same-cost non-temporal comparisons produce a material win without blocking labels or tracked regressions. Velocity-backed internal temporal additionally requires motion/disocclusion evidence. Complete-but-failing evidence remains `reject-promotion`; AO-owned temporal remains private unless the velocity-backed evidence reaches candidate.

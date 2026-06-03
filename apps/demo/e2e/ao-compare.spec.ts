@@ -155,7 +155,7 @@ for (const fixture of Object.values(PARITY_SCENES).filter((scene) => scene.key !
 
     await page.goto(fixture.route)
 
-    const panel = page.locator('.compare-panel')
+    const panel = page.locator('.compare-panel').first()
     await expect(panel).toBeVisible({ timeout: 30_000 })
 
     const canvas = page.locator('canvas').first()

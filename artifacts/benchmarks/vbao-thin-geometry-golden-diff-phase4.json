@@ -1,0 +1,568 @@
+{
+  "generatedAt": "2026-06-03T10:57:52.488Z",
+  "baseUrl": "http://127.0.0.1:5220",
+  "scenes": [
+    "museum"
+  ],
+  "resolutions": [
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "passTimingSampleCount": 3,
+  "note": "Production-only local capture. This is not a formal EVIDENCE.md claim unless copied into EVIDENCE.md with timings review.",
+  "referenceGate": {
+    "basis": "Product AO rows must provide fixture observations before they can be compared against the ray-cast and canonical reports.",
+    "productRows": [
+      {
+        "label": "1920x1080-museum-vbao-product-preset-off-full-res-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1280x720-museum-vbao-product-preset-off-full-res-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "label": "1920x1080-museum-vbao-product-preset-off-full-res-product-beauty",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "mode": "vbao",
+      "view": "beauty",
+      "denoise": true,
+      "fullResolutionVbao": true,
+      "vbaoResolution": "full-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 3.963904,
+          "reason": "Median WebGPU timestamp from 3 steady-state samples; render target VBAO.Raw (1920x1080)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "resolve",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "polish",
+          "status": "measured",
+          "gpuMs": 0.254976,
+          "reason": "Median WebGPU timestamp from 3 steady-state samples; render target VBAO.FullResPolish (1920x1080)."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 4.2188799999999995,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 76,
+          "y0": 129,
+          "x1": 1574,
+          "y1": 928
+        },
+        "meanLuma": 0.6025418647117862,
+        "stdLuma": 0.12762138880517473,
+        "patternNoiseScore": 0.02161611852049313,
+        "stripeScore": 0.08714565887327352,
+        "horizontalStripeScore": 0.07806673681541156,
+        "verticalStripeScore": 0.08714565887327352,
+        "directionalAnisotropy": 0.06310381262063601,
+        "edgeBleedProxy": 0.01683337939280383,
+        "thinGapPreservationProxy": 0.003959670403295872,
+        "meanAbsDx": 0.004550600173583425,
+        "meanAbsDy": 0.005163603459397772,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-thin-geometry-golden-diff-phase4\\1920x1080-museum-vbao-product-preset-off-full-res-product-beauty.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "beauty",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": true,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.45,
+        "vbaoRadius": 0.35,
+        "vbaoThickness": 0.09,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "devicePixelRatio": 1,
+        "fps": 717.7033492615087,
+        "frameMs": 1.3933333333736906,
+        "avgFrameMs": 1.3933333333736906,
+        "medianFrameMs": 1.3999999999068677,
+        "p95FrameMs": 1.6000000000931323,
+        "reportIndex": 3,
+        "sampleCount": 30,
+        "timestamp": 4016.600000000093
+      },
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ]
+    },
+    {
+      "label": "1920x1080-museum-vbao-product-preset-off-full-res-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": true,
+      "vbaoResolution": "full-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 3.605504,
+          "reason": "Median WebGPU timestamp from 3 steady-state samples; render target VBAO.Raw (1920x1080)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "resolve",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "polish",
+          "status": "measured",
+          "gpuMs": 0.319488,
+          "reason": "Median WebGPU timestamp from 3 steady-state samples; render target VBAO.FullResPolish (1920x1080)."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 3.9249919999999996,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 76,
+          "y0": 129,
+          "x1": 1574,
+          "y1": 928
+        },
+        "meanLuma": 0.8796094340085939,
+        "stdLuma": 0.04990676463225822,
+        "patternNoiseScore": 0.010518946516558573,
+        "stripeScore": 0.13550944851048205,
+        "horizontalStripeScore": 0.08210664852706914,
+        "verticalStripeScore": 0.13550944851048205,
+        "directionalAnisotropy": 0.010962898157603016,
+        "edgeBleedProxy": 0.0035273053216592735,
+        "thinGapPreservationProxy": 0.0015565930105618919,
+        "meanAbsDx": 0.001943260797538188,
+        "meanAbsDy": 0.0019863406176529007,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-thin-geometry-golden-diff-phase4\\1920x1080-museum-vbao-product-preset-off-full-res-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": true,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.45,
+        "vbaoRadius": 0.35,
+        "vbaoThickness": 0.09,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "devicePixelRatio": 1,
+        "fps": 1000.000000015522,
+        "frameMs": 0.999999999984478,
+        "avgFrameMs": 0.999999999984478,
+        "medianFrameMs": 1,
+        "p95FrameMs": 1.2999999998137355,
+        "reportIndex": 7,
+        "sampleCount": 30,
+        "timestamp": 6101
+      },
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-off-full-res-product-beauty",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "beauty",
+      "denoise": true,
+      "fullResolutionVbao": true,
+      "vbaoResolution": "full-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.814528,
+          "reason": "Median WebGPU timestamp from 3 steady-state samples; render target VBAO.Raw (1280x720)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "resolve",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "polish",
+          "status": "measured",
+          "gpuMs": 0.151552,
+          "reason": "Median WebGPU timestamp from 3 steady-state samples; render target VBAO.FullResPolish (1280x720)."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.9660799999999998,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.5876748266055953,
+        "stdLuma": 0.1524643735346393,
+        "patternNoiseScore": 0.034490078351126344,
+        "stripeScore": 0.15699582366466522,
+        "horizontalStripeScore": 0.15699582366466522,
+        "verticalStripeScore": 0.10083614454564953,
+        "directionalAnisotropy": 0.1187432261876504,
+        "edgeBleedProxy": 0.02871998384180638,
+        "thinGapPreservationProxy": 0.006163578363813678,
+        "meanAbsDx": 0.005790000345126088,
+        "meanAbsDy": 0.0073503249656873115,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-thin-geometry-golden-diff-phase4\\1280x720-museum-vbao-product-preset-off-full-res-product-beauty.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "beauty",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": true,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.45,
+        "vbaoRadius": 0.35,
+        "vbaoThickness": 0.09,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 663.7168141360436,
+        "frameMs": 1.5066666667194417,
+        "avgFrameMs": 1.5066666667194417,
+        "medianFrameMs": 1.5,
+        "p95FrameMs": 2,
+        "reportIndex": 3,
+        "sampleCount": 30,
+        "timestamp": 3144.399999999907
+      },
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-off-full-res-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": true,
+      "vbaoResolution": "full-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 2.156544,
+          "reason": "Median WebGPU timestamp from 3 steady-state samples; render target VBAO.Raw (1280x720)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "resolve",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "polish",
+          "status": "measured",
+          "gpuMs": 0.176128,
+          "reason": "Median WebGPU timestamp from 3 steady-state samples; render target VBAO.FullResPolish (1280x720)."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 2.3326719999999996,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.8467965067084811,
+        "stdLuma": 0.14169767736146308,
+        "patternNoiseScore": 0.022942759938138328,
+        "stripeScore": 0.19103778615137765,
+        "horizontalStripeScore": 0.19103778615137765,
+        "verticalStripeScore": 0.16209185634014675,
+        "directionalAnisotropy": 0.10329904969754283,
+        "edgeBleedProxy": 0.008502672639186706,
+        "thinGapPreservationProxy": 0.0025072979542886827,
+        "meanAbsDx": 0.002175686886357596,
+        "meanAbsDy": 0.002676960778672171,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-thin-geometry-golden-diff-phase4\\1280x720-museum-vbao-product-preset-off-full-res-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": true,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.45,
+        "vbaoRadius": 0.35,
+        "vbaoThickness": 0.09,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 892.8571428422939,
+        "frameMs": 1.1200000000186265,
+        "avgFrameMs": 1.1200000000186265,
+        "medianFrameMs": 1.1000000000931323,
+        "p95FrameMs": 1.3000000002793968,
+        "reportIndex": 6,
+        "sampleCount": 30,
+        "timestamp": 4645.5
+      },
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ]
+    }
+  ]
+}

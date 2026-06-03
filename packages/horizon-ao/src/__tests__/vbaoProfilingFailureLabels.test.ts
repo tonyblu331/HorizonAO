@@ -4,6 +4,7 @@ import {
   VBAO_RECONSTRUCTION_STAGES,
   createEvidenceArtifactStatusRows,
   createReferenceGateStatusRows,
+  createRenderedThinGeometryProxyRows,
   createVbaoReconstructionStageStatusRows,
   classifyFailureLabels,
 } from '../../../../apps/demo/scripts/profiling/productionReport.mjs'
@@ -111,6 +112,71 @@ describe('VBAO profiling failure labels', () => {
         output: 'internally-filtered',
         observedFixtureCount: 0,
         status: 'missing-reference-observation',
+      },
+    ])
+  })
+
+  it('summarizes rendered thin-geometry proxy rows without calling them reference proof', () => {
+    const rows = createRenderedThinGeometryProxyRows([
+      {
+        label: 'vbao beauty',
+        mode: 'vbao',
+        view: 'beauty',
+        denoise: true,
+        fullResolutionVbao: true,
+        vbaoResolution: 'full-res',
+        failureLabels: ['noise', 'edge-bleed'],
+        qualityMetrics: {
+          thinGapPreservationProxy: 0.004,
+          edgeBleedProxy: 0.02,
+          stripeScore: 0.12,
+        },
+      },
+      {
+        label: 'vbao ao missing stripe',
+        mode: 'vbao',
+        view: 'ao',
+        denoise: true,
+        fullResolutionVbao: true,
+        vbaoResolution: 'full-res',
+        failureLabels: ['noise', 'thin-gap', 'mud'],
+        qualityMetrics: {
+          thinGapPreservationProxy: 0.001,
+          edgeBleedProxy: 0.03,
+        },
+      },
+      {
+        label: 'gtao ignored',
+        mode: 'gtao',
+        view: 'ao',
+        denoise: true,
+      },
+    ])
+
+    expect(rows).toEqual([
+      {
+        label: 'vbao beauty',
+        view: 'beauty',
+        output: 'product',
+        vbaoResolution: 'full-res',
+        thinGapProxy: 0.004,
+        edgeBleedProxy: 0.02,
+        stripeScore: 0.12,
+        failureLabels: ['noise', 'edge-bleed'],
+        status: 'complete',
+        missing: [],
+      },
+      {
+        label: 'vbao ao missing stripe',
+        view: 'ao',
+        output: 'product',
+        vbaoResolution: 'full-res',
+        thinGapProxy: 0.001,
+        edgeBleedProxy: 0.03,
+        stripeScore: null,
+        failureLabels: ['noise', 'thin-gap', 'mud'],
+        status: 'incomplete',
+        missing: ['qualityMetrics.stripeScore'],
       },
     ])
   })

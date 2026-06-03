@@ -1,8 +1,22 @@
 # Tasks: Velocity-Backed VBAO Temporal AO
 
+## Phase R: Roadmap Reconciliation
+
+- [x] R.1 Verify current private velocity-backed temporal implementation exists.
+- [x] R.2 Record that current temporal work should be continued as a private
+      candidate, not fought or publicly promoted.
+- [x] R.3 Add SDD plan and canonical ultraplan for working properly along the
+      implementation.
+- [x] R.4 Update stale source-contract language that says runtime temporal is
+      absent, while still rejecting camera-only/public temporal.
+- [x] R.5 Keep public API/export tests proving no public temporal surface exists.
+- [x] R.6 SOAP cleanup: consolidate roadmap content into `ultraplan.md` instead
+      of adding another prompt-style planning file.
+
 ## Phase 0: Baseline Rejection
 
-- [ ] 0.1 Keep source-contract coverage that runtime internal temporal is absent.
+- [ ] 0.1 Keep source-contract coverage that camera-only temporal is absent and
+      velocity-backed temporal remains private.
 - [ ] 0.2 Record current `reject-promotion` evidence as prerequisite truth.
 - [ ] 0.3 Add ADR closeout for the camera-only temporal rejection.
 - [ ] 0.4 Confirm no public temporal API appears in package options or README.
@@ -19,7 +33,8 @@
 
 - [x] 2.1 Add private `VBAOVelocityTemporalNode`.
 - [x] 2.2 Allocate only one separate `R16F` AO history target.
-- [x] 2.3 Reset history on resize, camera cut, first frame, or host reset.
+- [x] 2.3 Reset history on first frame and resize.
+- [ ] 2.6 Wire and verify host reset, camera cut, and device/format reset evidence.
 - [x] 2.4 Keep the node out of public exports.
 - [x] 2.5 Ensure the node produces complete output or is not merged.
 

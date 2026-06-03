@@ -34,8 +34,11 @@ export interface ScalarVbaoReferenceInput {
 
 export interface ScalarVbaoReferenceResult {
   readonly accessibility: number
+  readonly uniformAccessibility: number
+  readonly projectedWeightedAccessibility: number
   readonly sliceMasks: readonly number[]
   readonly sliceAccessibilities: readonly number[]
+  readonly sliceWeights: readonly number[]
 }
 
 function dot3(a: Vec3, b: Vec3): number {
@@ -85,14 +88,21 @@ function buildViewLocalFrame(pixelPosition: Vec3): {
 }
 
 function normalAngleForSlice(normal: Vec3, viewDir: Vec3, sliceDir: Vec3): number {
+  const { projectedNormal } = projectNormalIntoSlice(normal, viewDir, sliceDir)
+
+  return Math.atan2(dot3(projectedNormal, sliceDir), Math.max(dot3(projectedNormal, viewDir), 1e-5))
+}
+
+function projectNormalIntoSlice(normal: Vec3, viewDir: Vec3, sliceDir: Vec3): {
+  readonly projectedNormal: Vec3
+  readonly projectedLength: number
+} {
   const bitangent = normalize3(cross3(sliceDir, viewDir))
   const projected = sub3(normal, scale3(bitangent, dot3(normal, bitangent)))
   const projectedLength = Math.max(length3(projected), 1e-8)
   const projectedNormal = scale3(projected, 1 / projectedLength)
-  const sinGamma = dot3(projectedNormal, sliceDir)
-  const cosGamma = Math.max(dot3(projectedNormal, viewDir), 1e-5)
 
-  return Math.atan2(sinGamma, cosGamma)
+  return { projectedNormal, projectedLength }
 }
 
 export function makeScalarVbaoSampleAtTheta(input: {
@@ -127,6 +137,8 @@ export function evaluateScalarVbaoReference(input: ScalarVbaoReferenceInput): Sc
   const maxValidRadius2 = maxValidRadius * maxValidRadius
   const sliceMasks: number[] = []
   const sliceAccessibilities: number[] = []
+  const sliceWeights: number[] = []
+  const normal = normalize3(input.normal)
 
   for (let sliceIndex = 0; sliceIndex < options.slices; sliceIndex++) {
     const sliceDir = sampleGtVbaoAxialSliceDirection(
@@ -136,7 +148,8 @@ export function evaluateScalarVbaoReference(input: ScalarVbaoReferenceInput): Sc
       tangent0,
       tangent1,
     )
-    const normalAngle = normalAngleForSlice(normalize3(input.normal), viewDir, sliceDir)
+    const normalAngle = normalAngleForSlice(normal, viewDir, sliceDir)
+    const sliceWeight = projectNormalIntoSlice(normal, viewDir, sliceDir).projectedLength
     let mask = 0
 
     for (const sideSign of [1, -1] as const) {
@@ -168,16 +181,27 @@ export function evaluateScalarVbaoReference(input: ScalarVbaoReferenceInput): Sc
 
     sliceMasks.push(mask >>> 0)
     sliceAccessibilities.push(cosineMeasureReduction(mask))
+    sliceWeights.push(sliceWeight)
   }
 
-  const accessibility =
+  const uniformAccessibility =
     sliceAccessibilities.reduce((total, value) => total + value, 0) /
     Math.max(1, sliceAccessibilities.length)
+  const weightedTotal = sliceAccessibilities.reduce(
+    (total, value, index) => total + value * (sliceWeights[index] ?? 0),
+    0,
+  )
+  const weightSum = sliceWeights.reduce((total, value) => total + value, 0)
+  const accessibility =
+    weightSum <= 1e-8 ? uniformAccessibility : weightedTotal / weightSum
 
   return {
     accessibility,
+    uniformAccessibility,
+    projectedWeightedAccessibility: accessibility,
     sliceMasks,
     sliceAccessibilities,
+    sliceWeights,
   }
 }
 

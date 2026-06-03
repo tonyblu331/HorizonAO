@@ -250,7 +250,7 @@ describe('modernized VBAO production source contract', () => {
     expect(source).not.toContain('samplePos.sub(sampleViewDir.mul(this.thickness)).sub(P)')
   })
 
-  it('keeps projected-normal CDF framing but averages slices uniformly to reduce low-slice banding', () => {
+  it('weights post-CDF slice accessibility by projected-normal length', () => {
     expect(source).toContain(
       "const B_i = (normalize(cross(S_i as any, V as any) as any) as any).toVar('B_i')",
     )
@@ -261,11 +261,9 @@ describe('modernized VBAO production source contract', () => {
     expect(source).toContain('const Nproj = NprojRaw.div(NprojLen).toVar')
     expect(source).toContain('const sinGamma = dot(Nproj, S_i).toVar')
     expect(source).toContain('const cosGamma = max(dot(Nproj, V), float(1e-5)).toVar')
-    expect(source).toContain('weightedAccessibility.addAssign(sliceAccessibility)')
-    expect(source).toContain('weightSum.addAssign(float(1))')
-    expect(source).not.toContain(
-      'weightedAccessibility.addAssign(sliceAccessibility.mul(NprojLen))',
-    )
+    expect(source).toContain('weightedAccessibility.addAssign(sliceAccessibility.mul(NprojLen))')
+    expect(source).toContain('weightSum.addAssign(NprojLen)')
+    expect(source).not.toContain('weightSum.addAssign(float(1))')
   })
 
   it('reduces cosine-measure sector masks by popcount without a second cosine loop', () => {
@@ -389,6 +387,10 @@ describe('modernized VBAO production source contract', () => {
     expect(museumSource).toContain("vbaoTemporalMode === 'host' && vbaoHostTaaMode === 'traa'")
     expect(temporalGateSource).toContain('VBAO_TEMPORAL_HOST_TAA_JSON')
     expect(temporalGateSource).toContain('VBAO_TEMPORAL_VELOCITY_JSON')
+    expect(temporalGateSource).toContain('VBAO_TEMPORAL_MOTION_JSON')
+    expect(temporalGateSource).toContain("const MOTION_EVIDENCE_KINDS = new Set(['camera-motion', 'object-motion', 'disocclusion'])")
+    expect(temporalGateSource).toContain('function hasMotionEvidenceKind(row)')
+    expect(temporalGateSource).toContain('function hasMotionEvidenceSource(row)')
     expect(temporalGateSource).toContain('hostTaaEvidence')
     expect(temporalGateSource).not.toContain('internalPrototypeAllowed')
     expect(temporalGateSource).toContain('internalTemporalAllowed: internalTemporalPassesPromotion')
@@ -397,11 +399,21 @@ describe('modernized VBAO production source contract', () => {
     expect(temporalGateSource).toContain('stripeRegression')
     expect(temporalGateSource).toContain('VBAO_TEMPORAL_ALTERNATIVE_JSON')
     expect(temporalGateSource).toContain('sameCostAlternativeEvidence')
+    expect(temporalGateSource).toContain('motionDisocclusionEvidence')
+    expect(temporalGateSource).toContain('hasMotionEvidenceKind(row)')
+    expect(temporalGateSource).toContain('hasMotionEvidenceSource(row)')
+    expect(temporalGateSource).toContain('function motionEvidenceKey(row)')
+    expect(temporalGateSource).toContain('const motionByKey = new Map')
+    expect(temporalGateSource).toContain('const missingMotionRows = productOffRows')
     expect(temporalGateSource).toContain('internalTemporalEvidence')
     expect(temporalGateSource).toContain('internalTemporalPassesPromotion')
     expect(temporalGateSource).toContain('const velocityTemporalEvidence =')
     expect(temporalGateSource).toContain('const internalTemporalEvidence = velocityTemporalEvidence')
     expect(temporalGateSource).toContain('const internalTemporalPassesPromotion =')
+    expect(temporalGateSource).toContain('velocityTemporalEvidence &&\n  motionDisocclusionEvidence')
+    expect(benchmarkSource).toContain('Private VBAOVelocityTemporalNode wrapped ${vbaoBaseProductOutputContract}')
+    expect(benchmarkSource).toContain('AO_BENCHMARK_VBAO_MOTION_EVIDENCE_KIND')
+    expect(benchmarkSource).toContain("motionEvidenceSource")
     expect(temporalGateSource).toContain(
       'const complete = hostEvidenceComplete && hostTaaEvidence && sameCostAlternativeEvidence',
     )
@@ -580,6 +592,7 @@ describe('modernized VBAO production source contract', () => {
     expect(bilateralWeightSource).toContain('const normalAgreement = clamp(dot(centerNormal, tapNormal), float(0), float(1))')
     expect(bilateralWeightSource).toContain('const planeDistance = abs(dot(tapPosition.sub(centerPosition), centerNormal))')
     expect(bilateralWeightSource).toContain('const depthWeight = exp2(')
+    expect(bilateralWeightSource).toContain('mul(float(24))')
     expect(bilateralWeightSource).toContain('const normalWeight = normal4.mul(normal4)')
     expect(resolveSource).toContain('computeVbaoBilateralGeometryWeight')
     expect(halfResCleanupSource).toContain('computeVbaoBilateralGeometryWeight')
@@ -589,6 +602,16 @@ describe('modernized VBAO production source contract', () => {
     expect(halfResCleanupSource).not.toContain('const normalAgreement =')
     expect(fullResPolishSource).not.toContain('const normalAgreement =')
     expect(resolvePolishSource).not.toContain('const normalAgreement =')
+  })
+
+  it('keeps deprecated VBAO option aliases explicit until migration policy changes', () => {
+    expect(optionsSource).toContain('readonly quality?: VBAOQualityPreset')
+    expect(optionsSource).toContain('/** @deprecated Use `quality`; kept temporarily for older HorizonAO callers. */')
+    expect(optionsSource).toContain('readonly preset?: VBAOQualityPreset')
+    expect(optionsSource).toContain('/** @deprecated Use `contrast`; kept for GTAONode-style compatibility. */')
+    expect(optionsSource).toContain('readonly scale?: number')
+    expect(optionsSource).toContain('/** @deprecated Use `strength`; kept for older HorizonAO callers. */')
+    expect(optionsSource).toContain('readonly intensity?: number')
   })
 
   it('provides a shared internal effect pass without changing render-target contracts', () => {

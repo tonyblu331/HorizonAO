@@ -8,7 +8,7 @@
 
 ### Requirement: Visibility-Bitmask Kernel Contract
 
-The production kernel SHALL use one coherent visibility-bitmask path with GT-VBAO corrections: axial slice directions, two-sided screen-space marching, one signed hemislice mask coordinate, sample-local thickness, cosine-measure CDF remapping, point-sample sector quantization, popcount accessibility reduction, and a uniform slice average after cosine-measure sectorization.
+The production kernel SHALL use one coherent visibility-bitmask path with GT-VBAO corrections: axial slice directions, two-sided screen-space marching, one signed hemislice mask coordinate, sample-local thickness, cosine-measure CDF remapping, point-sample sector quantization, popcount accessibility reduction, and projected-normal weighted slice accumulation after cosine-measure sectorization.
 
 #### Scenario: Axial slice directions match two-sided marching
 
@@ -26,13 +26,13 @@ The production kernel SHALL use one coherent visibility-bitmask path with GT-VBA
 - **AND** the horizon angles SHALL be remapped through the slice-local cosine-measure CDF before quantization
 - **AND** the interval SHALL use point-sample quantized sector treatment, not the old ceil-length sector range.
 
-#### Scenario: Cosine-measure masks reduce by popcount
+#### Scenario: Cosine-measure masks reduce by popcount and projected-normal slice weight
 
 - **GIVEN** the visibility-bitmask `M_i` and projected-normal angle `γ_i_norm`
 - **WHEN** per-slice accessibility is reduced
 - **THEN** the mask bits SHALL already represent equal chunks of cosine-weighted measure
 - **AND** the value SHALL be derived from `A_i = 1 − countOneBits(M_i)/32`
-- **AND** slices SHALL use a uniform slice average after cosine-measure sectorization
+- **AND** slices SHALL be weighted by the projected normal length for that slice
 - **AND** the production kernel SHALL NOT apply a second cosine-weighted sector loop after CDF remapping.
 
 #### Scenario: Sample-local thickness is perspective-correct

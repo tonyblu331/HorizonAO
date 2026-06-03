@@ -125,6 +125,20 @@ const vbaoTemporalMode = (() => {
     `AO_BENCHMARK_VBAO_TEMPORAL_MODE must be "off", "host", or "velocity-internal"; the rejected camera-only internal temporal prototype remains removed, received "${requested}".`,
   )
 })()
+const vbaoMotionEvidenceKind = (() => {
+  const requested = process.env.AO_BENCHMARK_VBAO_MOTION_EVIDENCE_KIND
+  if (
+    requested === undefined ||
+    requested === 'camera-motion' ||
+    requested === 'object-motion' ||
+    requested === 'disocclusion'
+  ) {
+    return requested
+  }
+  throw new Error(
+    `AO_BENCHMARK_VBAO_MOTION_EVIDENCE_KIND must be "camera-motion", "object-motion", or "disocclusion", received "${requested}".`,
+  )
+})()
 const vbaoHostTaaMode = (() => {
   const requested = process.env.AO_BENCHMARK_VBAO_HOST_TAA ?? 'off'
   if (requested === 'off' || requested === 'traa') return requested
@@ -164,6 +178,9 @@ for (const stage of vbaoReconstructionStages) {
 
 function createSceneUrl(scene) {
   const url = new URL(`/${scene}`, baseUrl)
+  if (passTimingSampleCount > 0) {
+    url.searchParams.set('gpuPassTiming', '1')
+  }
   if (vbaoSampleMode !== 'product-preset') {
     url.searchParams.set('vbaoSampleMode', vbaoSampleMode)
   }
@@ -585,6 +602,16 @@ try {
                   const screenshotPath = path.join(screenshotRoot, `${label}.png`)
                   await page.screenshot({ path: screenshotPath })
                   const qualityMetrics = await analyzeScreenshotQuality(page, screenshotPath)
+                  const vbaoBaseProductOutputContract =
+                    vbaoResolvePolishMode === 'fused' && !fullResolutionVbao
+                      ? 'Evidence-only final product AO with fused half-resolution resolve-polish candidate'
+                      : vbaoCleanupMode === 'skip' && !fullResolutionVbao
+                      ? 'Evidence-only final product AO with half-resolution cleanup skipped before resolve'
+                      : 'VBAONode.getTextureNode() final product AO with internal reconstruction/polish'
+                  const vbaoProductOutputContract =
+                    vbaoTemporalMode === 'velocity-internal'
+                      ? `Private VBAOVelocityTemporalNode wrapped ${vbaoBaseProductOutputContract}`
+                      : vbaoBaseProductOutputContract
                   const row = {
                     label,
                     backend: latest?.rendererBackend ?? 'unknown',
@@ -600,11 +627,7 @@ try {
                     productOutputContract:
                       mode === 'vbao'
                         ? denoise
-                          ? vbaoResolvePolishMode === 'fused' && !fullResolutionVbao
-                            ? 'Evidence-only final product AO with fused half-resolution resolve-polish candidate'
-                            : vbaoCleanupMode === 'skip' && !fullResolutionVbao
-                            ? 'Evidence-only final product AO with half-resolution cleanup skipped before resolve'
-                            : 'VBAONode.getTextureNode() final product AO with internal reconstruction/polish'
+                          ? vbaoProductOutputContract
                           : 'VBAONode.getRawTextureNode() raw debug AO'
                         : 'n/a',
                     sampling:
@@ -619,6 +642,20 @@ try {
                     vbaoSoftness: mode === 'vbao' ? vbaoDemoSoftness : 0,
                     temporalDiagnostics:
                       mode === 'vbao' ? (latest?.vbaoTemporalDiagnostics ?? null) : null,
+                    motionEvidenceKind:
+                      mode === 'vbao' &&
+                      vbaoTemporalMode === 'velocity-internal' &&
+                      denoise &&
+                      vbaoMotionEvidenceKind !== undefined
+                        ? vbaoMotionEvidenceKind
+                        : 'n/a',
+                    motionEvidenceSource:
+                      mode === 'vbao' &&
+                      vbaoTemporalMode === 'velocity-internal' &&
+                      denoise &&
+                      vbaoMotionEvidenceKind !== undefined
+                        ? 'ao-benchmark-motion'
+                        : 'n/a',
                     passTimings: createVbaoPassTimingRows({
                       mode,
                       denoise,
