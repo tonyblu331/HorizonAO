@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "benchmark:ao": "node scripts/collect-ao-benchmark.mjs",
+    "benchmark:ao-fps": "node scripts/collect-ao-fps-benchmark.mjs",
     "benchmark:ao:gpu-readback": "node scripts/collect-ao-gpu-readback-baseline.mjs",
     "benchmark:vbao-noise": "node scripts/collect-vbao-noise-source-comparison.mjs",
     "verify:vbao-temporal": "node scripts/verify-vbao-temporal-gate.mjs",

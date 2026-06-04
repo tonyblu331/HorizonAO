@@ -80,6 +80,32 @@ describe('AO production reference gate', () => {
     )
   })
 
+  it('keeps candidate-shaped product rows blocked by missing reference observations', () => {
+    const report = createAoProductionReferenceGateReport(
+      [
+        {
+          label: 'vbao confidence-guided candidate',
+          mode: 'vbao',
+          view: 'ao',
+          denoise: true,
+        },
+      ],
+      {
+        generatedAt: '2026-06-01T00:00:00.000Z',
+        sampleCount: 1024,
+      },
+    )
+
+    expect(report.productRows[0]).toMatchObject({
+      label: 'vbao confidence-guided candidate',
+      algorithm: 'vbao',
+      output: 'product',
+      observedFixtureCount: 0,
+      missingRequiredFixtureIds: AO_PRODUCTION_REFERENCE_REQUIRED_FIXTURE_IDS,
+      status: 'missing-reference-observation',
+    })
+  })
+
   it('compares product observations against the ray-cast report', () => {
     const report = createAoProductionReferenceGateReport(
       [

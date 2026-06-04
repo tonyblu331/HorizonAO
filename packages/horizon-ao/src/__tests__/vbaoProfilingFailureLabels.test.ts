@@ -28,14 +28,30 @@ const temporalTargetInventory = {
     owner: 'VBAOVelocityTemporalNode',
     format: 'RedFormat',
     type: 'HalfFloatType',
+    lifetime: 'reset-on-first-frame-resize-explicit-reset',
   },
   diagnostics: {
     owner: 'VBAOVelocityTemporalNode',
     format: 'RGBAFormat',
+    type: 'HalfFloatType',
+    lifetime: 'active-vbao-pipeline',
   },
-  velocity: { owner: 'host-pass' },
-  previousDepth: { owner: 'host-pass' },
-  previousNormal: { owner: 'host-pass' },
+  velocity: {
+    owner: 'host-pass',
+    source: 'mrt-velocity',
+    convention: 'historyUv = uv - velocity.xy * vec2(0.5, -0.5)',
+    lifetime: 'host-pass-current-frame',
+  },
+  previousDepth: {
+    owner: 'host-pass',
+    source: "PassNode.getPreviousTextureNode('depth')",
+    lifetime: 'host-pass-previous-frame',
+  },
+  previousNormal: {
+    owner: 'host-pass',
+    source: "PassNode.getPreviousTextureNode('output')",
+    lifetime: 'host-pass-previous-frame',
+  },
 }
 
 describe('VBAO profiling failure labels', () => {
@@ -275,6 +291,7 @@ describe('VBAO profiling failure labels', () => {
         passTimings: [
           { pass: 'raw', status: 'measured', gpuMs: 0.25 },
           { pass: 'temporal', status: 'measured', gpuMs: 0.08 },
+          { pass: 'diagnostics', status: 'measured', gpuMs: 0.02 },
           { pass: 'total-product', status: 'derived', gpuMs: 0.33 },
         ],
       },
@@ -284,6 +301,22 @@ describe('VBAO profiling failure labels', () => {
         temporalMode: 'velocity-internal',
         temporalDiagnostics,
         screenshotPath: 'artifacts/benchmarks/screenshots-ao-production/vbao-temporal-inventory.png',
+        latest: { medianFrameMs: 1.25, p95FrameMs: 2.5 },
+        passTimings: [
+          { pass: 'raw', status: 'measured', gpuMs: 0.25 },
+          { pass: 'temporal', status: 'measured', gpuMs: 0.08 },
+          { pass: 'diagnostics', status: 'measured', gpuMs: 0.02 },
+          { pass: 'total-product', status: 'derived', gpuMs: 0.33 },
+        ],
+      },
+      {
+        label: 'velocity temporal missing diagnostics pass timing',
+        mode: 'vbao',
+        denoise: true,
+        temporalMode: 'velocity-internal',
+        temporalDiagnostics,
+        temporalTargetInventory,
+        screenshotPath: 'artifacts/benchmarks/screenshots-ao-production/vbao-temporal-pass.png',
         latest: { medianFrameMs: 1.25, p95FrameMs: 2.5 },
         passTimings: [
           { pass: 'raw', status: 'measured', gpuMs: 0.25 },
@@ -303,6 +336,7 @@ describe('VBAO profiling failure labels', () => {
         passTimings: [
           { pass: 'raw', status: 'measured', gpuMs: 0.25 },
           { pass: 'temporal', status: 'measured', gpuMs: 0.08 },
+          { pass: 'diagnostics', status: 'measured', gpuMs: 0.02 },
           { pass: 'total-product', status: 'derived', gpuMs: 0.33 },
         ],
       },
@@ -348,6 +382,11 @@ describe('VBAO profiling failure labels', () => {
         label: 'velocity temporal missing target inventory',
         status: 'incomplete',
         missing: ['temporalTargetInventory'],
+      },
+      {
+        label: 'velocity temporal missing diagnostics pass timing',
+        status: 'incomplete',
+        missing: ['passTimings.diagnostics'],
       },
       {
         label: 'velocity temporal reset mismatch',

@@ -4,9 +4,11 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   AO_REQUIRED_REFERENCE_FIXTURE_IDS,
+  VBAO_PRODUCT_QUALITY_MATRIX,
   createProductPromotionVerdictRows,
   createReferenceGateStatusRows,
   createRenderedProxyReferenceComparisonRows,
+  createVbaoProductQualityMatrixStatusRows,
   writeProductionQualityReports,
 } from './productionReport.mjs'
 
@@ -32,7 +34,10 @@ function productRow(overrides = {}) {
     mode: 'vbao',
     view: 'ao',
     denoise: true,
-    fullResolutionVbao: true,
+    fullResolutionVbao: false,
+    vbaoResolution: 'half-res',
+    temporalMode: 'off',
+    sampleMode: 'product-preset',
     referenceObservations: completeReferenceObservations(),
     failureLabels: ['none'],
     ...overrides,
@@ -64,9 +69,71 @@ describe('production AO promotion verdicts', () => {
       view: 'ao',
       algorithm: 'vbao',
       output: 'product',
+      matrixRole: 'candidate',
+      matrixRows: [
+        'confidence-guided-candidate',
+        'compute-off-control',
+        'temporal-off-baseline',
+      ],
+      promotionBoundary: 'eligible-after-reference-threshold-and-same-cost-gates',
       verdict: 'pass',
       blockers: [],
     })
+  })
+
+  it('freezes and classifies the candidate/control row matrix', () => {
+    expect(VBAO_PRODUCT_QUALITY_MATRIX.map((row) => row.id)).toEqual([
+      'confidence-guided-candidate',
+      'scalar-control',
+      'same-cost-3x10',
+      'same-cost-2x16',
+      'full-res-product-control',
+      'compute-off-control',
+      'compute-smoke-observability',
+      'temporal-off-baseline',
+      'velocity-internal-private',
+    ])
+
+    const rows = createVbaoProductQualityMatrixStatusRows([
+      productRow({ label: 'confidence-guided candidate' }),
+      productRow({ label: 'scalar control', receiverConfidenceMode: 'scalar-control' }),
+      productRow({ label: 'same-cost raw samples', sampleMode: 'same-cost-3x10' }),
+      productRow({ label: 'full-res product', fullResolutionVbao: true, vbaoResolution: 'full-res' }),
+      productRow({ label: 'compute off' }),
+      productRow({ label: 'compute smoke', computeCandidateLabel: 'sector-confidence-smoke' }),
+      productRow({ label: 'temporal off' }),
+      productRow({ label: 'velocity internal', temporalMode: 'velocity-internal' }),
+    ])
+
+    expect(rows.map((row) => [row.label, row.matrixRole])).toEqual([
+      ['confidence-guided candidate', 'candidate'],
+      ['scalar control', 'control'],
+      ['same-cost raw samples', 'control'],
+      ['full-res product', 'control'],
+      ['compute off', 'candidate'],
+      ['compute smoke', 'observability'],
+      ['temporal off', 'candidate'],
+      ['velocity internal', 'private'],
+    ])
+    expect(rows.find((row) => row.label === 'scalar control')?.matrixRows).toContain('scalar-control')
+    expect(rows.find((row) => row.label === 'same-cost raw samples')?.sampleCost).toBe(
+      'same-cost-raw-samples',
+    )
+    expect(rows.find((row) => row.label === 'full-res product')?.matrixRows).toContain(
+      'full-res-product-control',
+    )
+    expect(rows.find((row) => row.label === 'compute off')?.matrixRows).toContain(
+      'compute-off-control',
+    )
+    expect(rows.find((row) => row.label === 'compute smoke')?.matrixRows).toContain(
+      'compute-smoke-observability',
+    )
+    expect(rows.find((row) => row.label === 'temporal off')?.matrixRows).toContain(
+      'temporal-off-baseline',
+    )
+    expect(rows.find((row) => row.label === 'velocity internal')?.matrixRows).toContain(
+      'velocity-internal-private',
+    )
   })
 
   it('carries scene, resolution, view, algorithm, and output dimensions', () => {
@@ -130,7 +197,7 @@ describe('production AO promotion verdicts', () => {
     expect(verdicts[0]?.blockers).toContain('failureLabel.edge-bleed')
   })
 
-  it('keeps private evidence lanes candidate-only', () => {
+  it('keeps private and control evidence lanes non-promotable with distinct verdicts', () => {
     const verdicts = createProductPromotionVerdictRows(
       [
         productRow({ label: 'velocity temporal', temporalMode: 'velocity-internal' }),
@@ -148,7 +215,8 @@ describe('production AO promotion verdicts', () => {
       },
     )
 
-    expect(verdicts.map((row) => row.verdict)).toEqual(['candidate-only', 'candidate-only'])
+    expect(verdicts.map((row) => row.verdict)).toEqual(['private-only', 'control-only'])
+    expect(verdicts.map((row) => row.matrixRole)).toEqual(['private', 'control'])
   })
 
   it('does not treat n/a compute candidate sentinels as private lanes', () => {
@@ -168,7 +236,7 @@ describe('production AO promotion verdicts', () => {
     expect(verdicts[0]?.verdict).toBe('pass')
   })
 
-  it('keeps benchmark-shaped cleanup rows candidate-only', () => {
+  it('keeps benchmark-shaped cleanup rows control-only', () => {
     const verdicts = createProductPromotionVerdictRows(
       [productRow({ label: 'cleanup skip', cleanupMode: 'skip' })],
       {
@@ -177,10 +245,10 @@ describe('production AO promotion verdicts', () => {
       },
     )
 
-    expect(verdicts.map((row) => row.verdict)).toEqual(['candidate-only'])
+    expect(verdicts.map((row) => row.verdict)).toEqual(['control-only'])
   })
 
-  it('keeps same-cost and spatial sample variants candidate-only', () => {
+  it('keeps same-cost and spatial sample variants control-only', () => {
     const verdicts = createProductPromotionVerdictRows(
       [
         productRow({ label: 'same cost', sampleMode: 'same-cost-3x10' }),
@@ -198,7 +266,7 @@ describe('production AO promotion verdicts', () => {
       },
     )
 
-    expect(verdicts.map((row) => row.verdict)).toEqual(['candidate-only', 'candidate-only'])
+    expect(verdicts.map((row) => row.verdict)).toEqual(['control-only', 'control-only'])
   })
 
   it('includes VBAO raw-debug rows in the promotion matrix', () => {
@@ -212,7 +280,8 @@ describe('production AO promotion verdicts', () => {
 
     expect(verdicts[0]).toMatchObject({
       output: 'raw-debug',
-      verdict: 'pass',
+      matrixRole: 'diagnostic',
+      verdict: 'diagnostic-only',
     })
   })
 
@@ -270,6 +339,7 @@ describe('production AO promotion verdicts', () => {
         '| 1x1 | vbao | product-preset | off | off | half-res | ao | confidence-diagnostic |',
       )
       expect(report.productPromotionRows[0]?.output).toBe('confidence-diagnostic')
+      expect(report.productPromotionRows[0]?.matrixRole).toBe('diagnostic')
     } finally {
       await rm(tempDir, { force: true, recursive: true })
     }
@@ -368,7 +438,7 @@ describe('production AO promotion verdicts', () => {
     expect(verdicts[0]?.blockers).toContain('fail')
   })
 
-  it('keeps non-default noise-source candidates candidate-only', () => {
+  it('keeps non-default noise-source candidates control-only', () => {
     const verdicts = createProductPromotionVerdictRows(
       [productRow({ noiseSource: 'ign' })],
       {
@@ -377,7 +447,7 @@ describe('production AO promotion verdicts', () => {
       },
     )
 
-    expect(verdicts[0]?.verdict).toBe('candidate-only')
+    expect(verdicts[0]?.verdict).toBe('control-only')
   })
 
   it('includes beauty rows in the promotion matrix', () => {
@@ -409,7 +479,7 @@ describe('production AO promotion verdicts', () => {
           rows: [
             productRow({
               resolution: { width: 1920, height: 1080 },
-              vbaoResolution: 'full',
+              vbaoResolution: 'half-res',
               qualityMetrics: {
                 patternNoiseScore: 0,
                 stripeScore: 0,
@@ -431,6 +501,7 @@ describe('production AO promotion verdicts', () => {
       const report = JSON.parse(await readFile(outputJson, 'utf8'))
       expect(report.productPromotionRows[0]).toMatchObject({
         label: 'vbao product ao',
+        matrixRole: 'candidate',
         verdict: 'pass',
       })
       expect(report.renderedProxyReferenceRows[0]).toMatchObject({

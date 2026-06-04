@@ -308,6 +308,11 @@ function getRequestedVbaoComputeCandidateMode(): VbaoComputeCandidateMode {
   return requested === VBAO_COMPUTE_CANDIDATE_LABEL ? VBAO_COMPUTE_CANDIDATE_LABEL : 'off'
 }
 
+function getRequestedVbaoReceiverConfidenceMode(): VbaoReceiverConfidenceMode {
+  const requested = new URLSearchParams(window.location.search).get('vbaoReceiverConfidence')
+  return requested === 'scalar-control' ? 'scalar-control' : 'confidence-guided'
+}
+
 function getRequestedVbaoSoftness(): number {
   const requested = Number(new URLSearchParams(window.location.search).get('vbaoSoftness') ?? 0.2)
   return Number.isFinite(requested) ? Math.max(0, Math.min(1, requested)) : 0.2
@@ -478,6 +483,7 @@ async function runGtaoReferenceScene(
   const vbaoHostTaaMode = getRequestedVbaoHostTaaMode()
   const vbaoCleanupMode = getRequestedVbaoCleanupMode()
   const vbaoComputeCandidateMode = getRequestedVbaoComputeCandidateMode()
+  const vbaoReceiverConfidenceMode = getRequestedVbaoReceiverConfidenceMode()
   const vbaoSoftness = getRequestedVbaoSoftness()
   const cameraView = getRequestedCameraView()
   let vbaoReconstructionStage = getRequestedVbaoReconstructionStage()
@@ -493,6 +499,7 @@ async function runGtaoReferenceScene(
         vbaoHostTaaMode,
         vbaoCleanupMode,
         vbaoComputeCandidateMode,
+        vbaoReceiverConfidenceMode,
         vbaoSoftness,
         trackGpuPassTiming,
         () => vbaoReconstructionStage,
@@ -644,6 +651,7 @@ async function runGtaoReferenceScene(
       vbaoComputeCandidateTiming: usesVbao
         ? (pipelines?.getVbaoComputeCandidateTiming() ?? null)
         : null,
+      vbaoReceiverConfidenceMode: usesVbao ? vbaoReceiverConfidenceMode : 'n/a',
       vbaoSamplePreset: usesVbao
         ? vbaoSampleMode !== 'product-preset'
           ? vbaoSampleMode
@@ -713,6 +721,7 @@ function createReferencePipelines(
   vbaoHostTaaMode: VbaoHostTaaMode,
   vbaoCleanupMode: VbaoCleanupMode,
   vbaoComputeCandidateMode: VbaoComputeCandidateMode,
+  vbaoReceiverConfidenceMode: VbaoReceiverConfidenceMode,
   vbaoSoftness: number,
   trackGpuPassTiming: boolean,
   getVbaoReconstructionStage: () => VbaoReconstructionStage,
@@ -919,6 +928,7 @@ function createReferencePipelines(
     | {
         readonly fullResolution: boolean
         readonly cleanupMode: VbaoCleanupMode
+        readonly receiverConfidenceMode: VbaoReceiverConfidenceMode
         readonly node: VBAONode
         readonly stageNodes: readonly {
           dispose: () => void
@@ -973,8 +983,11 @@ function createReferencePipelines(
         : {}),
     }
     const vbaoNode = new VBAONode(prePassDepth, prePassNormal, camera, vbaoOptions)
+    const usesReceiverConfidence =
+      vbaoReceiverConfidenceMode === 'confidence-guided' &&
+      (vbaoComputeCandidateMode === VBAO_COMPUTE_CANDIDATE_LABEL || vbaoSoftness > 0)
     const receiverConfidenceNode =
-      vbaoComputeCandidateMode === VBAO_COMPUTE_CANDIDATE_LABEL || vbaoSoftness > 0
+      usesReceiverConfidence
         ? new VBAOReceiverConfidenceNode(
             prePassDepth,
             prePassNormal,
@@ -1136,6 +1149,7 @@ function createReferencePipelines(
     return {
       fullResolution,
       cleanupMode: vbaoCleanupMode,
+      receiverConfidenceMode: vbaoReceiverConfidenceMode,
       node: vbaoNode,
       stageNodes,
       pipelines: {
@@ -1179,7 +1193,8 @@ function createReferencePipelines(
   const activeVbaoPipelines = (fullResolutionVbao: boolean) => {
     if (
       activeVbao?.fullResolution === fullResolutionVbao &&
-      activeVbao.cleanupMode === vbaoCleanupMode
+      activeVbao.cleanupMode === vbaoCleanupMode &&
+      activeVbao.receiverConfidenceMode === vbaoReceiverConfidenceMode
     ) {
       return activeVbao.pipelines
     }

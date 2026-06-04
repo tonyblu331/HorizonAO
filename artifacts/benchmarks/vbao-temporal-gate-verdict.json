@@ -1,15 +1,17 @@
 {
-  "generatedAt": "2026-06-02T21:35:14.187Z",
+  "generatedAt": "2026-06-04T18:08:40.437Z",
   "reproducibility": {
     "cleanCheckout": false,
-    "basis": "Default *-latest benchmark inputs are local generated artifacts ignored by git; provide explicit tracked input paths or rerun the full matrix before treating this verdict as clean-checkout reproducible."
+    "basis": "Clean-checkout reproducibility requires every explicit temporal gate input file and referenced screenshot to be tracked by git with no staged or unstaged changes."
   },
   "inputs": {
-    "offJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-off-latest.json",
-    "hostJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-host-latest.json",
-    "hostTaaJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-host-traa-latest.json",
-    "velocityJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-velocity-internal-smoke.json",
-    "alternativeJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-spatial-ultra-latest.json"
+    "offJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-off-static.json",
+    "hostJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-host-static.json",
+    "hostTaaJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-host-traa-static.json",
+    "velocityJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-velocity-internal-static.json",
+    "resetJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-reset-smoke.json",
+    "motionJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-motion-combined.json",
+    "alternativeJsonPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\vbao-temporal-spatial-ultra-static.json"
   },
   "thresholds": {
     "materialPatternWin": 0.0005,
@@ -18,15 +20,25 @@
     "thinGapRegressionTolerance": 0.0003
   },
   "hostTaaEvidence": true,
-  "hasHostTaaMaterialPatternWin": false,
+  "hasHostTaaMaterialPatternWin": true,
   "hasHostTaaStripeRegression": true,
   "hasHostTaaBlockingFailureLabels": true,
   "sameCostAlternativeEvidence": true,
+  "hostTaaLaneComplete": true,
+  "velocityLaneComplete": false,
+  "resetEvidenceComplete": false,
+  "motionEvidenceCompleteForReview": false,
   "motionDisocclusionEvidence": false,
+  "observedMotionEvidenceKinds": [
+    "camera-motion",
+    "object-motion",
+    "disocclusion"
+  ],
+  "missingMotionEvidenceKinds": [],
   "internalTemporalEvidence": false,
   "evaluatedInternalEvidence": true,
   "hasInternalMaterialPatternWin": false,
-  "hasInternalStripeRegression": true,
+  "hasInternalStripeRegression": false,
   "hasInternalEdgeRegression": false,
   "hasInternalThinGapRegression": false,
   "hasInternalBlockingFailureLabels": true,
@@ -36,118 +48,11 @@
   "reason": "Host sampling has host TAA/TRAA evidence, but it did not show a material product pattern/noise win without stripe regression.",
   "missingHostRows": [],
   "missingHostTaaRows": [],
+  "missingResetRows": [],
+  "missingMotionRows": [],
+  "missingVelocityDiagnosticsRows": [],
+  "missingVelocityTargetInventoryRows": [],
   "comparisons": [
-    {
-      "key": "museum|1280x720|vbao|product-preset|full-res|beauty|raw-debug",
-      "scene": "museum",
-      "resolution": {
-        "width": 1280,
-        "height": 720
-      },
-      "view": "beauty",
-      "output": "raw-debug",
-      "off": {
-        "patternNoiseScore": 0.03466015338821248,
-        "stripeScore": 0.15600342542317439,
-        "edgeBleedProxy": 0.029077962579220865,
-        "thinGapPreservationProxy": 0.006795901191394423,
-        "totalProductGpuMs": null,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-off\\1280x720-museum-vbao-product-preset-off-full-res-raw-debug-beauty.png"
-      },
-      "host": {
-        "patternNoiseScore": 0.03468694907038123,
-        "stripeScore": 0.15584036659091471,
-        "edgeBleedProxy": 0.02918132405066903,
-        "thinGapPreservationProxy": 0.00685991483193183,
-        "totalProductGpuMs": null,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-host\\1280x720-museum-vbao-product-preset-host-full-res-raw-debug-beauty.png"
-      },
-      "delta": {
-        "patternNoiseScore": 0.00002679568216874817,
-        "stripeScore": -0.00016305883225967155,
-        "edgeBleedProxy": 0.00010336147144816496,
-        "thinGapPreservationProxy": 0.00006401364053740689
-      },
-      "materialPatternWin": false,
-      "stripeRegression": false,
-      "edgeRegression": false,
-      "thinGapRegression": false,
-      "evidenceComplete": true
-    },
-    {
-      "key": "museum|1280x720|vbao|product-preset|full-res|beauty|product",
-      "scene": "museum",
-      "resolution": {
-        "width": 1280,
-        "height": 720
-      },
-      "view": "beauty",
-      "output": "product",
-      "off": {
-        "patternNoiseScore": 0.03446893186721689,
-        "stripeScore": 0.15681961471997538,
-        "edgeBleedProxy": 0.028723616663225,
-        "thinGapPreservationProxy": 0.006121885730106851,
-        "totalProductGpuMs": 1.728512,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-off\\1280x720-museum-vbao-product-preset-off-full-res-product-beauty.png"
-      },
-      "host": {
-        "patternNoiseScore": 0.034512399807070986,
-        "stripeScore": 0.15707539828105185,
-        "edgeBleedProxy": 0.028862547602431024,
-        "thinGapPreservationProxy": 0.006176151575969497,
-        "totalProductGpuMs": 1.2472320000000001,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-host\\1280x720-museum-vbao-product-preset-host-full-res-product-beauty.png"
-      },
-      "delta": {
-        "patternNoiseScore": 0.00004346793985409575,
-        "stripeScore": 0.0002557835610764725,
-        "edgeBleedProxy": 0.00013893093920602437,
-        "thinGapPreservationProxy": 0.00005426584586264594
-      },
-      "materialPatternWin": false,
-      "stripeRegression": false,
-      "edgeRegression": false,
-      "thinGapRegression": false,
-      "evidenceComplete": true
-    },
-    {
-      "key": "museum|1280x720|vbao|product-preset|full-res|ao|raw-debug",
-      "scene": "museum",
-      "resolution": {
-        "width": 1280,
-        "height": 720
-      },
-      "view": "ao",
-      "output": "raw-debug",
-      "off": {
-        "patternNoiseScore": 0.02312100919738814,
-        "stripeScore": 0.18957183667160024,
-        "edgeBleedProxy": 0.009859972946227542,
-        "thinGapPreservationProxy": 0.003395627373683447,
-        "totalProductGpuMs": null,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-off\\1280x720-museum-vbao-product-preset-off-full-res-raw-debug-ao.png"
-      },
-      "host": {
-        "patternNoiseScore": 0.02312100919738814,
-        "stripeScore": 0.18957183667160024,
-        "edgeBleedProxy": 0.009859972946227542,
-        "thinGapPreservationProxy": 0.003395627373683447,
-        "totalProductGpuMs": null,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-host\\1280x720-museum-vbao-product-preset-host-full-res-raw-debug-ao.png"
-      },
-      "delta": {
-        "patternNoiseScore": 0,
-        "stripeScore": 0,
-        "edgeBleedProxy": 0,
-        "thinGapPreservationProxy": 0
-      },
-      "materialPatternWin": false,
-      "stripeRegression": false,
-      "edgeRegression": false,
-      "thinGapRegression": false,
-      "evidenceComplete": true
-    },
     {
       "key": "museum|1280x720|vbao|product-preset|full-res|ao|product",
       "scene": "museum",
@@ -158,28 +63,28 @@
       "view": "ao",
       "output": "product",
       "off": {
-        "patternNoiseScore": 0.02304605396520259,
-        "stripeScore": 0.19013703327470569,
-        "edgeBleedProxy": 0.009691713304804058,
-        "thinGapPreservationProxy": 0.0030762807959085936,
-        "totalProductGpuMs": 1.4776319999999998,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-off\\1280x720-museum-vbao-product-preset-off-full-res-product-ao.png"
+        "patternNoiseScore": 0.07638805682840145,
+        "stripeScore": 0.0819532747829104,
+        "edgeBleedProxy": 0.054329476184691444,
+        "thinGapPreservationProxy": 0.023261789826750163,
+        "totalProductGpuMs": 1.118208,
+        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-off-static\\1280x720-museum-vbao-product-preset-off-full-res-product-ao.png"
       },
       "host": {
-        "patternNoiseScore": 0.023048248842570118,
-        "stripeScore": 0.19069002180791952,
-        "edgeBleedProxy": 0.00971149170656741,
-        "thinGapPreservationProxy": 0.0031085032575860973,
-        "totalProductGpuMs": 1.390592,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-host\\1280x720-museum-vbao-product-preset-host-full-res-product-ao.png"
+        "patternNoiseScore": 0.02943662853891791,
+        "stripeScore": 0.14887001952284354,
+        "edgeBleedProxy": 0.01699648472441682,
+        "thinGapPreservationProxy": 0.010297582360974524,
+        "totalProductGpuMs": 1.2820479999999999,
+        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-host-static\\1280x720-museum-vbao-product-preset-host-full-res-product-ao.png"
       },
       "delta": {
-        "patternNoiseScore": 0.000002194877367529824,
-        "stripeScore": 0.0005529885332138385,
-        "edgeBleedProxy": 0.000019778401763351564,
-        "thinGapPreservationProxy": 0.00003222246167750367
+        "patternNoiseScore": -0.046951428289483545,
+        "stripeScore": 0.06691674473993314,
+        "edgeBleedProxy": -0.03733299146027462,
+        "thinGapPreservationProxy": -0.012964207465775639
       },
-      "materialPatternWin": false,
+      "materialPatternWin": true,
       "stripeRegression": true,
       "edgeRegression": false,
       "thinGapRegression": false,
@@ -188,43 +93,6 @@
   ],
   "hostTaaComparisons": [
     {
-      "key": "museum|1280x720|vbao|product-preset|full-res|beauty|product",
-      "scene": "museum",
-      "resolution": {
-        "width": 1280,
-        "height": 720
-      },
-      "view": "beauty",
-      "output": "product",
-      "off": {
-        "patternNoiseScore": 0.03446893186721689,
-        "stripeScore": 0.15681961471997538,
-        "edgeBleedProxy": 0.028723616663225,
-        "thinGapPreservationProxy": 0.006121885730106851,
-        "totalProductGpuMs": 1.728512,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-off\\1280x720-museum-vbao-product-preset-off-full-res-product-beauty.png"
-      },
-      "host": {
-        "patternNoiseScore": 0.034235640534003145,
-        "stripeScore": 0.15773746797350943,
-        "edgeBleedProxy": 0.02868936740825989,
-        "thinGapPreservationProxy": 0.006108382135188855,
-        "totalProductGpuMs": 1.743872,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-host-traa\\1280x720-museum-vbao-product-preset-host-traa-full-res-product-beauty.png"
-      },
-      "delta": {
-        "patternNoiseScore": -0.00023329133321374484,
-        "stripeScore": 0.0009178532535340511,
-        "edgeBleedProxy": -0.00003424925496510814,
-        "thinGapPreservationProxy": -0.00001350359491799659
-      },
-      "materialPatternWin": false,
-      "stripeRegression": true,
-      "edgeRegression": false,
-      "thinGapRegression": false,
-      "evidenceComplete": true
-    },
-    {
       "key": "museum|1280x720|vbao|product-preset|full-res|ao|product",
       "scene": "museum",
       "resolution": {
@@ -234,28 +102,28 @@
       "view": "ao",
       "output": "product",
       "off": {
-        "patternNoiseScore": 0.02304605396520259,
-        "stripeScore": 0.19013703327470569,
-        "edgeBleedProxy": 0.009691713304804058,
-        "thinGapPreservationProxy": 0.0030762807959085936,
-        "totalProductGpuMs": 1.4776319999999998,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-off\\1280x720-museum-vbao-product-preset-off-full-res-product-ao.png"
+        "patternNoiseScore": 0.07638805682840145,
+        "stripeScore": 0.0819532747829104,
+        "edgeBleedProxy": 0.054329476184691444,
+        "thinGapPreservationProxy": 0.023261789826750163,
+        "totalProductGpuMs": 1.118208,
+        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-off-static\\1280x720-museum-vbao-product-preset-off-full-res-product-ao.png"
       },
       "host": {
-        "patternNoiseScore": 0.023047157153994486,
-        "stripeScore": 0.1906770011476639,
-        "edgeBleedProxy": 0.009796374144033494,
-        "thinGapPreservationProxy": 0.003039007974966837,
-        "totalProductGpuMs": 1.509376,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-host-traa\\1280x720-museum-vbao-product-preset-host-traa-full-res-product-ao.png"
+        "patternNoiseScore": 0.04545482202896617,
+        "stripeScore": 0.11493169715741151,
+        "edgeBleedProxy": 0.03872055124264603,
+        "thinGapPreservationProxy": 0.02119198270779266,
+        "totalProductGpuMs": 1.2892160000000001,
+        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-host-traa-static\\1280x720-museum-vbao-product-preset-host-traa-full-res-product-ao.png"
       },
       "delta": {
-        "patternNoiseScore": 0.000001103188791897608,
-        "stripeScore": 0.000539967872958208,
-        "edgeBleedProxy": 0.00010466083922943542,
-        "thinGapPreservationProxy": -0.0000372728209417565
+        "patternNoiseScore": -0.030933234799435286,
+        "stripeScore": 0.03297842237450112,
+        "edgeBleedProxy": -0.015608924942045417,
+        "thinGapPreservationProxy": -0.0020698071189575035
       },
-      "materialPatternWin": false,
+      "materialPatternWin": true,
       "stripeRegression": true,
       "edgeRegression": false,
       "thinGapRegression": false,
@@ -273,58 +141,35 @@
       "view": "ao",
       "output": "product",
       "off": {
-        "patternNoiseScore": 0.02304605396520259,
-        "stripeScore": 0.19013703327470569,
-        "edgeBleedProxy": 0.009691713304804058,
-        "thinGapPreservationProxy": 0.0030762807959085936,
-        "totalProductGpuMs": 1.4776319999999998,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-off\\1280x720-museum-vbao-product-preset-off-full-res-product-ao.png"
+        "patternNoiseScore": 0.07638805682840145,
+        "stripeScore": 0.0819532747829104,
+        "edgeBleedProxy": 0.054329476184691444,
+        "thinGapPreservationProxy": 0.023261789826750163,
+        "totalProductGpuMs": 1.118208,
+        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-off-static\\1280x720-museum-vbao-product-preset-off-full-res-product-ao.png"
       },
       "host": {
-        "patternNoiseScore": 0.022946087383882978,
-        "stripeScore": 0.19093708650012192,
-        "edgeBleedProxy": 0.008516504419658436,
-        "thinGapPreservationProxy": 0.0025579784251050686,
-        "totalProductGpuMs": 1.4161920000000001,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-velocity-internal-smoke\\1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao.png"
+        "patternNoiseScore": 0.07638805682840145,
+        "stripeScore": 0.0819532747829104,
+        "edgeBleedProxy": 0.054329476184691444,
+        "thinGapPreservationProxy": 0.023261789826750163,
+        "totalProductGpuMs": 1.160192,
+        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-velocity-internal-static\\1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao.png"
       },
       "delta": {
-        "patternNoiseScore": -0.00009996658131961045,
-        "stripeScore": 0.0008000532254162362,
-        "edgeBleedProxy": -0.0011752088851456222,
-        "thinGapPreservationProxy": -0.000518302370803525
+        "patternNoiseScore": 0,
+        "stripeScore": 0,
+        "edgeBleedProxy": 0,
+        "thinGapPreservationProxy": 0
       },
       "materialPatternWin": false,
-      "stripeRegression": true,
+      "stripeRegression": false,
       "edgeRegression": false,
       "thinGapRegression": false,
-      "evidenceComplete": true
+      "evidenceComplete": false
     }
   ],
   "alternativeComparisons": [
-    {
-      "key": "museum|1280x720|vbao|full-res|beauty|product",
-      "scene": "museum",
-      "resolution": {
-        "width": 1280,
-        "height": 720
-      },
-      "view": "beauty",
-      "output": "product",
-      "sampleMode": "spatial-ultra",
-      "evidenceComplete": true,
-      "off": {
-        "patternNoiseScore": 0.03446893186721689,
-        "stripeScore": 0.15681961471997538,
-        "totalProductGpuMs": 1.728512
-      },
-      "alternative": {
-        "patternNoiseScore": 0.03445760667917555,
-        "stripeScore": 0.15696389580767373,
-        "totalProductGpuMs": 1.800192,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-spatial-ultra\\1280x720-museum-vbao-spatial-ultra-off-full-res-product-beauty.png"
-      }
-    },
     {
       "key": "museum|1280x720|vbao|full-res|ao|product",
       "scene": "museum",
@@ -337,15 +182,15 @@
       "sampleMode": "spatial-ultra",
       "evidenceComplete": true,
       "off": {
-        "patternNoiseScore": 0.02304605396520259,
-        "stripeScore": 0.19013703327470569,
-        "totalProductGpuMs": 1.4776319999999998
+        "patternNoiseScore": 0.07638805682840145,
+        "stripeScore": 0.0819532747829104,
+        "totalProductGpuMs": 1.118208
       },
       "alternative": {
-        "patternNoiseScore": 0.023068454971904545,
-        "stripeScore": 0.19027658260457248,
-        "totalProductGpuMs": 1.875968,
-        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-spatial-ultra\\1280x720-museum-vbao-spatial-ultra-off-full-res-product-ao.png"
+        "patternNoiseScore": 0.027452794047312348,
+        "stripeScore": 0.16252591266575478,
+        "totalProductGpuMs": 1.564672,
+        "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-spatial-ultra-static\\1280x720-museum-vbao-spatial-ultra-off-full-res-product-ao.png"
       }
     }
   ]

@@ -31,6 +31,99 @@ export const VBAO_RECONSTRUCTION_DIAGNOSTIC_STAGES = ['confidence']
 export const AO_DEFAULT_PRODUCT_SAMPLE_MODES = [undefined, 'product-preset', 'n/a']
 export const AO_DEFAULT_PRODUCT_NOISE_SOURCES = [undefined, 'phase-atlas-stable-hash', 'n/a']
 
+export const VBAO_PRODUCT_QUALITY_MATRIX = Object.freeze([
+  Object.freeze({
+    id: 'confidence-guided-candidate',
+    role: 'candidate',
+    receiverConfidence: 'confidence-guided',
+    sampleCost: 'product-preset',
+    resolution: 'half-res',
+    compute: 'compute-off',
+    temporal: 'temporal-off',
+    promotionBoundary: 'eligible-after-reference-threshold-and-same-cost-gates',
+  }),
+  Object.freeze({
+    id: 'scalar-control',
+    role: 'control',
+    receiverConfidence: 'scalar-control',
+    sampleCost: 'product-preset',
+    resolution: 'candidate-resolution',
+    compute: 'compute-off',
+    temporal: 'temporal-off',
+    promotionBoundary: 'control-only',
+  }),
+  Object.freeze({
+    id: 'same-cost-3x10',
+    role: 'control',
+    receiverConfidence: 'confidence-guided',
+    sampleCost: 'same-cost-raw-samples',
+    resolution: 'candidate-resolution',
+    compute: 'compute-off',
+    temporal: 'temporal-off',
+    promotionBoundary: 'control-only',
+  }),
+  Object.freeze({
+    id: 'same-cost-2x16',
+    role: 'control',
+    receiverConfidence: 'confidence-guided',
+    sampleCost: 'same-cost-raw-samples',
+    resolution: 'candidate-resolution',
+    compute: 'compute-off',
+    temporal: 'temporal-off',
+    promotionBoundary: 'control-only',
+  }),
+  Object.freeze({
+    id: 'full-res-product-control',
+    role: 'control',
+    receiverConfidence: 'confidence-guided',
+    sampleCost: 'product-preset',
+    resolution: 'full-res',
+    compute: 'compute-off',
+    temporal: 'temporal-off',
+    promotionBoundary: 'control-only',
+  }),
+  Object.freeze({
+    id: 'compute-off-control',
+    role: 'control',
+    receiverConfidence: 'any',
+    sampleCost: 'any',
+    resolution: 'any',
+    compute: 'compute-off',
+    temporal: 'any',
+    promotionBoundary: 'control-axis',
+  }),
+  Object.freeze({
+    id: 'compute-smoke-observability',
+    role: 'observability',
+    receiverConfidence: 'confidence-guided',
+    sampleCost: 'product-preset',
+    resolution: 'candidate-resolution',
+    compute: 'sector-confidence-smoke',
+    temporal: 'temporal-off',
+    promotionBoundary: 'observability-only',
+  }),
+  Object.freeze({
+    id: 'temporal-off-baseline',
+    role: 'baseline',
+    receiverConfidence: 'any',
+    sampleCost: 'any',
+    resolution: 'any',
+    compute: 'any',
+    temporal: 'temporal-off',
+    promotionBoundary: 'baseline-axis',
+  }),
+  Object.freeze({
+    id: 'velocity-internal-private',
+    role: 'private',
+    receiverConfidence: 'confidence-guided',
+    sampleCost: 'product-preset',
+    resolution: 'candidate-resolution',
+    compute: 'compute-off',
+    temporal: 'velocity-internal',
+    promotionBoundary: 'private-only',
+  }),
+])
+
 export function classifyFailureLabels(row) {
   if (row.mode !== 'vbao') return ['none']
   if (row.fullResolutionVbao === false) return ['noise']
@@ -138,19 +231,179 @@ export function createReferenceGateStatusRows(rows) {
   })
 }
 
-function isPrivateCandidateRow(row) {
-  const computeCandidateLabel = row.computeCandidateLabel ?? row.latest?.vbaoComputeCandidateLabel
+function receiverConfidenceModeForRow(row) {
+  if (row.mode !== 'vbao') return 'n/a'
+  return row.receiverConfidenceMode ?? row.latest?.vbaoReceiverConfidenceMode ?? 'confidence-guided'
+}
 
-  return (
-    !AO_DEFAULT_PRODUCT_SAMPLE_MODES.includes(row.sampleMode) ||
-    !AO_DEFAULT_PRODUCT_NOISE_SOURCES.includes(row.noiseSource) ||
-    row.temporalMode === 'host' ||
-    row.temporalMode === 'velocity-internal' ||
-    row.receiverConfidenceMode === 'scalar-control' ||
-    (computeCandidateLabel !== undefined && computeCandidateLabel !== 'n/a') ||
-    row.cleanupMode === 'skip' ||
-    row.vbaoCleanupMode === 'skip'
-  )
+function sampleCostForRow(row) {
+  if (row.mode !== 'vbao') return 'n/a'
+  if (row.sampleMode === 'same-cost-3x10' || row.sampleMode === 'same-cost-2x16') {
+    return 'same-cost-raw-samples'
+  }
+  if (row.sampleMode === 'spatial-ultra') return 'extra-raw-samples'
+  if (row.sampleMode === 'debug-override') return 'debug-override'
+  return 'product-preset'
+}
+
+function resolutionLaneForRow(row) {
+  if (row.mode !== 'vbao') return 'n/a'
+  if (row.fullResolutionVbao === true || row.vbaoResolution === 'full-res' || row.vbaoResolution === 'full') {
+    return 'full-res'
+  }
+  if (row.fullResolutionVbao === false || row.vbaoResolution === 'half-res' || row.vbaoResolution === 'half') {
+    return 'half-res'
+  }
+  return 'unknown-resolution'
+}
+
+function computeModeForRow(row) {
+  const computeCandidateLabel = row.computeCandidateLabel ?? row.latest?.vbaoComputeCandidateLabel
+  if (row.mode !== 'vbao') return 'n/a'
+  if (computeCandidateLabel === undefined || computeCandidateLabel === 'n/a' || computeCandidateLabel === 'off') {
+    return 'compute-off'
+  }
+  if (computeCandidateLabel === 'sector-confidence-smoke') return 'sector-confidence-smoke'
+  return String(computeCandidateLabel)
+}
+
+function temporalModeForRow(row) {
+  if (row.mode !== 'vbao') return 'n/a'
+  if (row.temporalMode === undefined || row.temporalMode === 'n/a' || row.temporalMode === 'off') {
+    return 'temporal-off'
+  }
+  return row.temporalMode
+}
+
+function matrixRowIdsForClassification(row, classification) {
+  if (row.mode !== 'vbao') return ['comparison-row']
+
+  const matrixRows = []
+
+  if (
+    row.denoise === true &&
+    classification.receiverConfidenceMode === 'confidence-guided' &&
+    classification.sampleCost === 'product-preset' &&
+    classification.resolution === 'half-res' &&
+    classification.computeMode === 'compute-off' &&
+    classification.temporalMode === 'temporal-off' &&
+    row.vbaoReconstructionStage !== 'confidence' &&
+    row.cleanupMode !== 'skip' &&
+    row.vbaoCleanupMode !== 'skip'
+  ) {
+    matrixRows.push('confidence-guided-candidate')
+  }
+  if (classification.receiverConfidenceMode === 'scalar-control') matrixRows.push('scalar-control')
+  if (row.sampleMode === 'same-cost-3x10') matrixRows.push('same-cost-3x10')
+  if (row.sampleMode === 'same-cost-2x16') matrixRows.push('same-cost-2x16')
+  if (classification.resolution === 'full-res') matrixRows.push('full-res-product-control')
+  if (classification.computeMode === 'compute-off') matrixRows.push('compute-off-control')
+  if (classification.computeMode === 'sector-confidence-smoke') {
+    matrixRows.push('compute-smoke-observability')
+  }
+  if (classification.temporalMode === 'temporal-off') matrixRows.push('temporal-off-baseline')
+  if (classification.temporalMode === 'velocity-internal') matrixRows.push('velocity-internal-private')
+
+  if (row.vbaoReconstructionStage === 'confidence') matrixRows.push('confidence-diagnostic')
+  if (row.denoise === false) matrixRows.push('raw-debug-diagnostic')
+  if (row.cleanupMode === 'skip' || row.vbaoCleanupMode === 'skip') matrixRows.push('cleanup-skip-control')
+  if (!AO_DEFAULT_PRODUCT_NOISE_SOURCES.includes(row.noiseSource)) matrixRows.push('noise-source-control')
+  if (row.sampleMode === 'spatial-ultra') matrixRows.push('spatial-extra-samples-control')
+  if (row.sampleMode === 'debug-override') matrixRows.push('debug-sample-control')
+
+  return matrixRows.length === 0 ? ['unclassified-vbao-row'] : matrixRows
+}
+
+function matrixRoleForRow(row, classification, matrixRows) {
+  if (row.mode !== 'vbao') return 'comparison'
+  if (classification.computeMode === 'sector-confidence-smoke') return 'observability'
+  if (classification.temporalMode === 'velocity-internal' || classification.temporalMode === 'host') {
+    return 'private'
+  }
+  if (matrixRows.some((id) => id.endsWith('-diagnostic'))) return 'diagnostic'
+  if (
+    matrixRows.some(
+      (id) =>
+        id.includes('control') ||
+        id.startsWith('same-cost') ||
+        id === 'scalar-control' ||
+        id === 'full-res-product-control',
+    )
+  ) {
+    const onlyAxisControls = matrixRows.every(
+      (id) =>
+        id === 'compute-off-control' ||
+        id === 'temporal-off-baseline' ||
+        id === 'confidence-guided-candidate',
+    )
+    return onlyAxisControls && matrixRows.includes('confidence-guided-candidate')
+      ? 'candidate'
+      : 'control'
+  }
+  if (matrixRows.includes('confidence-guided-candidate')) return 'candidate'
+  return 'candidate'
+}
+
+function promotionBoundaryForRole(role) {
+  switch (role) {
+    case 'candidate':
+      return 'eligible-after-reference-threshold-and-same-cost-gates'
+    case 'control':
+      return 'control-only'
+    case 'observability':
+      return 'observability-only'
+    case 'private':
+      return 'private-only'
+    case 'diagnostic':
+      return 'diagnostic-only'
+    case 'comparison':
+      return 'comparison-only'
+    default:
+      return 'unclassified'
+  }
+}
+
+export function classifyVbaoProductQualityMatrixRow(row) {
+  const classification = {
+    receiverConfidenceMode: receiverConfidenceModeForRow(row),
+    sampleCost: sampleCostForRow(row),
+    resolution: resolutionLaneForRow(row),
+    computeMode: computeModeForRow(row),
+    temporalMode: temporalModeForRow(row),
+  }
+  const matrixRows = matrixRowIdsForClassification(row, classification)
+  const matrixRole = matrixRoleForRow(row, classification, matrixRows)
+
+  return {
+    ...classification,
+    matrixRole,
+    matrixRows,
+    promotionBoundary: promotionBoundaryForRole(matrixRole),
+  }
+}
+
+export function createVbaoProductQualityMatrixStatusRows(rows) {
+  return rows
+    .filter((row) => row.mode === 'vbao')
+    .map((row) => ({
+      label: row.label,
+      ...classifyVbaoProductQualityMatrixRow(row),
+    }))
+}
+
+function fixedVerdictForMatrixRole(role) {
+  switch (role) {
+    case 'control':
+      return 'control-only'
+    case 'observability':
+      return 'observability-only'
+    case 'private':
+      return 'private-only'
+    case 'diagnostic':
+      return 'diagnostic-only'
+    default:
+      return null
+  }
 }
 
 function blockingFailureLabels(row) {
@@ -207,6 +460,8 @@ export function createProductPromotionVerdictRows(rows, options = {}) {
     const reference = referenceByLabel.get(row.label)
     const threshold = thresholdByLabel.get(row.label)
     const failures = blockingFailureLabels(row)
+    const matrix = classifyVbaoProductQualityMatrixRow(row)
+    const fixedVerdict = fixedVerdictForMatrixRole(matrix.matrixRole)
     const blockers = []
 
     if (evidence === undefined || evidence.status !== 'complete') {
@@ -241,13 +496,14 @@ export function createProductPromotionVerdictRows(rows, options = {}) {
       view: row.view ?? 'n/a',
       algorithm: row.mode,
       output: promotionOutputLabelForRow(row),
-      verdict: isPrivateCandidateRow(row)
-        ? 'candidate-only'
-        : blockers.length === 0
+      matrixRole: matrix.matrixRole,
+      matrixRows: matrix.matrixRows,
+      promotionBoundary: matrix.promotionBoundary,
+      verdict: fixedVerdict ?? (blockers.length === 0
           ? 'pass'
           : hasFailureBlocker || hasThresholdFailureBlocker
             ? 'fail'
-            : 'incomplete',
+            : 'incomplete'),
       blockers,
     }
   })
@@ -591,6 +847,8 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
   }
   const referenceGateRows =
     report.referenceGate?.productRows ?? createReferenceGateStatusRows(report.rows)
+  const productQualityMatrixRows =
+    report.productQualityMatrixRows ?? createVbaoProductQualityMatrixStatusRows(report.rows)
   const thresholdGateRows =
     report.thresholdGate?.productRows ?? createProductThresholdGateRows(report.rows)
   const productPromotionRows =
@@ -613,6 +871,8 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
   const outputReport = {
     ...report,
     evidenceArtifactRows,
+    productQualityMatrix: VBAO_PRODUCT_QUALITY_MATRIX,
+    productQualityMatrixRows,
     productPromotionRows,
     renderedProxyReferenceRows,
     thresholdGate: {
@@ -631,6 +891,32 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
   }
 
   await writeFile(outputJson, `${JSON.stringify(outputReport, null, 2)}\n`)
+  lines.push('')
+  lines.push('## VBAO Product Quality Matrix')
+  lines.push('')
+  lines.push(
+    'This frozen matrix separates the current candidate from controls, private evidence, and observability rows. Matrix rows can share axes such as compute-off or temporal-off; only candidate rows can ever become product-promotion passes.',
+  )
+  lines.push('')
+  lines.push('| Matrix row | Role | Receiver confidence | Sample cost | Resolution | Compute | Temporal | Promotion boundary |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |')
+  for (const row of VBAO_PRODUCT_QUALITY_MATRIX) {
+    lines.push(
+      `| ${row.id} | ${row.role} | ${row.receiverConfidence} | ${row.sampleCost} | ${row.resolution} | ${row.compute} | ${row.temporal} | ${row.promotionBoundary} |`,
+    )
+  }
+  lines.push('')
+  lines.push('| Report row | Matrix role | Matrix rows | Receiver confidence | Sample cost | Resolution | Compute | Temporal | Promotion boundary |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
+  if (productQualityMatrixRows.length === 0) {
+    lines.push('| n/a | comparison | none | n/a | n/a | n/a | n/a | n/a | comparison-only |')
+  } else {
+    for (const row of productQualityMatrixRows) {
+      lines.push(
+        `| ${row.label ?? 'n/a'} | ${row.matrixRole} | ${row.matrixRows.join(',')} | ${row.receiverConfidenceMode} | ${row.sampleCost} | ${row.resolution} | ${row.computeMode} | ${row.temporalMode} | ${row.promotionBoundary} |`,
+      )
+    }
+  }
   lines.push('')
   lines.push('## VBAO Half-Resolution Reconstruction Stage Status')
   lines.push('')
@@ -689,17 +975,17 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
   lines.push('## AO Product Promotion Verdict')
   lines.push('')
   lines.push(
-    'A row can pass only when it is default product evidence with complete artifacts, complete required reference fixture coverage, and no blocking failure labels. Private candidates remain candidate-only.',
+    'A row can pass only when it is candidate product evidence with complete artifacts, complete required reference fixture coverage, passing thresholds, and no blocking failure labels. Controls, diagnostics, private lanes, and observability lanes stay non-promotable.',
   )
   lines.push('')
-  lines.push('| Product row | Scene | Resolution | View | Algorithm | Output | Verdict | Blockers |')
-  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |')
+  lines.push('| Product row | Scene | Resolution | View | Algorithm | Output | Matrix role | Matrix rows | Verdict | Blockers |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |')
   if (productPromotionRows.length === 0) {
-    lines.push('| n/a | n/a | n/a | n/a | n/a | n/a | incomplete | product-row |')
+    lines.push('| n/a | n/a | n/a | n/a | n/a | n/a | comparison | none | incomplete | product-row |')
   } else {
     for (const row of productPromotionRows) {
       lines.push(
-        `| ${row.label ?? 'n/a'} | ${row.scene} | ${row.resolution} | ${row.view} | ${row.algorithm} | ${row.output} | ${row.verdict} | ${row.blockers.length === 0 ? 'none' : row.blockers.join(',')} |`,
+        `| ${row.label ?? 'n/a'} | ${row.scene} | ${row.resolution} | ${row.view} | ${row.algorithm} | ${row.output} | ${row.matrixRole} | ${row.matrixRows.join(',')} | ${row.verdict} | ${row.blockers.length === 0 ? 'none' : row.blockers.join(',')} |`,
       )
     }
   }

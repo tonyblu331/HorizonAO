@@ -36,8 +36,8 @@
 - [x] 3.4 Compare failure labels for noise, edge bleed, thin-gap preservation,
   stripe, anisotropy, and scale mismatch.
 - [x] 3.5 Summarize the measured default tradeoff in this SDD: half-res reduces
-  raw/total GPU cost, while the current report still labels half-res rows with
-  `false-curvature` and `scale-mismatch`.
+  raw/total GPU cost, while fixture/reference observations are still required
+  before stronger quality labels are promoted.
 - [x] 3.6 Decide whether `EVIDENCE.md` should receive this capture now or wait
   for fixture observations, because the generated report marks product rows as
   `missing-reference-observation`.
@@ -51,6 +51,9 @@
 - [x] 4.2 Route `false-curvature` and `scale-mismatch` follow-up to the existing
   depth hierarchy or signal-quality SDD lane instead of changing kernel formula
   here.
+- [x] 4.2a Stop blanket-classifying every half-resolution row as
+  `false-curvature,scale-mismatch`; keep those labels for fixture-proven or
+  explicitly reviewed rows.
 - [x] 4.3 Route any compute/storage follow-up to a separate SDD only if
   pass-level evidence shows fullscreen TSL raw work remains the limiting
   architecture after the default change.

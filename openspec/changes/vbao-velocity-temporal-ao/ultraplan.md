@@ -24,9 +24,13 @@ historyUv = uv - offsetUv
 ```
 
 - WebGPU smoke evidence exists and the temporal pass emits timing.
-- `verify:vbao-temporal` still returns `reject-promotion`.
-- Motion/disocclusion evidence, diagnostics, target inventory, and public API
-  review remain incomplete.
+- Target inventory, reset evidence, same-cost static evidence, and
+  camera-motion/object-motion/disocclusion evidence are captured.
+- `verify:vbao-temporal` returns `reject-promotion`, not `candidate`; the
+  velocity lane remains incomplete until diagnostics pass timing is recaptured.
+- Temporal diagnostics are emitted in the benchmark row and verifier/report
+  paths treat missing diagnostics as incomplete evidence.
+- Public API review remains blocked.
 
 ## Diet Principle
 
@@ -39,6 +43,10 @@ host contract
 ```
 
 Anything else is fat unless a failing gate proves it is needed.
+
+Canonical temporal shape lives in `design.md` under "Canonical Horizon AO
+Temporal Shape". Do not duplicate that ownership table here; this file owns
+roadmap, gate order, and readiness.
 
 ## SOAP Alignment
 
@@ -61,16 +69,16 @@ CONCEPTS > more files.
 
 | Area | Current readiness | Notes |
 | --- | ---: | --- |
-| Private temporal node | 70% | Renders, owns AO history, measures temporal pass. |
-| Host guide ownership | 60% | Previous guides are host-owned, but target/lifetime inventory is incomplete. |
-| Reset behavior | 45% | First-frame and resize reset exist; host reset/camera-cut evidence is open. |
-| Validation logic | 65% | UV, depth, normal, velocity, and clamp exist; diagnostics are weak. |
-| Static evidence | 45% | Smoke and prior matrix exist, but verdict is `reject-promotion`. |
-| Motion/disocclusion evidence | 15% | Required before candidate; currently missing. |
+| Private temporal node | 80% | Renders, owns AO history, emits diagnostics, measures temporal pass. |
+| Host guide ownership | 85% | Previous guides are host-owned and target/lifetime inventory is reported. |
+| Reset behavior | 80% | First-frame, resize, and explicit benchmark reset evidence are captured. |
+| Validation logic | 80% | UV, depth, normal, velocity, clamp, and diagnostic reason encoding exist. |
+| Static evidence | 100% | Same-cost static matrix is captured. |
+| Motion/disocclusion evidence | 100% | Camera-motion, object-motion, and disocclusion rows are captured. |
 | Public API readiness | 0% | Correctly blocked. |
 
-Overall temporal readiness: **~45% private candidate readiness**, **0% public
-feature readiness**.
+Overall temporal readiness: **evidence-complete for this private review,
+promotion-blocked by quality gates**, **0% public feature readiness**.
 
 ## Gate Stack
 
@@ -92,11 +100,11 @@ flowchart LR
 | Phase | Goal | Stop Condition |
 | --- | --- | --- |
 | R0 | Reconcile current truth | Docs/tests claim all runtime temporal is absent |
-| R1 | Inventory host ownership and targets | Previous guide ownership or AO history lifetime is implicit |
-| R2 | Add diagnostics before tuning | Rejection reason is invisible |
-| R3 | Benchmark static same-cost matrix | Missing screenshots, timings, or spatial alternative |
-| R4 | Benchmark motion/disocclusion matrix | Ghosting/disocclusion labels appear or motion rows are absent |
-| R5 | Decide API | Evidence is not `candidate` |
+| R1 | Inventory host ownership and targets | Complete for this slice |
+| R2 | Add diagnostics before tuning | Complete for this slice |
+| R3 | Benchmark static same-cost matrix | Complete for this slice |
+| R4 | Benchmark motion/disocclusion matrix | Complete for this slice; blocking labels keep verdict rejected |
+| R5 | Decide API | Public API remains blocked because evidence is not `candidate` |
 
 ## Implementation Slices
 
@@ -164,11 +172,30 @@ Required captures:
 
 Gate:
 
+- every row has diagnostics when `velocity-internal`;
 - Material pattern/noise win.
 - No stripe regression.
 - No edge-bleed regression.
 - No thin-gap regression.
 - Pass timing includes temporal cost.
+
+### R3.5: Target Inventory And Reset Evidence
+
+Do this before interpreting matrix results. Otherwise a win can still be caused
+by undefined lifetime behavior.
+
+Deliverables:
+
+- target/lifetime inventory for AO history, current AO, velocity, previous
+  depth, and previous normal;
+- reset trigger list for first frame, resize/DPR, explicit reset, camera cut,
+  and device/format changes;
+- smoke evidence that reset diagnostics appear after resize or camera cut.
+
+Gate:
+
+- verifier/report language can say why guide/history lifetime is complete or
+  incomplete.
 
 ### R4: Motion And Disocclusion Matrix
 
@@ -253,18 +280,17 @@ source-contract tests
 - Static-only evidence.
 - Extra file splitting.
 
-## Recommended Next Slice
+## Current Gate Result
 
-Start with **R2 diagnostics** before another benchmark matrix.
+The target/reset evidence, static same-cost matrix, and
+camera-motion/object-motion/disocclusion rows are captured. The verifier result
+is `reject-promotion`, not private candidate; the velocity lane remains
+incomplete until diagnostics pass timing is recaptured.
 
-First concrete slice:
-
-1. Add temporal diagnostics fields to `VBAOVelocityTemporalNode` or demo
-   benchmark reporting.
-2. Expose diagnostics in `window.__aoBenchmark.latest`.
-3. Add source-contract tests.
-4. Capture one `velocity-internal` smoke row proving diagnostics are present.
-5. Only then rerun the same-cost matrix.
+Next work is not more temporal API or threshold tuning. The only canonical next
+gate is quality root-cause work on the blocking labels already reported by the
+matrix. Temporal remains private until a later SDD can show a material same-cost
+win without ghosting, disocclusion, mud, halo, edge-bleed, or thin-gap failure.
 
 ## Kill Criteria
 

@@ -96,18 +96,18 @@ Measured result:
   `1.120ms`.
 - The default policy therefore reduces raw visibility and total-product GPU
   cost in the captured rows.
-- The tradeoff is not free: half-resolution rows still carry
-  `noise,false-curvature,scale-mismatch` labels, while the full-resolution
-  comparison rows carry `noise,edge-bleed`.
+- The tradeoff is not free: half-resolution rows still require reference
+  observations before stronger product claims. The previous
+  `false-curvature,scale-mismatch` labels were blanket classifier output for
+  all half-resolution rows, not fixture-proven labels from this capture.
 
 Promotion decision:
 
 - Do not promote this capture to `EVIDENCE.md` yet.
 - The generated report marks product rows as `missing-reference-observation`,
   so this is SDD-local cost evidence, not a complete release evidence claim.
-- Route the remaining `false-curvature` and `scale-mismatch` follow-up through
-  the depth-hierarchy or signal-quality lane before making stronger product
-  claims.
+- Route any proven `false-curvature` and `scale-mismatch` follow-up through the
+  depth-hierarchy or signal-quality lane before making stronger product claims.
 
 ### Phase 4: Deeper Kernel Work
 
@@ -134,8 +134,10 @@ Triage:
 - Keep this SDD scoped to default policy plus evidence. The default change
   reduces raw visibility cost without changing kernel formula, pass topology, or
   public API.
-- `false-curvature` and `scale-mismatch` are not fixed by this SDD. Route them
-  to the depth-hierarchy evidence lane or the broader signal-quality SDD.
+- Do not stamp `false-curvature` and `scale-mismatch` onto every
+  half-resolution row. Route those labels to the depth-hierarchy evidence lane
+  or the broader signal-quality SDD only when fixture/reference evidence proves
+  them.
 - Compute/storage work is not justified by this SDD alone. It needs a separate
   proposal if raw fullscreen TSL cost remains the limiting architecture after
   the default change.

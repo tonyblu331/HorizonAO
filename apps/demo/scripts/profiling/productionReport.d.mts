@@ -52,6 +52,74 @@ export const AO_DEFAULT_PRODUCT_NOISE_SOURCES: readonly [
   'n/a',
 ]
 
+export type VbaoProductQualityMatrixRole =
+  | 'candidate'
+  | 'control'
+  | 'baseline'
+  | 'observability'
+  | 'private'
+
+export interface VbaoProductQualityMatrixDefinitionRow {
+  readonly id: string
+  readonly role: VbaoProductQualityMatrixRole
+  readonly receiverConfidence: string
+  readonly sampleCost: string
+  readonly resolution: string
+  readonly compute: string
+  readonly temporal: string
+  readonly promotionBoundary: string
+}
+
+export const VBAO_PRODUCT_QUALITY_MATRIX: readonly VbaoProductQualityMatrixDefinitionRow[]
+
+export type VbaoProductQualityReportMatrixRole =
+  | 'candidate'
+  | 'control'
+  | 'observability'
+  | 'private'
+  | 'diagnostic'
+  | 'comparison'
+
+export interface VbaoProductQualityMatrixInputRow {
+  label?: string
+  mode?: string
+  denoise?: boolean
+  sampleMode?: string
+  noiseSource?: string
+  vbaoResolution?: string
+  fullResolutionVbao?: boolean
+  temporalMode?: string
+  receiverConfidenceMode?: string
+  computeCandidateLabel?: string
+  cleanupMode?: string
+  vbaoCleanupMode?: string
+  vbaoReconstructionStage?: string
+  latest?: {
+    vbaoReceiverConfidenceMode?: string
+    vbaoComputeCandidateLabel?: string
+  }
+}
+
+export interface VbaoProductQualityMatrixStatusRow {
+  label?: string
+  receiverConfidenceMode: string
+  sampleCost: string
+  resolution: string
+  computeMode: string
+  temporalMode: string
+  matrixRole: VbaoProductQualityReportMatrixRole
+  matrixRows: string[]
+  promotionBoundary: string
+}
+
+export function classifyVbaoProductQualityMatrixRow(
+  row: VbaoProductQualityMatrixInputRow,
+): Omit<VbaoProductQualityMatrixStatusRow, 'label'>
+
+export function createVbaoProductQualityMatrixStatusRows(
+  rows: VbaoProductQualityMatrixInputRow[],
+): VbaoProductQualityMatrixStatusRow[]
+
 export interface VbaoReconstructionStageEvidence {
   stage:
     | (typeof VBAO_RECONSTRUCTION_STAGES)[number]
@@ -166,6 +234,7 @@ export interface AOEvidenceArtifactStatusInputRow {
   label?: string
   mode?: string
   temporalMode?: string
+  receiverConfidenceMode?: string
   denoise?: boolean
   fullResolutionVbao?: boolean
   vbaoReconstructionStage?: (typeof VBAO_RECONSTRUCTION_STAGES)[number] | string
@@ -227,7 +296,18 @@ export interface AOProductPromotionVerdictRow {
   view: string
   algorithm: string
   output: string
-  verdict: 'pass' | 'fail' | 'incomplete' | 'candidate-only'
+  matrixRole: VbaoProductQualityReportMatrixRole
+  matrixRows: string[]
+  promotionBoundary: string
+  verdict:
+    | 'pass'
+    | 'fail'
+    | 'incomplete'
+    | 'candidate-only'
+    | 'control-only'
+    | 'observability-only'
+    | 'private-only'
+    | 'diagnostic-only'
   blockers: string[]
 }
 
@@ -259,6 +339,7 @@ export function writeProductionQualityReports(args: {
   report: {
     generatedAt: string
     evidenceArtifactRows?: AOEvidenceArtifactStatusRow[]
+    productQualityMatrixRows?: VbaoProductQualityMatrixStatusRow[]
     productPromotionRows?: AOProductPromotionVerdictRow[]
     renderedProxyReferenceRows?: AORenderedProxyReferenceComparisonRow[]
     thresholdGate?: {
@@ -276,7 +357,13 @@ export function writeProductionQualityReports(args: {
       mode: string
       denoise?: boolean
       vbaoResolution?: string
+      fullResolutionVbao?: boolean
       temporalMode?: string
+      receiverConfidenceMode?: string
+      sampleMode?: string
+      noiseSource?: string
+      cleanupMode?: string
+      vbaoCleanupMode?: string
       temporalDiagnostics?: unknown
       temporalTargetInventory?: unknown
       computeCandidateLabel?: string
@@ -306,6 +393,7 @@ export function writeProductionQualityReports(args: {
         vbaoComputeCandidateLabel?: string
         vbaoComputeCandidateInventory?: unknown
         vbaoComputeCandidateTiming?: unknown
+        vbaoReceiverConfidenceMode?: string
       }
       qualityMetrics: {
         patternNoiseScore: number

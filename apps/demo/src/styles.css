@@ -342,11 +342,10 @@ nav a.active {
 .split-labels {
   position: absolute;
   z-index: 10;
-  top: 78px;
-  left: 0;
-  right: 0;
+  inset: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: 1fr;
   pointer-events: none;
 }
 
@@ -356,6 +355,8 @@ nav a.active {
 
 .split-labels span {
   justify-self: center;
+  align-self: start;
+  margin-top: 18px;
   border: 1px solid rgba(248, 246, 239, 0.18);
   border-radius: 6px;
   padding: 7px 10px;
