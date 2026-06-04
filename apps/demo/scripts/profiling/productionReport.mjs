@@ -15,7 +15,20 @@ export const AO_FAILURE_LABELS = [
 
 export const AO_REFERENCE_GATE_MODES = ['vbao', 'gtao', 'ssao', 'n8ao']
 
+export const AO_REQUIRED_REFERENCE_FIXTURE_IDS = [
+  'flat-plane-open',
+  'box-contact',
+  'two-wall-corner',
+  'broad-wall-contact',
+  'thin-gap-separated-slabs',
+  'grazing-surface-wall',
+  'normal-sensitive-side-contact',
+]
+
 export const VBAO_RECONSTRUCTION_STAGES = ['raw', 'cleanup', 'resolve', 'polish', 'final']
+
+export const AO_DEFAULT_PRODUCT_SAMPLE_MODES = [undefined, 'product-preset', 'n/a']
+export const AO_DEFAULT_PRODUCT_NOISE_SOURCES = [undefined, 'phase-atlas-stable-hash', 'n/a']
 
 export function classifyFailureLabels(row) {
   if (row.mode !== 'vbao') return ['none']
@@ -71,15 +84,31 @@ export function createVbaoReconstructionStageStatusRows(rows) {
 
 function isReferenceGateProductRow(row) {
   if (!AO_REFERENCE_GATE_MODES.includes(row.mode)) return false
-  if (row.view !== undefined && row.view !== 'ao') return false
+  if (row.view !== undefined && row.view !== 'ao' && row.view !== 'beauty') return false
 
+  if (row.mode === 'vbao') return row.denoise === true || row.denoise === false
   if (row.mode === 'n8ao') return row.denoise !== false
   return row.denoise === true
+}
+
+function promotionOutputLabelForRow(row) {
+  if (row.mode === 'vbao') return row.denoise === false ? 'raw-debug' : 'product'
+  if (row.mode === 'n8ao') return 'internally-filtered'
+  return 'denoised'
 }
 
 function referenceObservationCount(row) {
   const observations = row.referenceObservations ?? row.referenceGate?.observations ?? []
   return observations.length
+}
+
+function missingRequiredReferenceFixtures(row) {
+  const observedFixtures = new Set(
+    (row.referenceObservations ?? row.referenceGate?.observations ?? []).map(
+      (observation) => observation.fixtureId,
+    ),
+  )
+  return AO_REQUIRED_REFERENCE_FIXTURE_IDS.filter((fixtureId) => !observedFixtures.has(fixtureId))
 }
 
 export function createReferenceGateStatusRows(rows) {
@@ -89,18 +118,111 @@ export function createReferenceGateStatusRows(rows) {
         (observation) => observation.fixtureId,
       ),
     )
-    const output =
-      row.mode === 'vbao' ? 'product' : row.mode === 'n8ao' ? 'internally-filtered' : 'denoised'
+      return {
+        label: row.label,
+        algorithm: row.mode,
+        output: promotionOutputLabelForRow(row),
+        observedFixtureCount: observedFixtures.size || referenceObservationCount(row),
+        missingRequiredFixtureIds: missingRequiredReferenceFixtures(row),
+      status:
+        observedFixtures.size === 0 && referenceObservationCount(row) === 0
+          ? 'missing-reference-observation'
+          : missingRequiredReferenceFixtures(row).length > 0
+            ? 'missing-required-observation'
+            : 'compared',
+    }
+  })
+}
+
+function isPrivateCandidateRow(row) {
+  const computeCandidateLabel = row.computeCandidateLabel ?? row.latest?.vbaoComputeCandidateLabel
+
+  return (
+    !AO_DEFAULT_PRODUCT_SAMPLE_MODES.includes(row.sampleMode) ||
+    !AO_DEFAULT_PRODUCT_NOISE_SOURCES.includes(row.noiseSource) ||
+    row.temporalMode === 'host' ||
+    row.temporalMode === 'velocity-internal' ||
+    (computeCandidateLabel !== undefined && computeCandidateLabel !== 'n/a') ||
+    row.cleanupMode === 'skip' ||
+    row.vbaoCleanupMode === 'skip' ||
+    row.resolvePolishMode === 'fused' ||
+    row.vbaoResolvePolishMode === 'fused'
+  )
+}
+
+function blockingFailureLabels(row) {
+  const labels = row.failureLabels ?? classifyFailureLabels(row)
+  return labels.filter((label) => label !== 'none')
+}
+
+export function createProductThresholdGateRows(rows, options = {}) {
+  const thresholdRows = options.thresholdRows
+  if (thresholdRows !== undefined) return thresholdRows
+
+  return rows.filter(isReferenceGateProductRow).map((row) => ({
+    label: row.label,
+    status: 'incomplete',
+    blockers: ['thresholdGate'],
+  }))
+}
+
+export function createProductPromotionVerdictRows(rows, options = {}) {
+  const evidenceArtifactRows = options.evidenceArtifactRows ?? createEvidenceArtifactStatusRows(rows)
+  const referenceGateRows = options.referenceGateRows ?? createReferenceGateStatusRows(rows)
+  const thresholdGateRows = createProductThresholdGateRows(rows, {
+    thresholdRows: options.thresholdGateRows,
+  })
+  const evidenceByLabel = new Map(evidenceArtifactRows.map((row) => [row.label, row]))
+  const referenceByLabel = new Map(referenceGateRows.map((row) => [row.label, row]))
+  const thresholdByLabel = new Map(thresholdGateRows.map((row) => [row.label, row]))
+
+  return rows.filter(isReferenceGateProductRow).map((row) => {
+    const evidence = evidenceByLabel.get(row.label)
+    const reference = referenceByLabel.get(row.label)
+    const threshold = thresholdByLabel.get(row.label)
+    const failures = blockingFailureLabels(row)
+    const blockers = []
+
+    if (evidence === undefined || evidence.status !== 'complete') {
+      blockers.push(...(evidence?.missing ?? ['evidenceArtifact']))
+    }
+    if (reference === undefined || reference.status !== 'compared') {
+      blockers.push(reference?.status ?? 'referenceGate')
+    }
+    if (threshold === undefined || threshold.status !== 'pass') {
+      const thresholdBlockers = threshold?.blockers ?? []
+      blockers.push(
+        ...(thresholdBlockers.length > 0
+          ? thresholdBlockers
+          : [threshold?.status ?? 'thresholdGate']),
+      )
+    }
+    if (failures.length > 0) {
+      blockers.push(...failures.map((label) => `failureLabel.${label}`))
+    }
+    const hasFailureBlocker = blockers.some((blocker) =>
+      String(blocker).startsWith('failureLabel.'),
+    )
+    const hasThresholdFailureBlocker = threshold?.status === 'fail'
 
     return {
       label: row.label,
+      scene: row.scene ?? 'n/a',
+      resolution:
+        row.resolution === undefined
+          ? 'n/a'
+          : `${row.resolution.width}x${row.resolution.height}`,
+      view: row.view ?? 'n/a',
       algorithm: row.mode,
-      output,
-      observedFixtureCount: observedFixtures.size || referenceObservationCount(row),
-      status:
-        observedFixtures.size > 0 || referenceObservationCount(row) > 0
-          ? 'compared'
-          : 'missing-reference-observation',
+      output: promotionOutputLabelForRow(row),
+      verdict: isPrivateCandidateRow(row)
+        ? 'candidate-only'
+        : blockers.length === 0
+          ? 'pass'
+          : hasFailureBlocker || hasThresholdFailureBlocker
+            ? 'fail'
+            : 'incomplete',
+      blockers,
     }
   })
 }
@@ -144,6 +266,38 @@ export function createRenderedThinGeometryProxyRows(rows) {
         missing,
       }
     })
+}
+
+export function createRenderedProxyReferenceComparisonRows(rows, options = {}) {
+  const thinGeometryProxyRows =
+    options.thinGeometryProxyRows ?? createRenderedThinGeometryProxyRows(rows)
+  const referenceGateRows = options.referenceGateRows ?? createReferenceGateStatusRows(rows)
+  const referenceByLabel = new Map(referenceGateRows.map((row) => [row.label, row]))
+
+  return thinGeometryProxyRows.map((row) => {
+    const reference = referenceByLabel.get(row.label)
+    const blockers = []
+    if (row.status !== 'complete') blockers.push(...row.missing)
+    if (reference === undefined) {
+      blockers.push('referenceGate')
+    } else if (reference.status !== 'compared') {
+      blockers.push(reference.status)
+      blockers.push(...reference.missingRequiredFixtureIds.map((fixtureId) => `fixture.${fixtureId}`))
+    }
+
+    return {
+      label: row.label,
+      view: row.view ?? 'n/a',
+      output: row.output,
+      vbaoResolution: row.vbaoResolution,
+      proxyStatus: row.status,
+      referenceStatus: reference?.status ?? 'missing-reference-observation',
+      observedFixtureCount: reference?.observedFixtureCount ?? 0,
+      missingRequiredFixtureIds: reference?.missingRequiredFixtureIds ?? [],
+      status: blockers.length === 0 ? 'compared' : 'blocked',
+      blockers,
+    }
+  })
 }
 
 function isFiniteNumber(value) {
@@ -266,8 +420,6 @@ export function createEvidenceArtifactStatusRows(rows) {
 }
 
 export async function writeProductionQualityReports({ outputJson, outputMd, report }) {
-  await writeFile(outputJson, `${JSON.stringify(report, null, 2)}\n`)
-
   const lines = []
   lines.push('# AO Production Screenshot Quality Summary')
   lines.push('')
@@ -386,10 +538,46 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
   }
   const referenceGateRows =
     report.referenceGate?.productRows ?? createReferenceGateStatusRows(report.rows)
+  const thresholdGateRows =
+    report.thresholdGate?.productRows ?? createProductThresholdGateRows(report.rows)
+  const productPromotionRows =
+    report.productPromotionRows ??
+    createProductPromotionVerdictRows(report.rows, {
+      evidenceArtifactRows,
+      referenceGateRows,
+      thresholdGateRows,
+    })
   const reconstructionStageRows =
     report.reconstructionGate?.stageRows ?? createVbaoReconstructionStageStatusRows(report.rows)
   const thinGeometryRows =
     report.thinGeometryProxyRows ?? createRenderedThinGeometryProxyRows(report.rows)
+  const renderedProxyReferenceRows =
+    report.renderedProxyReferenceRows ??
+    createRenderedProxyReferenceComparisonRows(report.rows, {
+      referenceGateRows,
+      thinGeometryProxyRows: thinGeometryRows,
+    })
+  const outputReport = {
+    ...report,
+    evidenceArtifactRows,
+    productPromotionRows,
+    renderedProxyReferenceRows,
+    thresholdGate: {
+      ...report.thresholdGate,
+      productRows: thresholdGateRows,
+    },
+    reconstructionGate: {
+      ...report.reconstructionGate,
+      stageRows: reconstructionStageRows,
+    },
+    referenceGate: {
+      ...report.referenceGate,
+      productRows: referenceGateRows,
+    },
+    thinGeometryProxyRows: thinGeometryRows,
+  }
+
+  await writeFile(outputJson, `${JSON.stringify(outputReport, null, 2)}\n`)
   lines.push('')
   lines.push('## VBAO Half-Resolution Reconstruction Stage Status')
   lines.push('')
@@ -427,20 +615,56 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
     }
   }
   lines.push('')
+  lines.push('## VBAO Rendered Proxy vs Reference Observation Gate')
+  lines.push('')
+  lines.push(
+    'Rendered thin-gap, edge-bleed, and stripe proxies are compared against reference observation coverage by product row. Complete screenshot proxies still block when required fixture observations are missing.',
+  )
+  lines.push('')
+  lines.push('| Row | View | Output | VBAO res | Proxy status | Reference status | Observed fixtures | Missing required fixtures | Status | Blockers |')
+  lines.push('| --- | --- | --- | --- | --- | --- | ---: | --- | --- | --- |')
+  if (renderedProxyReferenceRows.length === 0) {
+    lines.push('| n/a | n/a | n/a | n/a | incomplete | missing-reference-observation | 0 | all | blocked | vbao-rendered-row |')
+  } else {
+    for (const row of renderedProxyReferenceRows) {
+      lines.push(
+        `| ${row.label ?? 'n/a'} | ${row.view} | ${row.output} | ${row.vbaoResolution} | ${row.proxyStatus} | ${row.referenceStatus} | ${row.observedFixtureCount} | ${row.missingRequiredFixtureIds.join(', ') || 'none'} | ${row.status} | ${row.blockers.length === 0 ? 'none' : row.blockers.join(',')} |`,
+      )
+    }
+  }
+  lines.push('')
+  lines.push('## AO Product Promotion Verdict')
+  lines.push('')
+  lines.push(
+    'A row can pass only when it is default product evidence with complete artifacts, complete required reference fixture coverage, and no blocking failure labels. Private candidates remain candidate-only.',
+  )
+  lines.push('')
+  lines.push('| Product row | Scene | Resolution | View | Algorithm | Output | Verdict | Blockers |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |')
+  if (productPromotionRows.length === 0) {
+    lines.push('| n/a | n/a | n/a | n/a | n/a | n/a | incomplete | product-row |')
+  } else {
+    for (const row of productPromotionRows) {
+      lines.push(
+        `| ${row.label ?? 'n/a'} | ${row.scene} | ${row.resolution} | ${row.view} | ${row.algorithm} | ${row.output} | ${row.verdict} | ${row.blockers.length === 0 ? 'none' : row.blockers.join(',')} |`,
+      )
+    }
+  }
+  lines.push('')
   lines.push('## AO Reference Gate Status')
   lines.push('')
   lines.push(
     'Product AO rows must provide fixture observations before they can be compared against the ray-cast and canonical reports. Missing observations are gate misses, not passes.',
   )
   lines.push('')
-  lines.push('| Product row | Algorithm | Output | Observed fixtures | Status |')
-  lines.push('| --- | --- | --- | ---: | --- |')
+  lines.push('| Product row | Algorithm | Output | Observed fixtures | Missing required fixtures | Status |')
+  lines.push('| --- | --- | --- | ---: | --- | --- |')
   if (referenceGateRows.length === 0) {
-    lines.push('| n/a | n/a | n/a | 0 | missing-reference-observation |')
+    lines.push('| n/a | n/a | n/a | 0 | all | missing-reference-observation |')
   } else {
     for (const row of referenceGateRows) {
       lines.push(
-        `| ${row.label ?? 'n/a'} | ${row.algorithm} | ${row.output} | ${row.observedFixtureCount ?? 0} | ${row.status} |`,
+        `| ${row.label ?? 'n/a'} | ${row.algorithm} | ${row.output} | ${row.observedFixtureCount ?? 0} | ${row.missingRequiredFixtureIds?.join(', ') || 'none'} | ${row.status} |`,
       )
     }
   }

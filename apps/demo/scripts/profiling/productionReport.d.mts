@@ -24,12 +24,30 @@ export function classifyFailureLabels(row: AOReportRowForFailureLabels): string[
 
 export const AO_REFERENCE_GATE_MODES: readonly ['vbao', 'gtao', 'ssao', 'n8ao']
 
+export const AO_REQUIRED_REFERENCE_FIXTURE_IDS: readonly [
+  'flat-plane-open',
+  'box-contact',
+  'two-wall-corner',
+  'broad-wall-contact',
+  'thin-gap-separated-slabs',
+  'grazing-surface-wall',
+  'normal-sensitive-side-contact',
+]
+
 export const VBAO_RECONSTRUCTION_STAGES: readonly [
   'raw',
   'cleanup',
   'resolve',
   'polish',
   'final',
+]
+
+export const AO_DEFAULT_PRODUCT_SAMPLE_MODES: readonly [undefined, 'product-preset', 'n/a']
+
+export const AO_DEFAULT_PRODUCT_NOISE_SOURCES: readonly [
+  undefined,
+  'phase-atlas-stable-hash',
+  'n/a',
 ]
 
 export interface VbaoReconstructionStageEvidence {
@@ -76,7 +94,8 @@ export interface AOReferenceGateStatusRow {
   algorithm: string
   output: string
   observedFixtureCount: number
-  status: 'compared' | 'missing-reference-observation'
+  missingRequiredFixtureIds: string[]
+  status: 'compared' | 'missing-reference-observation' | 'missing-required-observation'
 }
 
 export function createReferenceGateStatusRows(
@@ -117,6 +136,27 @@ export interface AORenderedThinGeometryProxyRow {
 export function createRenderedThinGeometryProxyRows(
   rows: AORenderedThinGeometryProxyInputRow[],
 ): AORenderedThinGeometryProxyRow[]
+
+export interface AORenderedProxyReferenceComparisonRow {
+  label?: string
+  view: string
+  output: string
+  vbaoResolution: string
+  proxyStatus: 'complete' | 'incomplete'
+  referenceStatus: 'compared' | 'missing-reference-observation' | 'missing-required-observation'
+  observedFixtureCount: number
+  missingRequiredFixtureIds: string[]
+  status: 'compared' | 'blocked'
+  blockers: string[]
+}
+
+export function createRenderedProxyReferenceComparisonRows(
+  rows: AORenderedThinGeometryProxyInputRow[],
+  options?: {
+    thinGeometryProxyRows?: AORenderedThinGeometryProxyRow[]
+    referenceGateRows?: AOReferenceGateStatusRow[]
+  },
+): AORenderedProxyReferenceComparisonRow[]
 
 export interface AOEvidenceArtifactStatusInputRow {
   label?: string
@@ -159,12 +199,69 @@ export function createEvidenceArtifactStatusRows(
   rows: AOEvidenceArtifactStatusInputRow[],
 ): AOEvidenceArtifactStatusRow[]
 
+export interface AOProductPromotionVerdictInputRow
+  extends AOReportRowForReferenceGate,
+    AOEvidenceArtifactStatusInputRow,
+    AOReportRowForFailureLabels {
+  sampleMode?: string
+  scene?: string
+  resolution?: { width: number; height: number }
+  view?: string
+  temporalMode?: string
+  computeCandidateLabel?: string
+  noiseSource?: string
+  cleanupMode?: string
+  vbaoCleanupMode?: string
+  resolvePolishMode?: string
+  vbaoResolvePolishMode?: string
+  failureLabels?: string[]
+  latest?: AOEvidenceArtifactStatusInputRow['latest']
+}
+
+export interface AOProductPromotionVerdictRow {
+  label?: string
+  scene: string
+  resolution: string
+  view: string
+  algorithm: string
+  output: string
+  verdict: 'pass' | 'fail' | 'incomplete' | 'candidate-only'
+  blockers: string[]
+}
+
+export interface AOProductThresholdGateRow {
+  label?: string
+  status: 'pass' | 'fail' | 'incomplete'
+  blockers: string[]
+}
+
+export function createProductThresholdGateRows(
+  rows: AOProductPromotionVerdictInputRow[],
+  options?: {
+    thresholdRows?: AOProductThresholdGateRow[]
+  },
+): AOProductThresholdGateRow[]
+
+export function createProductPromotionVerdictRows(
+  rows: AOProductPromotionVerdictInputRow[],
+  options?: {
+    evidenceArtifactRows?: AOEvidenceArtifactStatusRow[]
+    referenceGateRows?: AOReferenceGateStatusRow[]
+    thresholdGateRows?: AOProductThresholdGateRow[]
+  },
+): AOProductPromotionVerdictRow[]
+
 export function writeProductionQualityReports(args: {
   outputJson: string
   outputMd: string
   report: {
     generatedAt: string
     evidenceArtifactRows?: AOEvidenceArtifactStatusRow[]
+    productPromotionRows?: AOProductPromotionVerdictRow[]
+    renderedProxyReferenceRows?: AORenderedProxyReferenceComparisonRow[]
+    thresholdGate?: {
+      productRows?: AOProductThresholdGateRow[]
+    }
     reconstructionGate?: {
       stageRows?: VbaoReconstructionStageStatusRow[]
     }

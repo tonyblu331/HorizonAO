@@ -19,6 +19,16 @@ export const AO_PRODUCTION_REFERENCE_ALGORITHMS = ['vbao', 'gtao', 'ssao', 'n8ao
 
 export type AoProductionReferenceAlgorithm = (typeof AO_PRODUCTION_REFERENCE_ALGORITHMS)[number]
 
+export const AO_PRODUCTION_REFERENCE_REQUIRED_FIXTURE_IDS = [
+  'flat-plane-open',
+  'box-contact',
+  'two-wall-corner',
+  'broad-wall-contact',
+  'thin-gap-separated-slabs',
+  'grazing-surface-wall',
+  'normal-sensitive-side-contact',
+] as const satisfies readonly RaycastAoFixtureId[]
+
 const AO_PRODUCTION_REFERENCE_EXPECTED_ALGORITHMS: readonly string[] = [
   'vbao-raw',
   'vbao-product',
@@ -27,7 +37,10 @@ const AO_PRODUCTION_REFERENCE_EXPECTED_ALGORITHMS: readonly string[] = [
   'n8ao',
 ]
 
-export type AoProductionReferenceGateStatus = 'compared' | 'missing-reference-observation'
+export type AoProductionReferenceGateStatus =
+  | 'compared'
+  | 'missing-reference-observation'
+  | 'missing-required-observation'
 
 export interface AoProductionReferenceObservation {
   readonly fixtureId: RaycastAoFixtureId
@@ -55,6 +68,7 @@ export interface AoProductionReferenceGateRow {
   readonly algorithm: AoProductionReferenceAlgorithm
   readonly output: string
   readonly observedFixtureCount: number
+  readonly missingRequiredFixtureIds: readonly RaycastAoFixtureId[]
   readonly status: AoProductionReferenceGateStatus
 }
 
@@ -129,6 +143,22 @@ function rowObservations(
   return row.referenceObservations ?? row.referenceGate?.observations ?? []
 }
 
+function missingRequiredFixtureIds(
+  observations: readonly AoProductionReferenceObservation[],
+): readonly RaycastAoFixtureId[] {
+  const observedIds = new Set(observations.map((observation) => observation.fixtureId))
+  return AO_PRODUCTION_REFERENCE_REQUIRED_FIXTURE_IDS.filter((fixtureId) => !observedIds.has(fixtureId))
+}
+
+function gateStatusForObservations(
+  observations: readonly AoProductionReferenceObservation[],
+): AoProductionReferenceGateStatus {
+  if (observations.length === 0) return 'missing-reference-observation'
+  return missingRequiredFixtureIds(observations).length === 0
+    ? 'compared'
+    : 'missing-required-observation'
+}
+
 function compareRow(
   row: AoProductionReferenceGateInputRow,
   algorithm: AoProductionReferenceAlgorithm,
@@ -145,7 +175,8 @@ function compareRow(
       algorithm,
       output: outputLabel(row, algorithm),
       observedFixtureCount: new Set(observations.map((observation) => observation.fixtureId)).size,
-      status: observations.length > 0 ? 'compared' : 'missing-reference-observation',
+      missingRequiredFixtureIds: missingRequiredFixtureIds(observations),
+      status: gateStatusForObservations(observations),
     },
     observations: observations.map(
       (observation): AoReferenceObservation => ({
@@ -206,15 +237,15 @@ export function formatAoProductionReferenceGateMarkdown(
   lines.push('')
   lines.push(`Basis: ${report.basis}`)
   lines.push('')
-  lines.push('| Product row | Algorithm | Output | Observed fixtures | Status |')
-  lines.push('| --- | --- | --- | ---: | --- |')
+  lines.push('| Product row | Algorithm | Output | Observed fixtures | Missing required fixtures | Status |')
+  lines.push('| --- | --- | --- | ---: | --- | --- |')
 
   if (report.productRows.length === 0) {
-    lines.push('| n/a | n/a | n/a | 0 | missing-reference-observation |')
+    lines.push('| n/a | n/a | n/a | 0 | all | missing-reference-observation |')
   } else {
     for (const row of report.productRows) {
       lines.push(
-        `| ${row.label} | ${row.algorithm} | ${row.output} | ${row.observedFixtureCount} | ${row.status} |`,
+        `| ${row.label} | ${row.algorithm} | ${row.output} | ${row.observedFixtureCount} | ${row.missingRequiredFixtureIds.join(', ') || 'none'} | ${row.status} |`,
       )
     }
   }

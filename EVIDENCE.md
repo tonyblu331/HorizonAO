@@ -4,6 +4,77 @@ Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
 This file is the gate for later adaptive thickness, sampling, denoise, or depth
 hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
+## 2026-06-04 — VBAO release gap closure Phase 3 capture
+
+Status: **pinned render evidence captured; release promotion remains blocked**.
+
+Artifacts:
+
+- JSON: `artifacts/benchmarks/ao-release-gap-closure-latest.json`
+- Markdown summary: `artifacts/benchmarks/ao-release-gap-closure-summary.md`
+- Screenshots: `artifacts/benchmarks/screenshots-ao-release-gap-closure/`
+- Generated shader inspection JSON:
+  `artifacts/benchmarks/vbao-generated-shader-inspection-latest.json`
+- Generated shader inspection summary:
+  `artifacts/benchmarks/vbao-generated-shader-inspection-summary.md`
+
+Command:
+
+```powershell
+$env:AO_BENCHMARK_SCENES='lab,museum'; $env:AO_BENCHMARK_MODES='gtao,vbao,n8ao'; $env:AO_BENCHMARK_VIEWS='beauty,ao'; $env:AO_BENCHMARK_DENOISE_STATES='false,true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='half,full'; $env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5208'; $env:PLAYWRIGHT_TEST_PORT='5208'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/ao-release-gap-closure-latest.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/ao-release-gap-closure-summary.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-ao-release-gap-closure'; pnpm --filter @horizonao/demo exec node scripts/collect-ao-benchmark.mjs
+$env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5209'; $env:PLAYWRIGHT_TEST_PORT='5209'; pnpm --filter @horizonao/demo exec node scripts/collect-vbao-generated-shader-inspection.mjs
+```
+
+Coverage:
+
+- Scenes: `/lab`, `/museum`.
+- Resolutions: `1920x1080`, `1280x720`.
+- Views: `beauty`, `ao`.
+- Outputs: VBAO `raw-debug` and `product`; GTAO `raw` and `denoised`;
+  N8AO `internally-filtered`.
+- Rows captured: 38 report rows and 36 screenshots.
+- `/lab` emitted VBAO rows only through the current benchmark API; `/museum`
+  emitted GTAO, VBAO, and N8AO rows.
+
+Primary VBAO AO/product rows:
+
+| Scene | Resolution | VBAO res | View | Output | Median ms | p95 ms | Product GPU ms | Pattern/noise | Stripe | Edge bleed proxy | Thin-gap proxy | Failure labels | Screenshot |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| lab | 1280x720 | full-res | ao | product | 0.800 | 1.000 | 2.021376 | 0.01381 | 0.22399 | 0.00880 | 0.00482 | noise,edge-bleed | `artifacts/benchmarks/screenshots-ao-release-gap-closure/1280x720-lab-vbao-product-preset-off-full-res-product-ao.png` |
+| lab | 1920x1080 | full-res | ao | product | 0.600 | 0.900 | 2.617344 | 0.00861 | 0.05696 | 0.00602 | 0.00456 | noise,edge-bleed | `artifacts/benchmarks/screenshots-ao-release-gap-closure/1920x1080-lab-vbao-product-preset-off-full-res-product-ao.png` |
+| museum | 1280x720 | full-res | ao | product | 0.700 | 1.000 | 2.238464 | 0.03699 | 0.12702 | 0.02553 | 0.01145 | noise,edge-bleed | `artifacts/benchmarks/screenshots-ao-release-gap-closure/1280x720-museum-vbao-product-preset-off-full-res-product-ao.png` |
+| museum | 1280x720 | half-res | ao | product | 0.700 | 0.900 | 0.982016 | 0.02402 | 0.18573 | 0.01168 | 0.00371 | noise | `artifacts/benchmarks/screenshots-ao-release-gap-closure/1280x720-museum-vbao-product-preset-off-half-res-final-product-ao.png` |
+| museum | 1920x1080 | full-res | ao | product | 0.800 | 1.000 | 4.368384 | 0.01251 | 0.14387 | 0.00548 | 0.00363 | noise,edge-bleed | `artifacts/benchmarks/screenshots-ao-release-gap-closure/1920x1080-museum-vbao-product-preset-off-full-res-product-ao.png` |
+| museum | 1920x1080 | half-res | ao | product | 0.700 | 0.900 | 1.244160 | 0.01166 | 0.15391 | 0.00514 | 0.00214 | noise | `artifacts/benchmarks/screenshots-ao-release-gap-closure/1920x1080-museum-vbao-product-preset-off-half-res-final-product-ao.png` |
+
+Gate result:
+
+- Product promotion verdict rows: 26 `fail`, 8 `incomplete`, 0 `pass`.
+- Reference gate rows: 34 `missing-reference-observation`, so screenshot
+  proxies are not allowed to promote thin/contact correctness claims.
+- Threshold gate rows: 34 `incomplete`; no material threshold policy was tuned
+  after seeing this capture.
+- Evidence artifact rows: 36 `complete`, 2 `incomplete`; the incomplete rows
+  are synthetic half-resolution reconstruction summary rows missing stage
+  observations, not screenshot captures.
+- Generated shader inspection: `pass` for product-preset and `spatial-ultra`;
+  fixed slice/sample loop bounds, no dynamic slice/sample uniform loops, no
+  duplicate VBAO declaration warnings, and no non-ignored console diagnostics.
+- Rendered proxy vs reference observation gate: 26 rows checked, 26 `blocked`;
+  screenshot proxies were complete, but every row still has
+  `missing-reference-observation` with all required fixture IDs missing.
+- These artifacts are local capture outputs. Until explicitly added to version
+  control, the final release verdict remains not clean-checkout reproducible.
+
+Decision:
+
+- Phase 3 render capture exists and is useful for comparison.
+- The current contact/thickness policy is **not accepted for release
+  promotion** from this capture: reference observations and threshold verdicts
+  are still missing, and VBAO product rows retain `noise` / `edge-bleed`
+  labels.
+- Production build was not run.
+
 ## 2026-06-04 — VBAO signal-quality studio gate
 
 Status: **candidate bakeoff complete; no quality candidate promoted**.
