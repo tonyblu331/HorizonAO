@@ -9,12 +9,22 @@ import { VBAO_NOISE_TILE_SIZE } from '../../../../packages/horizon-ao/src/vbaoNo
 
 export const VBAO_BENCHMARK_NOISE_SOURCES = [
   'phase-atlas-stable-hash',
+  'phase-atlas-stable-hash-128',
   'ign',
+  'ign-128',
   'static-stbn',
+  'static-stbn-128',
+  'hilbert-r2-lut',
   'fast-like',
 ] as const
 
 export type VbaoBenchmarkNoiseSourceName = (typeof VBAO_BENCHMARK_NOISE_SOURCES)[number]
+type VbaoBenchmarkBaseNoiseSource =
+  | 'phase-atlas-stable-hash'
+  | 'ign'
+  | 'static-stbn'
+  | 'hilbert-r2-lut'
+  | 'fast-like'
 
 const benchmarkNoiseTextures = new Map<VbaoBenchmarkNoiseSourceName, DataTexture>()
 
@@ -66,17 +76,44 @@ function fastLikeUnit(x: number, y: number, seed: number): number {
   return fract(lowDiscrepancy + hashUnit(tileX, tileY, seed + 307) * 0.03125)
 }
 
+function hilbertR2LikeUnit(x: number, y: number, seed: number): number {
+  const tileX = x & 63
+  const tileY = y & 63
+  const rank = morton8(tileX ^ ((seed * 11) & 63), tileY ^ ((seed * 17) & 63))
+  const r2 = fract(rank * 0.7548776662466927 + seed * 0.5698402909980532)
+  return fract(r2 + hashUnit(tileX, tileY, seed + 409) * 0.015625)
+}
+
+function baseNoiseSource(source: VbaoBenchmarkNoiseSourceName): VbaoBenchmarkBaseNoiseSource {
+  switch (source) {
+    case 'phase-atlas-stable-hash-128':
+      return 'phase-atlas-stable-hash'
+    case 'ign-128':
+      return 'ign'
+    case 'static-stbn-128':
+      return 'static-stbn'
+    default:
+      return source
+  }
+}
+
+function noiseTileSize(source: VbaoBenchmarkNoiseSourceName): number {
+  return source.endsWith('-128') ? 128 : VBAO_NOISE_TILE_SIZE
+}
+
 function sampleBenchmarkUnit(
   source: VbaoBenchmarkNoiseSourceName,
   x: number,
   y: number,
   seed: number,
 ): number {
-  switch (source) {
+  switch (baseNoiseSource(source)) {
     case 'ign':
       return ignUnit(x, y, seed)
     case 'static-stbn':
       return staticStbnUnit(x, y, seed)
+    case 'hilbert-r2-lut':
+      return hilbertR2LikeUnit(x, y, seed)
     case 'fast-like':
       return fastLikeUnit(x, y, seed)
     case 'phase-atlas-stable-hash':
@@ -128,7 +165,7 @@ export function createVbaoBenchmarkNoiseTexture(
   const existing = benchmarkNoiseTextures.get(noiseSource)
   if (existing !== undefined) return existing
 
-  const n = VBAO_NOISE_TILE_SIZE
+  const n = noiseTileSize(noiseSource)
   const atlasWidth = n * VBAO_PHASE_ATLAS_COLUMNS
   const atlasHeight = n * VBAO_PHASE_ATLAS_ROWS
   const data = new Uint8Array(atlasWidth * atlasHeight * 4)
@@ -159,7 +196,7 @@ export function createVbaoBenchmarkNoiseTexture(
   texture.minFilter = NearestFilter
   texture.generateMipmaps = false
   texture.colorSpace = NoColorSpace
-  texture.name = `VBAO.BenchmarkNoise.${noiseSource}`
+  texture.name = `VBAO.BenchmarkNoise.${noiseSource}.${n}x${n}`
   texture.needsUpdate = true
   benchmarkNoiseTextures.set(noiseSource, texture)
   return texture

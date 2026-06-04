@@ -4,6 +4,69 @@ Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
 This file is the gate for later adaptive thickness, sampling, denoise, or depth
 hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
+## 2026-06-04 — VBAO signal-quality studio gate
+
+Status: **candidate bakeoff complete; no quality candidate promoted**.
+
+This SDD aligned the pasted VBAO noise/thinness diagnosis with current source
+truth, named the hardcoded contact policy constants, ran contact/sampling
+candidates, and added a private TSL compute smoke path. The evidence supports
+better instrumentation and decision records, not a product quality promotion.
+
+Artifacts:
+
+- `openspec/changes/vbao-signal-quality-studio-gate/`
+- `artifacts/benchmarks/ao-gpu-readback-latest.json`
+- `artifacts/benchmarks/ao-gpu-readback-summary.md`
+- `artifacts/benchmarks/vbao-noise-source-comparison-latest.json`
+- `artifacts/benchmarks/vbao-noise-source-comparison-summary.md`
+- `artifacts/benchmarks/screenshots-vbao-noise-sources/`
+- `artifacts/benchmarks/vbao-compute-smoke-latest.json`
+- `artifacts/benchmarks/vbao-compute-smoke-summary.md`
+- `artifacts/benchmarks/screenshots-vbao-compute-smoke/`
+
+Commands:
+
+```sh
+pnpm --filter @horizonao/demo benchmark:ao:gpu-readback
+
+$env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; node apps/demo/scripts/collect-vbao-noise-source-comparison.mjs
+
+$env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='ao'; $env:AO_BENCHMARK_DENOISE_STATES='true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE='sector-confidence-smoke'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-compute-smoke-latest.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-compute-smoke-summary.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-compute-smoke'; pnpm --filter @horizonao/demo benchmark:ao
+```
+
+Readback baseline:
+
+- backend: `webgpu-compute`
+- output: `24x1` values, `96` bytes
+- storage targets: `output`, `readback`
+- `vbao-32-sector-gpu` MAE: `0.0060`
+- worst fixture: `two-wall-corner-gap`
+
+Rendered compute smoke row:
+
+| Resolution | View | Output | Candidate | Labels | Raw GPU ms | Polish GPU ms | Total product GPU ms | Compute CPU ms | Pattern/noise ↓ | Edge bleed ↓ | Thin-gap ↑ |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1280x720 | ao | product | `sector-confidence-smoke` | `noise,edge-bleed` | 1.506 | 0.104 | 1.611 | 2.400 | 0.03699 | 0.02553 | 0.01145 |
+
+Decision:
+
+- Keep current named contact policy as control; reject adaptive/floor thickness
+  candidates because they add sectors to the thin-gap gate.
+- Keep `phase-atlas-stable-hash` as control; reject IGN, STBN,
+  Hilbert/R2-style LUT, 128x128 atlas, and same-budget sample-shape candidates
+  from this pass.
+- Keep `sector-confidence-smoke` private and opt-in only; it proves TSL
+  compute-to-texture-node integration and timing visibility, but it does not
+  win a quality gate.
+- Do not prototype edge metadata or depth hierarchy yet. They need cleaner
+  reference targets before adding more product-pipeline machinery.
+- README and marketing claims remain blocked until reference/product gates prove
+  quality, not merely smoother screenshots.
+- AO-view metrics in these screenshot reports are rendered presentation
+  metrics after the demo display transform; cross-algorithm rows are not scalar
+  AO truth.
+
 ## 2026-06-03 — VBAO thin-geometry golden-diff rendered proxy audit
 
 Status: **rendered proxy evidence captured; ray-cast product observation still missing**.

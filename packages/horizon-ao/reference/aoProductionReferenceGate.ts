@@ -19,6 +19,14 @@ export const AO_PRODUCTION_REFERENCE_ALGORITHMS = ['vbao', 'gtao', 'ssao', 'n8ao
 
 export type AoProductionReferenceAlgorithm = (typeof AO_PRODUCTION_REFERENCE_ALGORITHMS)[number]
 
+const AO_PRODUCTION_REFERENCE_EXPECTED_ALGORITHMS: readonly string[] = [
+  'vbao-raw',
+  'vbao-product',
+  'gtao',
+  'ssao',
+  'n8ao',
+]
+
 export type AoProductionReferenceGateStatus = 'compared' | 'missing-reference-observation'
 
 export interface AoProductionReferenceObservation {
@@ -96,14 +104,23 @@ function outputLabel(
   return denoise ? 'denoised' : 'raw'
 }
 
-function productAlgorithm(
+function comparableAlgorithm(
   row: AoProductionReferenceGateInputRow,
 ): AoProductionReferenceAlgorithm | null {
   const algorithm = normalizeAlgorithm(row.mode ?? row.algorithm)
   if (algorithm === null) return null
   if (!isAoView(row)) return null
+  if (algorithm === 'vbao') return algorithm
   if (!isProductOutput(row, algorithm)) return null
   return algorithm
+}
+
+function raycastAlgorithmLabel(
+  row: AoProductionReferenceGateInputRow,
+  algorithm: AoProductionReferenceAlgorithm,
+): string {
+  if (algorithm !== 'vbao') return algorithm
+  return outputLabel(row, algorithm) === 'product' ? 'vbao-product' : 'vbao-raw'
 }
 
 function rowObservations(
@@ -133,7 +150,7 @@ function compareRow(
     observations: observations.map(
       (observation): AoReferenceObservation => ({
         fixtureId: observation.fixtureId,
-        algorithm,
+        algorithm: raycastAlgorithmLabel(row, algorithm),
         accessibility: observation.accessibility,
         source: observation.source ?? 'gpu-readback',
         note: observation.note ?? label,
@@ -151,7 +168,7 @@ export function createAoProductionReferenceGateReport(
   const observations: AoReferenceObservation[] = []
 
   for (const row of rows) {
-    const algorithm = productAlgorithm(row)
+    const algorithm = comparableAlgorithm(row)
     if (algorithm === null) continue
 
     const comparison = compareRow(row, algorithm)
@@ -160,7 +177,7 @@ export function createAoProductionReferenceGateReport(
   }
   const raycastOptions: CreateAoReferenceReportOptions = {
     generatedAt,
-    expectedAlgorithms: AO_PRODUCTION_REFERENCE_ALGORITHMS,
+    expectedAlgorithms: AO_PRODUCTION_REFERENCE_EXPECTED_ALGORITHMS,
     ...(options.sampleCount !== undefined ? { sampleCount: options.sampleCount } : {}),
     ...(options.raycastThresholds !== undefined ? { thresholds: options.raycastThresholds } : {}),
   }

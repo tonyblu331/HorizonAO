@@ -85,6 +85,9 @@ describe('AO reference report gate', () => {
 
     expect(summary?.observedFixtureCount).toBe(1)
     expect(summary?.missingFixtureIds).toContain('thin-gap-separated-slabs')
+    expect(summary?.missingFixtureIds).toContain('broad-wall-contact')
+    expect(summary?.missingFixtureIds).toContain('grazing-surface-wall')
+    expect(summary?.missingFixtureIds).toContain('normal-sensitive-side-contact')
     expect(summary?.verdict).toBe('warn')
   })
 

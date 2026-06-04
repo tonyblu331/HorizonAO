@@ -216,6 +216,14 @@ export const RAYCAST_AO_FIXTURES = Object.freeze([
     ],
   },
   {
+    id: 'broad-wall-contact',
+    description: 'Single broad wall near the receiver; gates broad-contact under-occlusion.',
+    point: [0, 0, 0],
+    normal: [0, 1, 0],
+    radius: 1.5,
+    occluders: [{ type: 'box', min: [0.38, 0, -1.0], max: [0.54, 1.25, 1.0] }],
+  },
+  {
     id: 'thin-gap-separated-slabs',
     description: 'Two separated thin slabs with a visible center opening.',
     point: [0, 0, 0],
@@ -225,6 +233,22 @@ export const RAYCAST_AO_FIXTURES = Object.freeze([
       { type: 'box', min: [0.45, 0, -0.82], max: [0.52, 1.05, -0.14] },
       { type: 'box', min: [0.45, 0, 0.14], max: [0.52, 1.05, 0.82] },
     ],
+  },
+  {
+    id: 'grazing-surface-wall',
+    description: 'Tilted receiver normal near a wall; stresses grazing finite-geometry AO.',
+    point: [0, 0, 0],
+    normal: [0.42, 0.91, 0],
+    radius: 1.5,
+    occluders: [{ type: 'box', min: [0.46, 0, -0.7], max: [0.58, 1.15, 0.7] }],
+  },
+  {
+    id: 'normal-sensitive-side-contact',
+    description: 'Receiver normal tilted toward a side blocker; gates normal-sensitive contact.',
+    point: [0, 0, 0],
+    normal: [0, 0.74, 0.67],
+    radius: 1.5,
+    occluders: [{ type: 'box', min: [-0.36, 0, 0.46], max: [0.36, 1.05, 0.58] }],
   },
   {
     id: 'far-object-outside-radius',

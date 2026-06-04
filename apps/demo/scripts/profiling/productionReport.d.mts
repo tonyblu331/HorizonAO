@@ -121,13 +121,25 @@ export function createRenderedThinGeometryProxyRows(
 export interface AOEvidenceArtifactStatusInputRow {
   label?: string
   mode?: string
+  temporalMode?: string
   denoise?: boolean
   fullResolutionVbao?: boolean
   vbaoReconstructionStage?: (typeof VBAO_RECONSTRUCTION_STAGES)[number] | string
+  temporalDiagnostics?: unknown
+  temporalTargetInventory?: unknown
+  computeCandidateLabel?: string
+  computeCandidateInventory?: unknown
+  computeCandidateTiming?: unknown
+  temporalResetEvidenceReason?: string
   screenshotPath?: string
   latest?: {
     medianFrameMs?: number
     p95FrameMs?: number
+    vbaoTemporalDiagnostics?: unknown
+    vbaoTemporalTargetInventory?: unknown
+    vbaoComputeCandidateLabel?: string
+    vbaoComputeCandidateInventory?: unknown
+    vbaoComputeCandidateTiming?: unknown
   }
   reconstructionStages?: VbaoReconstructionStageEvidence[]
   passTimings?: Array<{
@@ -166,6 +178,12 @@ export function writeProductionQualityReports(args: {
       denoise?: boolean
       vbaoResolution?: string
       temporalMode?: string
+      temporalDiagnostics?: unknown
+      temporalTargetInventory?: unknown
+      computeCandidateLabel?: string
+      computeCandidateInventory?: unknown
+      computeCandidateTiming?: unknown
+      temporalResetEvidenceReason?: string
       hostTaaMode?: string
       view: string
       resolution: { width: number; height: number }
@@ -178,11 +196,17 @@ export function writeProductionQualityReports(args: {
         pass: string
         status: string
         gpuMs?: number | null
+        cpuMs?: number | null
       }>
       screenshotPath?: string
       latest?: {
         medianFrameMs?: number
         p95FrameMs?: number
+        vbaoTemporalDiagnostics?: unknown
+        vbaoTemporalTargetInventory?: unknown
+        vbaoComputeCandidateLabel?: string
+        vbaoComputeCandidateInventory?: unknown
+        vbaoComputeCandidateTiming?: unknown
       }
       qualityMetrics: {
         patternNoiseScore: number

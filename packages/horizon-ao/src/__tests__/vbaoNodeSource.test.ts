@@ -18,10 +18,12 @@ import aoCompareSource from '../../../../apps/demo/e2e/ao-compare.spec.ts?raw'
 import benchmarkSource from '../../../../apps/demo/scripts/collect-ao-benchmark.mjs?raw'
 import temporalGateSource from '../../../../apps/demo/scripts/verify-vbao-temporal-gate.mjs?raw'
 import shaderInspectionSource from '../../../../apps/demo/scripts/collect-vbao-generated-shader-inspection.mjs?raw'
+import gpuReadbackSource from '../../../../apps/demo/scripts/collect-ao-gpu-readback-baseline.mjs?raw'
 import profilingBenchmarkHarnessSource from '../../../../apps/demo/scripts/profiling/benchmarkHarness.mjs?raw'
 import profilingProductionReportSource from '../../../../apps/demo/scripts/profiling/productionReport.mjs?raw'
 import profilingScreenshotMetricsSource from '../../../../apps/demo/scripts/profiling/screenshotMetrics.mjs?raw'
 import benchmarkNoiseSource from '../../../../apps/demo/src/scenes/vbaoBenchmarkNoise.ts?raw'
+import computeCandidateSource from '../../../../apps/demo/src/scenes/vbaoComputeCandidate.ts?raw'
 
 const runtimeSources = [museumSource, aoCompareSource, benchmarkSource].join('\n')
 
@@ -117,7 +119,11 @@ describe('modernized VBAO production source contract', () => {
     expect(benchmarkNoiseSource).toContain('VBAO_BENCHMARK_NOISE_SOURCES')
     expect(benchmarkNoiseSource).toContain('createVbaoBenchmarkNoiseTexture')
     expect(benchmarkNoiseSource).toContain("'ign'")
+    expect(benchmarkNoiseSource).toContain("'ign-128'")
     expect(benchmarkNoiseSource).toContain("'static-stbn'")
+    expect(benchmarkNoiseSource).toContain("'static-stbn-128'")
+    expect(benchmarkNoiseSource).toContain("'phase-atlas-stable-hash-128'")
+    expect(benchmarkNoiseSource).toContain("'hilbert-r2-lut'")
     expect(benchmarkNoiseSource).toContain("'fast-like'")
     expect(source).not.toContain('__benchmarkNoiseSource')
     expect(optionsSource).not.toContain('__benchmarkNoiseSource')
@@ -209,8 +215,9 @@ describe('modernized VBAO production source contract', () => {
       "const sampleDist2 = dot(sampleDelta, sampleDelta).toVar('sampleDist2')",
     )
     expect(source).toContain("const sampleAlong = dot(sampleDelta, sampleDir).toVar('sampleAlong')")
+    expect(optionsSource).toContain('VBAO_CONTACT_THICKNESS_RADIUS_RATIO')
     expect(source).toMatch(
-      /const maxThickness = this\.radius\.mul\(float\(0\.3\)\)\.toVar\('vbaoMaxThickness'\)[\s\S]*?const maxValidRadius2 = maxValidRadius\.mul\(maxValidRadius\)\.toVar\('vbaoMaxValidRadius2'\)[\s\S]*?\(Loop as any\)\(\s*\{ start: int\(0\), end: sliceLoopEnd/,
+      /const maxThickness = this\.radius[\s\S]*?\.mul\(float\(VBAO_CONTACT_THICKNESS_RADIUS_RATIO\)\)[\s\S]*?\.toVar\('vbaoMaxThickness'\)[\s\S]*?const maxValidRadius2 = maxValidRadius\.mul\(maxValidRadius\)\.toVar\('vbaoMaxValidRadius2'\)[\s\S]*?\(Loop as any\)\(\s*\{ start: int\(0\), end: sliceLoopEnd/,
     )
     expect(source).toContain('sampleDist2.greaterThan(float(1e-8))')
     expect(source).toContain('sampleDist2.lessThanEqual(maxValidRadius2)')
@@ -233,17 +240,18 @@ describe('modernized VBAO production source contract', () => {
     expect(source).toContain(
       "const sampleDist = sqrt(max(sampleDist2, float(1e-8))).toVar('sampleDist')",
     )
-    expect(source).toContain(
-      "const maxThickness = this.radius.mul(float(0.3)).toVar('vbaoMaxThickness')",
-    )
+    expect(optionsSource).toContain('VBAO_CONTACT_THICKNESS_RADIUS_RATIO')
+    expect(optionsSource).toContain('VBAO_NEAR_SAMPLE_THICKNESS_RATIO')
+    expect(source).toContain('float(VBAO_CONTACT_THICKNESS_RADIUS_RATIO)')
+    expect(source).toContain('float(VBAO_NEAR_SAMPLE_THICKNESS_RATIO)')
     expect(source).toMatch(
       /const baseThickness = min\([\s\S]*?this\.thickness,[\s\S]*?maxThickness[\s\S]*?\)\.toVar\('vbaoBaseThickness'\)/,
     )
     expect(source).toMatch(
-      /const effectiveThickness = min\([\s\S]*?baseThickness,[\s\S]*?sampleDist\.mul\(float\(0\.85\)\),[\s\S]*?\)\.toVar\('effectiveThickness'\)/,
+      /const effectiveThickness = min\([\s\S]*?baseThickness,[\s\S]*?sampleDist\.mul\(float\(VBAO_NEAR_SAMPLE_THICKNESS_RATIO\)\),[\s\S]*?\)\.toVar\('effectiveThickness'\)/,
     )
     expect(source).not.toContain(
-      "const effectiveThickness = min(this.thickness, sampleDist.mul(float(0.85))).toVar('effectiveThickness')",
+      "const effectiveThickness = min(this.thickness, sampleDist.mul(float(VBAO_NEAR_SAMPLE_THICKNESS_RATIO))).toVar('effectiveThickness')",
     )
     expect(source).toContain('const backDelta = samplePos')
     expect(source).toContain("const D_back = backDelta.div(backDist).toVar('D_back')")
@@ -389,6 +397,7 @@ describe('modernized VBAO production source contract', () => {
     expect(temporalGateSource).toContain('VBAO_TEMPORAL_VELOCITY_JSON')
     expect(temporalGateSource).toContain('VBAO_TEMPORAL_MOTION_JSON')
     expect(temporalGateSource).toContain("const MOTION_EVIDENCE_KINDS = new Set(['camera-motion', 'object-motion', 'disocclusion'])")
+    expect(temporalGateSource).toContain('const REQUIRED_MOTION_EVIDENCE_KINDS = [...MOTION_EVIDENCE_KINDS]')
     expect(temporalGateSource).toContain('function hasMotionEvidenceKind(row)')
     expect(temporalGateSource).toContain('function hasMotionEvidenceSource(row)')
     expect(temporalGateSource).toContain('hostTaaEvidence')
@@ -399,23 +408,41 @@ describe('modernized VBAO production source contract', () => {
     expect(temporalGateSource).toContain('stripeRegression')
     expect(temporalGateSource).toContain('VBAO_TEMPORAL_ALTERNATIVE_JSON')
     expect(temporalGateSource).toContain('sameCostAlternativeEvidence')
+    expect(temporalGateSource).toContain('async function explicitEvidencePathsAreTrackedAndClean(reports)')
+    expect(temporalGateSource).toContain("gitSucceeds(['ls-files', '--error-unmatch', '--', gitPath])")
+    expect(temporalGateSource).toContain("gitSucceeds(['diff', '--quiet', '--', gitPath])")
+    expect(temporalGateSource).toContain("gitSucceeds(['diff', '--cached', '--quiet', '--', gitPath])")
+    expect(temporalGateSource).toContain('.map((row) => row.screenshotPath)')
+    expect(temporalGateSource).toContain('.map(resolveEvidencePath)')
+    expect(temporalGateSource).toContain('cleanCheckout: cleanCheckoutReproducible')
     expect(temporalGateSource).toContain('motionDisocclusionEvidence')
     expect(temporalGateSource).toContain('hasMotionEvidenceKind(row)')
     expect(temporalGateSource).toContain('hasMotionEvidenceSource(row)')
     expect(temporalGateSource).toContain('function motionEvidenceKey(row)')
-    expect(temporalGateSource).toContain('const motionByKey = new Map')
+    expect(temporalGateSource).toContain('function motionEvidenceKindKey(row, kind = row.motionEvidenceKind)')
+    expect(temporalGateSource).toContain('const motionByKindKey = new Map')
     expect(temporalGateSource).toContain('const missingMotionRows = productOffRows')
+    expect(temporalGateSource).toContain('!motionByKindKey.has(motionEvidenceKindKey(row, kind))')
+    expect(temporalGateSource).toContain('const observedMotionEvidenceKinds =')
+    expect(temporalGateSource).toContain('const missingMotionEvidenceKinds = REQUIRED_MOTION_EVIDENCE_KINDS.filter')
+    expect(temporalGateSource).toContain('const motionEvidenceCompleteForReview =')
     expect(temporalGateSource).toContain('internalTemporalEvidence')
     expect(temporalGateSource).toContain('internalTemporalPassesPromotion')
     expect(temporalGateSource).toContain('const velocityTemporalEvidence =')
     expect(temporalGateSource).toContain('const internalTemporalEvidence = velocityTemporalEvidence')
     expect(temporalGateSource).toContain('const internalTemporalPassesPromotion =')
-    expect(temporalGateSource).toContain('velocityTemporalEvidence &&\n  motionDisocclusionEvidence')
+    expect(temporalGateSource).toContain('velocityTemporalEvidence &&\n  resetEvidenceComplete &&\n  motionDisocclusionEvidence')
     expect(benchmarkSource).toContain('Private VBAOVelocityTemporalNode wrapped ${vbaoBaseProductOutputContract}')
+    expect(museumSource).toContain('type VBAOVelocityTemporalDiagnostics')
+    expect(museumSource).toContain('getVbaoTemporalDiagnostics')
+    expect(museumSource).toContain('vbaoTemporalDiagnostics:')
     expect(benchmarkSource).toContain('AO_BENCHMARK_VBAO_MOTION_EVIDENCE_KIND')
     expect(benchmarkSource).toContain("motionEvidenceSource")
+    expect(temporalGateSource).toContain('function temporalDiagnosticsComplete(row)')
+    expect(temporalGateSource).toContain("diagnostics.renderTargetName === 'VBAO.VelocityTemporalDiagnostics'")
+    expect(temporalGateSource).toContain('missingVelocityDiagnosticsRows')
     expect(temporalGateSource).toContain(
-      'const complete = hostEvidenceComplete && hostTaaEvidence && sameCostAlternativeEvidence',
+      'hostEvidenceComplete &&\n  hostTaaEvidence &&\n  sameCostAlternativeEvidence &&\n  resetEvidenceComplete &&\n  motionEvidenceCompleteForReview',
     )
     expect(temporalGateSource).toContain('createExistingScreenshotPathSet')
     expect(temporalGateSource).toContain('qualityMetricsComplete')
@@ -424,10 +451,20 @@ describe('modernized VBAO production source contract', () => {
     expect(temporalGateSource).toContain('hasInternalBlockingFailureLabels')
     expect(temporalGateSource).toContain("rawPass?.status !== 'measured' || !finiteNumber(rawPass.gpuMs)")
     expect(temporalGateSource).toContain('Velocity-backed internal temporal evidence:')
+    expect(temporalGateSource).toContain('Velocity motion evidence complete:')
+    expect(temporalGateSource).toContain('Velocity motion/disocclusion gate clean:')
     expect(temporalGateSource).toContain('VBAO_TEMPORAL_REQUIRE_CANDIDATE')
     expect(temporalGateSource).toContain('process.exitCode = 1')
     expect(temporalGateSource).toContain('Host TAA/TRAA evidence:')
     expect(temporalGateSource).toContain('Same-cost non-temporal alternative evidence:')
+    expect(temporalGateSource).toContain('async function isTrackedCleanGitInput(filePath)')
+    expect(temporalGateSource).toContain("gitSucceeds(['ls-files', '--error-unmatch', '--', gitPath])")
+    expect(temporalGateSource).toContain("gitSucceeds(['diff', '--quiet', '--', gitPath])")
+    expect(temporalGateSource).toContain("gitSucceeds(['diff', '--cached', '--quiet', '--', gitPath])")
+    expect(temporalGateSource).toContain('cleanCheckout: cleanCheckoutReproducible')
+    expect(temporalGateSource).not.toContain(
+      'Default *-latest benchmark inputs are local generated artifacts ignored by git',
+    )
   })
 
   it('keeps removed internal temporal accumulation out of core exports and internals', () => {
@@ -449,6 +486,15 @@ describe('modernized VBAO production source contract', () => {
     expect(velocityTemporalSource).toContain('const historyUv = uvNode.sub(velocityUv)')
     expect(velocityTemporalSource).toContain('this.resetHistory.lessThan(float(0.5))')
     expect(velocityTemporalSource).toContain('const clampedHistoryAo = clamp(historyAo, minAo, maxAo)')
+    expect(velocityTemporalSource).toContain('VBAOVelocityTemporalDiagnostics')
+    expect(velocityTemporalSource).toContain("renderTargetName: this.diagnosticsRenderTarget.texture.name")
+    expect(velocityTemporalSource).toContain("reset: 1")
+    expect(velocityTemporalSource).toContain("viewport: 2")
+    expect(velocityTemporalSource).toContain("depth: 4")
+    expect(velocityTemporalSource).toContain("normal: 8")
+    expect(velocityTemporalSource).toContain("velocity: 16")
+    expect(velocityTemporalSource).toContain("clampHistoryRange: 32")
+    expect(velocityTemporalSource).toContain('reasonBits.addAssign(float(32))')
     expect(velocityTemporalSource).toContain('renderer.copyTextureToTexture')
     expect(velocityTemporalSource).not.toContain('previousViewProjection')
     expect(velocityTemporalSource).not.toContain('previousDepthRenderTarget')
@@ -459,6 +505,10 @@ describe('modernized VBAO production source contract', () => {
     expect(aoPipelinesSource).toContain('render: (mode: AoMode, viewMode: AoViewMode, productOutput?: boolean) => void')
     expect(aoPipelinesSource).toContain('const vbaoTex = vbaoNode.getTextureNode()')
     expect(aoPipelinesSource).toContain('const vbaoRawTex = vbaoNode.getRawTextureNode()')
+    expect(aoPipelinesSource).toContain('createSsaoScalar')
+    expect(aoPipelinesSource).not.toContain('SSAOPass')
+    expect(museumSource).toContain('ssaoRawScalar')
+    expect(museumSource).not.toContain('displayCompressedAoScalar')
     expect(aoPipelinesSource).toContain('if (productOutput) vbaoAoPipeline.render()')
     expect(aoPipelinesSource).toContain('else vbaoRawAoPipeline.render()')
     expect(aoPipelinesSource).toContain('if (productOutput) vbaoPipeline.render()')
@@ -721,9 +771,7 @@ describe('modernized VBAO production source contract', () => {
     expect(profilingProductionReportSource).toContain("'disocclusion'")
     expect(profilingProductionReportSource).toContain("'scale-mismatch'")
     expect(profilingProductionReportSource).toContain("'false-curvature'")
-    expect(profilingProductionReportSource).toContain(
-      "return ['noise', 'false-curvature', 'scale-mismatch']",
-    )
+    expect(profilingProductionReportSource).toContain("return ['noise']")
     expect(profilingProductionReportSource).toContain("return ['noise', 'edge-bleed']")
     expect(profilingProductionReportSource).toContain("labels.add('mud')")
     expect(profilingProductionReportSource).toContain("labels.add('thin-gap')")
@@ -746,7 +794,7 @@ describe('modernized VBAO production source contract', () => {
 
   it('records VBAO internal pass timing status without treating skipped passes as zero cost', () => {
     expect(benchmarkSource).toContain('function createVbaoPassTimingRows')
-    expect(benchmarkSource).toContain('collectVbaoGpuPassTimings')
+    expect(benchmarkSource).toContain('collectAoGpuPassTimings')
     expect(benchmarkSource).toContain("'measured'")
     expect(benchmarkSource).toContain("'derived'")
     expect(benchmarkSource).toContain("'skipped'")
@@ -763,13 +811,54 @@ describe('modernized VBAO production source contract', () => {
     expect(benchmarkSource).toContain("if (!enabled) return measuredByPass.has(pass) ? 'unexpected' : 'skipped'")
     expect(benchmarkSource).toContain('resolveGpuPassTimings')
     expect(benchmarkSource).toContain("['missing', 'unexpected'].includes(passTiming.status)")
-    expect(benchmarkSource).toContain('passTimings: createVbaoPassTimingRows')
+    expect(benchmarkSource).toMatch(/passTimings:[\s\S]*createVbaoPassTimingRows\(/)
     expect(profilingProductionReportSource).toContain('AO Production Pass Timing Status')
     expect(profilingProductionReportSource).toContain(
       '| Resolution | Algorithm | VBAO sample mode | VBAO temporal | Host TAA | VBAO res | View | Output | Pass | Status | GPU ms |',
     )
     expect(profilingProductionReportSource).toContain("row.hostTaaMode ?? 'n/a'")
     expect(profilingProductionReportSource).toContain('Skipped passes are not zero-cost passes')
+  })
+
+  it('keeps compute/readback candidates private and schema-visible', () => {
+    expect(optionsSource).not.toContain('compute')
+    expect(optionsSource).not.toContain('storageTarget')
+    expect(indexSource).not.toContain('ComputeNode')
+    expect(indexSource).not.toContain('VBAOCompute')
+    expect(source).not.toContain('renderer.compute')
+    expect(computeCandidateSource).toContain('VBAO_COMPUTE_CANDIDATE_LABEL')
+    expect(computeCandidateSource).toContain('sector-confidence-smoke')
+    expect(computeCandidateSource).toContain('new StorageTexture')
+    expect(computeCandidateSource).toContain('storageTexture')
+    expect(computeCandidateSource).toContain('textureStore')
+    expect(computeCandidateSource).toContain('compute: (renderer: WebGPURenderer) => renderer.compute(computeNode)')
+    expect(computeCandidateSource).toContain('computeAsync')
+    expect(computeCandidateSource).toContain('textureNode: texture(target)')
+    expect(museumSource).toContain('createVbaoSectorConfidenceComputeCandidate')
+    expect(museumSource).toContain('getRequestedVbaoComputeCandidateMode')
+    expect(museumSource).toContain("get('vbaoComputeCandidate')")
+    expect(museumSource).toContain('sectorConfidence.compute(renderer)')
+    expect(museumSource).toContain('const sectorConfidenceScalar = sectorConfidence?.textureNode.r ?? float(1)')
+    expect(museumSource).toContain('vbaoProductNode.r.mul(sectorConfidenceScalar)')
+    expect(museumSource).toContain('polishScalar.mul(sectorConfidenceScalar)')
+    expect(museumSource).toContain('vbaoComputeCandidateLabel')
+    expect(museumSource).toContain('getVbaoComputeCandidateLabel')
+    expect(museumSource).toContain('getVbaoComputeCandidateInventory')
+    expect(museumSource).toContain('getVbaoComputeCandidateTiming')
+    expect(benchmarkSource).toContain('computeCandidateLabel')
+    expect(benchmarkSource).toContain('computeCandidateInventory')
+    expect(benchmarkSource).toContain('computeCandidateTiming')
+    expect(benchmarkSource).toContain('AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE')
+    expect(benchmarkSource).toContain("url.searchParams.set('vbaoComputeCandidate', vbaoComputeCandidateMode)")
+    expect(profilingProductionReportSource).toContain('VBAO Compute Candidate Status')
+    expect(profilingProductionReportSource).toContain('CPU ms')
+    expect(gpuReadbackSource).toContain('@compute @workgroup_size(1)')
+    expect(gpuReadbackSource).toContain('var<storage, read_write> output')
+    expect(gpuReadbackSource).toContain('computeDispatchTimings')
+    expect(gpuReadbackSource).toContain('storageTargetInventory')
+    expect(gpuReadbackSource).toContain('outputResolution')
+    expect(gpuReadbackSource).toContain('webgpuBackendStatus')
+    expect(gpuReadbackSource).toContain('backend: ')
   })
 
   it('ships product-first quality presets without platform labels', () => {
@@ -800,7 +889,7 @@ describe('modernized VBAO production source contract', () => {
   })
 
   it('keeps Museum VBAO thickness in the product ratio band instead of the slabby stress value', () => {
-    expect(museumSource).toContain('baseline: { radius: 0.35, thickness: 0.09 }')
+    expect(museumSource).toContain('baseline: { radius: 1.25, thickness: 0.25 }')
     expect(museumSource).not.toContain('baseline: { radius: 0.35, thickness: 0.28 }')
   })
 
@@ -815,15 +904,20 @@ describe('modernized VBAO production source contract', () => {
     expect(museumSource).toContain('disposeActiveVbao()')
     expect(museumSource).toContain("quality: VBAO_PRODUCT_QUALITY")
     expect(museumSource).toContain("const VBAO_PRODUCT_QUALITY = 'quality' as const")
-    expect(museumSource).toContain(
-      "type VbaoSampleMode = 'product-preset' | 'debug-override' | 'spatial-ultra'",
-    )
-    expect(museumSource).toContain(
-      "if (requested === 'debug-override' || requested === 'spatial-ultra') return requested",
-    )
+    expect(museumSource).toContain('type VbaoSampleMode =')
+    expect(museumSource).toContain("'product-preset'")
+    expect(museumSource).toContain("'debug-override'")
+    expect(museumSource).toContain("'spatial-ultra'")
+    expect(museumSource).toContain("'same-cost-3x10'")
+    expect(museumSource).toContain("'same-cost-2x16'")
+    expect(museumSource).toContain('resolveVbaoSampleShape')
+    expect(museumSource).toContain("requested === 'debug-override'")
+    expect(museumSource).toContain("requested === 'spatial-ultra'")
     expect(museumSource).toContain("vbaoSampleMode === 'debug-override'")
-    expect(museumSource).toContain("vbaoSampleMode === 'spatial-ultra'")
+    expect(museumSource).toContain("if (sampleMode === 'spatial-ultra')")
     expect(museumSource).toContain('const VBAO_SPATIAL_ULTRA_SHAPE = { samples: 10, slices: 4 } as const')
+    expect(museumSource).toContain('const VBAO_SAME_COST_3X10_SHAPE = { samples: 10, slices: 3 } as const')
+    expect(museumSource).toContain('const VBAO_SAME_COST_2X16_SHAPE = { samples: 16, slices: 2 } as const')
     expect(museumSource).toContain(
       'benchmark: { noiseTexture: createVbaoBenchmarkNoiseTexture(vbaoNoiseSource) }',
     )
@@ -914,6 +1008,8 @@ describe('modernized VBAO production source contract', () => {
     expect(benchmarkSource).toContain('AO_BENCHMARK_VBAO_SAMPLE_MODE')
     expect(benchmarkSource).toContain("url.searchParams.set('vbaoSampleMode', vbaoSampleMode)")
     expect(benchmarkSource).toContain("'spatial-ultra'")
+    expect(benchmarkSource).toContain("'same-cost-3x10'")
+    expect(benchmarkSource).toContain("'same-cost-2x16'")
     expect(benchmarkSource).toContain('sampleMode: mode === ')
     expect(benchmarkSource).toContain(
       '${mode}-${vbaoSampleMode}${temporalLabel}${hostTaaLabel}${cleanupLabel}${resolvePolishLabel}${softnessLabel}-${vbaoResolutionLabel}',

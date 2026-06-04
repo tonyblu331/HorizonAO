@@ -13,7 +13,10 @@ describe('ray-cast AO reference fixtures', () => {
       'sphere-contact',
       'box-contact',
       'two-wall-corner',
+      'broad-wall-contact',
       'thin-gap-separated-slabs',
+      'grazing-surface-wall',
+      'normal-sensitive-side-contact',
       'far-object-outside-radius',
     ])
   })
@@ -35,6 +38,28 @@ describe('ray-cast AO reference fixtures', () => {
     expect(box).toBeGreaterThan(0.55)
     expect(box).toBeLessThan(0.9)
     expect(corner).toBeLessThan(Math.min(sphere, box))
+  })
+
+  it('covers broad-wall, grazing, and normal-sensitive finite geometry', () => {
+    const broadWall = evaluateRaycastAoReference(
+      fixtureById['broad-wall-contact']!,
+      2048,
+    ).accessibility
+    const grazing = evaluateRaycastAoReference(
+      fixtureById['grazing-surface-wall']!,
+      2048,
+    ).accessibility
+    const normalSensitive = evaluateRaycastAoReference(
+      fixtureById['normal-sensitive-side-contact']!,
+      2048,
+    ).accessibility
+
+    expect(broadWall).toBeGreaterThan(0.35)
+    expect(broadWall).toBeLessThan(0.85)
+    expect(grazing).toBeGreaterThan(0.25)
+    expect(grazing).toBeLessThan(broadWall)
+    expect(normalSensitive).toBeGreaterThan(0.25)
+    expect(normalSensitive).toBeLessThan(0.85)
   })
 
   it('preserves thin-gap access instead of treating separated slabs as one wall', () => {

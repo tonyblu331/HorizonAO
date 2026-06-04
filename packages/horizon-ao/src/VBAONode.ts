@@ -56,8 +56,10 @@ import {
 } from 'three/tsl'
 
 import {
+  VBAO_CONTACT_THICKNESS_RADIUS_RATIO,
   SECTOR_COUNT,
   VBAO_DEFAULTS,
+  VBAO_NEAR_SAMPLE_THICKNESS_RATIO,
   VBAO_QUALITY_TIERS,
   clampVbaoNodeOptions,
   type VBAONodeOptions,
@@ -586,7 +588,9 @@ export class VBAONode extends TempNode<'float'> {
         .select(cross(V, vec3(1, 0, 0)), cross(V, vec3(0, 1, 0)))
       const T0 = (normalize(tangentSeed as any) as any).toVar('T0')
       const T1 = (normalize(cross(V as any, T0 as any) as any) as any).toVar('T1')
-      const maxThickness = this.radius.mul(float(0.3)).toVar('vbaoMaxThickness')
+      const maxThickness = this.radius
+        .mul(float(VBAO_CONTACT_THICKNESS_RADIUS_RATIO))
+        .toVar('vbaoMaxThickness')
       const baseThickness = min(this.thickness, maxThickness).toVar('vbaoBaseThickness')
       const maxValidRadius = this.radius.add(baseThickness).toVar('vbaoMaxValidRadius')
       const maxValidRadius2 = maxValidRadius.mul(maxValidRadius).toVar('vbaoMaxValidRadius2')
@@ -665,7 +669,7 @@ export class VBAONode extends TempNode<'float'> {
                     const sampleDist = sqrt(max(sampleDist2, float(1e-8))).toVar('sampleDist')
                     const effectiveThickness = min(
                       baseThickness,
-                      sampleDist.mul(float(0.85)),
+                      sampleDist.mul(float(VBAO_NEAR_SAMPLE_THICKNESS_RATIO)),
                     ).toVar('effectiveThickness')
                     const D_front = sampleDelta.div(sampleDist).toVar('D_front')
                     const sampleViewLen = sqrt(max(dot(samplePos, samplePos), float(1e-8))).toVar(

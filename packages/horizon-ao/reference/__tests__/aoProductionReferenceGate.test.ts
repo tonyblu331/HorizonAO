@@ -10,9 +10,22 @@ const flatPlaneReference = evaluateRaycastAoReference(RAYCAST_AO_FIXTURES[0]!, 1
 const sphereReference = evaluateRaycastAoReference(RAYCAST_AO_FIXTURES[1]!, 1024)
 
 describe('AO production reference gate', () => {
-  it('selects product AO rows for VBAO/GTAO/SSAO/N8AO and rejects non-product rows', () => {
+  it('selects comparable AO rows and rejects non-product non-VBAO rows', () => {
     const rows: AoProductionReferenceGateInputRow[] = [
       { label: 'vbao raw beauty', mode: 'vbao', view: 'beauty', denoise: false },
+      {
+        label: 'vbao raw ao',
+        mode: 'vbao',
+        view: 'ao',
+        denoise: false,
+        referenceObservations: [
+          {
+            fixtureId: 'flat-plane-open',
+            accessibility: flatPlaneReference.accessibility,
+            source: 'gpu-readback',
+          },
+        ],
+      },
       { label: 'ssao raw ao', mode: 'ssao', view: 'ao', denoise: false },
       {
         label: 'vbao product ao',
@@ -54,11 +67,13 @@ describe('AO production reference gate', () => {
     })
 
     expect(report.productRows.map((row) => row.label)).toEqual([
+      'vbao raw ao',
       'vbao product ao',
       'gtao denoised ao',
       'n8ao filtered ao',
     ])
     expect(report.productRows.map((row) => row.status)).toEqual([
+      'compared',
       'compared',
       'compared',
       'missing-reference-observation',
@@ -96,13 +111,64 @@ describe('AO production reference gate', () => {
     )
 
     const sphereRow = report.raycastReport.rows.find((row) => row.fixtureId === 'sphere-contact')
-    const vbaoCandidate = sphereRow?.candidates.find((candidate) => candidate.algorithm === 'vbao')
+    const vbaoCandidate = sphereRow?.candidates.find(
+      (candidate) => candidate.algorithm === 'vbao-product',
+    )
 
     expect(vbaoCandidate?.absError).toBeCloseTo(0.25, 12)
     expect(vbaoCandidate?.verdict).toBe('fail')
-    expect(report.raycastReport.summary.find((item) => item.algorithm === 'vbao')?.verdict).toBe(
-      'fail',
+    expect(
+      report.raycastReport.summary.find((item) => item.algorithm === 'vbao-product')?.verdict,
+    ).toBe('fail')
+  })
+
+  it('keeps raw and product VBAO fixture observations separate', () => {
+    const report = createAoProductionReferenceGateReport(
+      [
+        {
+          label: 'vbao raw ao',
+          mode: 'vbao',
+          view: 'ao',
+          denoise: false,
+          referenceObservations: [
+            {
+              fixtureId: 'sphere-contact',
+              accessibility: sphereReference.accessibility - 0.02,
+              source: 'gpu-readback',
+            },
+          ],
+        },
+        {
+          label: 'vbao product ao',
+          mode: 'vbao',
+          view: 'ao',
+          denoise: true,
+          referenceObservations: [
+            {
+              fixtureId: 'sphere-contact',
+              accessibility: sphereReference.accessibility - 0.2,
+              source: 'gpu-readback',
+            },
+          ],
+        },
+      ],
+      {
+        generatedAt: '2026-06-01T00:00:00.000Z',
+        sampleCount: 1024,
+        raycastThresholds: { warnAbsError: 0.05, failAbsError: 0.15 },
+      },
     )
+    const sphereRow = report.raycastReport.rows.find((row) => row.fixtureId === 'sphere-contact')
+
+    expect(sphereRow?.candidates.map((candidate) => candidate.algorithm)).toEqual([
+      'vbao-raw',
+      'vbao-product',
+    ])
+    expect(report.raycastReport.summary.find((item) => item.algorithm === 'vbao-raw')?.verdict)
+      .toBe('warn')
+    expect(
+      report.raycastReport.summary.find((item) => item.algorithm === 'vbao-product')?.verdict,
+    ).toBe('fail')
   })
 
   it('keeps absent thin-slab product observations visible as missing coverage', () => {
@@ -128,7 +194,9 @@ describe('AO production reference gate', () => {
       },
     )
 
-    const vbaoSummary = report.raycastReport.summary.find((item) => item.algorithm === 'vbao')
+    const vbaoSummary = report.raycastReport.summary.find(
+      (item) => item.algorithm === 'vbao-product',
+    )
 
     expect(report.productRows[0]?.status).toBe('compared')
     expect(vbaoSummary?.missingFixtureIds).toContain('thin-gap-separated-slabs')
@@ -175,6 +243,7 @@ describe('AO production reference gate', () => {
 
     expect(markdown).toContain('# AO Production Reference Gate')
     expect(markdown).toContain('| vbao product ao | vbao | product | 1 | compared |')
+    expect(markdown).toContain('| vbao-product | warn | 1 |')
     expect(markdown).toContain('# AO Reference Fixture Report')
     expect(markdown).toContain('# VBAO Canonical Drift Report')
     expect(markdown).toContain(

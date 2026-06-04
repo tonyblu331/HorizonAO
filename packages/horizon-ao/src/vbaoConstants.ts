@@ -23,6 +23,15 @@ export const VBAO_THETA_RANGE = Math.PI
 export const VBAO_THETA_STEP = VBAO_THETA_RANGE / SECTOR_COUNT
 
 /**
+ * Internal finite-thickness policy for raw visibility intervals.
+ *
+ * These ratios are not public API. They keep the current contact behavior named
+ * so reference gates can fit replacements without brittle source-literal tests.
+ */
+export const VBAO_CONTACT_THICKNESS_RADIUS_RATIO = 0.3 as const
+export const VBAO_NEAR_SAMPLE_THICKNESS_RATIO = 0.85 as const
+
+/**
  * Default values for the public `VBAONode` uniforms.
  *
  * `resolutionScale` is a JS field on `VBAONode`, not a raw AO uniform; included

@@ -19,7 +19,7 @@ export const VBAO_RECONSTRUCTION_STAGES = ['raw', 'cleanup', 'resolve', 'polish'
 
 export function classifyFailureLabels(row) {
   if (row.mode !== 'vbao') return ['none']
-  if (row.fullResolutionVbao === false) return ['noise', 'false-curvature', 'scale-mismatch']
+  if (row.fullResolutionVbao === false) return ['noise']
 
   const labels = new Set(['noise'])
   const contract = row.productOutputContract ?? ''
@@ -154,6 +154,49 @@ function isMissingPassTiming(passTiming) {
   return ['blocked', 'incomplete', 'missing', 'unexpected', 'unmeasured'].includes(passTiming.status)
 }
 
+function hasTemporalDiagnostics(row) {
+  if (row.temporalMode !== 'velocity-internal') return true
+  const diagnostics = row.temporalDiagnostics ?? row.latest?.vbaoTemporalDiagnostics
+  return (
+    diagnostics !== null &&
+    typeof diagnostics === 'object' &&
+    diagnostics.renderTargetName === 'VBAO.VelocityTemporalDiagnostics' &&
+    diagnostics.encodedReasonBits?.reset === 1 &&
+    diagnostics.encodedReasonBits?.viewport === 2 &&
+    diagnostics.encodedReasonBits?.depth === 4 &&
+    diagnostics.encodedReasonBits?.normal === 8 &&
+    diagnostics.encodedReasonBits?.velocity === 16 &&
+    diagnostics.encodedReasonBits?.clampHistoryRange === 32
+  )
+}
+
+function hasTemporalTargetInventory(row) {
+  if (row.temporalMode !== 'velocity-internal') return true
+  const inventory = row.temporalTargetInventory ?? row.latest?.vbaoTemporalTargetInventory
+  return (
+    inventory !== null &&
+    typeof inventory === 'object' &&
+    inventory.currentAo?.owner === 'VBAONode' &&
+    inventory.aoHistory?.owner === 'VBAOVelocityTemporalNode' &&
+    inventory.aoHistory?.format === 'RedFormat' &&
+    inventory.aoHistory?.type === 'HalfFloatType' &&
+    inventory.diagnostics?.owner === 'VBAOVelocityTemporalNode' &&
+    inventory.diagnostics?.format === 'RGBAFormat' &&
+    inventory.velocity?.owner === 'host-pass' &&
+    inventory.previousDepth?.owner === 'host-pass' &&
+    inventory.previousNormal?.owner === 'host-pass'
+  )
+}
+
+function hasRequestedTemporalResetEvidence(row) {
+  if (row.temporalMode !== 'velocity-internal') return true
+  if (row.temporalResetEvidenceReason === undefined || row.temporalResetEvidenceReason === 'n/a') {
+    return true
+  }
+  const diagnostics = row.temporalDiagnostics ?? row.latest?.vbaoTemporalDiagnostics
+  return diagnostics?.lastResetReason === row.temporalResetEvidenceReason
+}
+
 function requiredPassesForEvidenceRow(row) {
   if (!isHalfResolutionProductVbaoRow(row)) return null
 
@@ -186,6 +229,15 @@ export function createEvidenceArtifactStatusRows(rows) {
     }
     if (row.mode === 'vbao' && !Array.isArray(row.passTimings)) {
       missing.push('passTimings')
+    }
+    if (!hasTemporalDiagnostics(row)) {
+      missing.push('temporalDiagnostics')
+    }
+    if (!hasTemporalTargetInventory(row)) {
+      missing.push('temporalTargetInventory')
+    }
+    if (!hasRequestedTemporalResetEvidence(row)) {
+      missing.push('temporalResetEvidence')
     }
     for (const passTiming of row.passTimings ?? []) {
       if (requiredPasses !== null && !requiredPasses.has(passTiming.pass)) {
@@ -250,8 +302,8 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
     'Skipped passes are not zero-cost passes; `skipped` means the pass is elided from that graph, `measured` means a pass-level WebGPU timestamp was captured, and `derived` means the value is a sum of measured pass timestamps.',
   )
   lines.push('')
-  lines.push('| Resolution | Algorithm | VBAO sample mode | VBAO temporal | Host TAA | VBAO res | View | Output | Pass | Status | GPU ms |')
-  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: |')
+  lines.push('| Resolution | Algorithm | VBAO sample mode | VBAO temporal | Host TAA | VBAO res | View | Output | Pass | Status | GPU ms | CPU ms |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: |')
   for (const row of report.rows) {
     const outputLabel =
       row.mode === 'vbao'
@@ -266,8 +318,12 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
         passTiming.gpuMs === null || passTiming.gpuMs === undefined
           ? 'n/a'
           : passTiming.gpuMs.toFixed(3)
+      const cpuMs =
+        passTiming.cpuMs === null || passTiming.cpuMs === undefined
+          ? 'n/a'
+          : passTiming.cpuMs.toFixed(3)
       lines.push(
-        `| ${row.resolution.width}x${row.resolution.height} | ${row.mode} | ${row.sampleMode ?? 'n/a'} | ${row.temporalMode ?? 'n/a'} | ${row.hostTaaMode ?? 'n/a'} | ${row.vbaoResolution} | ${row.view} | ${outputLabel} | ${passTiming.pass} | ${passTiming.status} | ${gpuMs} |`,
+        `| ${row.resolution.width}x${row.resolution.height} | ${row.mode} | ${row.sampleMode ?? 'n/a'} | ${row.temporalMode ?? 'n/a'} | ${row.hostTaaMode ?? 'n/a'} | ${row.vbaoResolution} | ${row.view} | ${outputLabel} | ${passTiming.pass} | ${passTiming.status} | ${gpuMs} | ${cpuMs} |`,
       )
     }
   }
@@ -283,6 +339,31 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
   lines.push('| off | product baseline | temporal-free AO evidence |')
   lines.push('| host | demo/evidence only | requires host TRAA and same-cost spatial comparison |')
   lines.push('| velocity-internal | private candidate only | requires host previous guides, temporal pass timing, same-cost spatial comparison, and motion evidence |')
+  lines.push('')
+  lines.push('## VBAO Compute Candidate Status')
+  lines.push('')
+  lines.push(
+    'Compute candidates are private evidence paths. A listed candidate is not a public `VBAONodeOptions` feature and is not promoted unless it wins a named gate.',
+  )
+  lines.push('')
+  lines.push('| Row | Candidate | Storage targets |')
+  lines.push('| --- | --- | --- |')
+  const computeRows = report.rows.filter((row) => row.mode === 'vbao')
+  if (computeRows.length === 0) {
+    lines.push('| n/a | n/a | n/a |')
+  } else {
+    for (const row of computeRows) {
+      const inventory = row.computeCandidateInventory ?? row.latest?.vbaoComputeCandidateInventory ?? []
+      const inventoryLabel = Array.isArray(inventory)
+        ? inventory
+            .map((target) => `${target.name ?? 'unknown'}:${target.role ?? 'unknown'}`)
+            .join(',')
+        : 'n/a'
+      lines.push(
+        `| ${row.label ?? 'n/a'} | ${row.computeCandidateLabel ?? row.latest?.vbaoComputeCandidateLabel ?? 'n/a'} | ${inventoryLabel.length === 0 ? 'none' : inventoryLabel} |`,
+      )
+    }
+  }
   const evidenceArtifactRows =
     report.evidenceArtifactRows ?? createEvidenceArtifactStatusRows(report.rows)
   lines.push('')
@@ -381,5 +462,8 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
     '- `directionalAnisotropy`: imbalance between horizontal and vertical neighbor differences.',
   )
   lines.push('- Crop excludes demo chrome and the bottom-right controls.')
+  lines.push(
+    '- AO-view screenshot metrics are measured after the demo display transform; compare cross-algorithm rows only as rendered presentation evidence, not scalar AO truth.',
+  )
   await writeFile(outputMd, `${lines.join('\n')}\n`)
 }

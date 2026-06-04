@@ -1,5 +1,7 @@
 import {
   SECTOR_COUNT,
+  VBAO_CONTACT_THICKNESS_RADIUS_RATIO,
+  VBAO_NEAR_SAMPLE_THICKNESS_RATIO,
   VBAO_THETA_MIN,
   clampVbaoNodeOptions,
 } from '../src/vbaoConstants'
@@ -17,6 +19,11 @@ export interface ScalarVbaoSample {
   readonly valid?: boolean
 }
 
+export type ScalarVbaoThicknessPolicy =
+  | 'current'
+  | 'adaptive-near-sample'
+  | 'minimum-effective-floor'
+
 export interface ScalarVbaoReferenceInput {
   readonly pixelPosition: Vec3
   readonly normal: Vec3
@@ -24,6 +31,7 @@ export interface ScalarVbaoReferenceInput {
   readonly thickness: number
   readonly slices: number
   readonly rotation?: number
+  readonly thicknessPolicy?: ScalarVbaoThicknessPolicy
   readonly sampleProvider: (input: {
     readonly sliceIndex: number
     readonly sideSign: 1 | -1
@@ -105,6 +113,24 @@ function projectNormalIntoSlice(normal: Vec3, viewDir: Vec3, sliceDir: Vec3): {
   return { projectedNormal, projectedLength }
 }
 
+function resolveEffectiveThickness(
+  policy: ScalarVbaoThicknessPolicy,
+  baseThickness: number,
+  sampleDist: number,
+): number {
+  const current = Math.min(baseThickness, sampleDist * VBAO_NEAR_SAMPLE_THICKNESS_RATIO)
+
+  if (policy === 'minimum-effective-floor') {
+    return Math.min(baseThickness, Math.max(current, baseThickness * 0.25))
+  }
+
+  if (policy === 'adaptive-near-sample') {
+    return Math.min(baseThickness, Math.sqrt(baseThickness * current))
+  }
+
+  return current
+}
+
 export function makeScalarVbaoSampleAtTheta(input: {
   readonly pixelPosition: Vec3
   readonly viewDir: Vec3
@@ -132,13 +158,17 @@ export function evaluateScalarVbaoReference(input: ScalarVbaoReferenceInput): Sc
     samples: SECTOR_COUNT,
   })
   const { viewDir, tangent0, tangent1 } = buildViewLocalFrame(input.pixelPosition)
-  const baseThickness = Math.min(options.thickness, options.radius * 0.3)
+  const baseThickness = Math.min(
+    options.thickness,
+    options.radius * VBAO_CONTACT_THICKNESS_RADIUS_RATIO,
+  )
   const maxValidRadius = options.radius + baseThickness
   const maxValidRadius2 = maxValidRadius * maxValidRadius
   const sliceMasks: number[] = []
   const sliceAccessibilities: number[] = []
   const sliceWeights: number[] = []
   const normal = normalize3(input.normal)
+  const thicknessPolicy = input.thicknessPolicy ?? 'current'
 
   for (let sliceIndex = 0; sliceIndex < options.slices; sliceIndex++) {
     const sliceDir = sampleGtVbaoAxialSliceDirection(
@@ -166,7 +196,11 @@ export function evaluateScalarVbaoReference(input: ScalarVbaoReferenceInput): Sc
         if (dist2 <= 1e-8 || dist2 > maxValidRadius2 || along <= 0) continue
 
         const sampleDist = Math.sqrt(Math.max(dist2, 1e-8))
-        const effectiveThickness = Math.min(baseThickness, sampleDist * 0.85)
+        const effectiveThickness = resolveEffectiveThickness(
+          thicknessPolicy,
+          baseThickness,
+          sampleDist,
+        )
         const interval = buildGtVbaoSampleInterval({
           samplePosition: sample.position,
           pixelPosition: input.pixelPosition,

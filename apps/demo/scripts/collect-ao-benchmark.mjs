@@ -99,21 +99,26 @@ for (const mode of modes) {
 for (const view of views) {
   if (!validViews.has(view)) throw new Error(`AO_BENCHMARK_VIEWS contains "${view}".`)
 }
+const vbaoDemoSoftnessDefault = 0.2
 const vbaoDemoSoftness = (() => {
-  const requested = Number(process.env.AO_BENCHMARK_VBAO_SOFTNESS ?? 0.45)
-  return Number.isFinite(requested) ? Math.max(0, Math.min(1, requested)) : 0.45
+  const requested = Number(process.env.AO_BENCHMARK_VBAO_SOFTNESS ?? vbaoDemoSoftnessDefault)
+  return Number.isFinite(requested)
+    ? Math.max(0, Math.min(1, requested))
+    : vbaoDemoSoftnessDefault
 })()
 const vbaoSampleMode = (() => {
   const requested = process.env.AO_BENCHMARK_VBAO_SAMPLE_MODE ?? 'product-preset'
   if (
     requested === 'product-preset' ||
     requested === 'debug-override' ||
-    requested === 'spatial-ultra'
+    requested === 'spatial-ultra' ||
+    requested === 'same-cost-3x10' ||
+    requested === 'same-cost-2x16'
   ) {
     return requested
   }
   throw new Error(
-    `AO_BENCHMARK_VBAO_SAMPLE_MODE must be "product-preset", "debug-override", or "spatial-ultra", received "${requested}".`,
+    `AO_BENCHMARK_VBAO_SAMPLE_MODE must be "product-preset", "debug-override", "spatial-ultra", "same-cost-3x10", or "same-cost-2x16", received "${requested}".`,
   )
 })()
 const vbaoTemporalMode = (() => {
@@ -139,6 +144,7 @@ const vbaoMotionEvidenceKind = (() => {
     `AO_BENCHMARK_VBAO_MOTION_EVIDENCE_KIND must be "camera-motion", "object-motion", or "disocclusion", received "${requested}".`,
   )
 })()
+const vbaoTemporalResetEvidenceReason = process.env.AO_BENCHMARK_VBAO_TEMPORAL_RESET_REASON
 const vbaoHostTaaMode = (() => {
   const requested = process.env.AO_BENCHMARK_VBAO_HOST_TAA ?? 'off'
   if (requested === 'off' || requested === 'traa') return requested
@@ -158,6 +164,13 @@ const vbaoResolvePolishMode = (() => {
   if (requested === 'separate' || requested === 'fused') return requested
   throw new Error(
     `AO_BENCHMARK_VBAO_RESOLVE_POLISH_MODE must be "separate" or "fused", received "${requested}".`,
+  )
+})()
+const vbaoComputeCandidateMode = (() => {
+  const requested = process.env.AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE ?? 'off'
+  if (requested === 'off' || requested === 'sector-confidence-smoke') return requested
+  throw new Error(
+    `AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE must be "off" or "sector-confidence-smoke", received "${requested}".`,
   )
 })()
 const vbaoReconstructionStages =
@@ -196,7 +209,10 @@ function createSceneUrl(scene) {
   if (vbaoResolvePolishMode === 'fused') {
     url.searchParams.set('vbaoResolvePolish', 'fused')
   }
-  if (vbaoDemoSoftness !== 0.45) {
+  if (vbaoComputeCandidateMode !== 'off') {
+    url.searchParams.set('vbaoComputeCandidate', vbaoComputeCandidateMode)
+  }
+  if (vbaoDemoSoftness !== vbaoDemoSoftnessDefault) {
     url.searchParams.set('vbaoSoftness', String(vbaoDemoSoftness))
   }
   return url.toString()
@@ -256,6 +272,13 @@ async function readSnapshot(page) {
 
 async function resetBenchmark(page) {
   await page.evaluate(() => window.__aoBenchmark?.reset())
+}
+
+async function resetVbaoTemporalEvidence(page, reason) {
+  if (reason === undefined || reason.length === 0) return
+  await page.evaluate((resetReason) => {
+    window.__aoBenchmark?.resetVbaoTemporalEvidence?.(resetReason)
+  }, reason)
 }
 
 async function waitForLatest(page, expected) {
@@ -321,7 +344,10 @@ function median(values) {
   return sorted[Math.floor(sorted.length / 2)]
 }
 
-function mapVbaoPassLabel(label) {
+function mapAoPassLabel(label, mode) {
+  if (label === `AO.PassTiming.${mode.toUpperCase()}`) return 'final'
+  if (label === 'GTAONode.AO') return 'ao'
+  if (label.startsWith('N8AO.')) return label.slice('N8AO.'.length).toLowerCase()
   if (label === 'VBAO.Raw') return 'raw'
   if (label === 'VBAO.HalfResCleanup') return 'cleanup'
   if (label === 'VBAO.Resolve') return 'resolve'
@@ -331,9 +357,7 @@ function mapVbaoPassLabel(label) {
   return undefined
 }
 
-async function collectVbaoGpuPassTimings(page, mode) {
-  if (mode !== 'vbao') return []
-
+async function collectAoGpuPassTimings(page, mode) {
   const samplesByPass = new Map()
   const labelsByPass = new Map()
   const sizesByPass = new Map()
@@ -345,7 +369,7 @@ async function collectVbaoGpuPassTimings(page, mode) {
       (await page.evaluate(() => window.__aoBenchmark?.resolveGpuPassTimings?.())) ?? []
 
     for (const row of rows) {
-      const pass = mapVbaoPassLabel(row.label)
+      const pass = mapAoPassLabel(row.label, mode)
       if (pass === undefined) continue
       const samples = samplesByPass.get(pass) ?? []
       samples.push(row.gpuMs)
@@ -364,6 +388,17 @@ async function collectVbaoGpuPassTimings(page, mode) {
     gpuMs: median(samples),
     sampleCount: samples.length,
     samples,
+  }))
+}
+
+function createAoPassTimingRows({ mode, measuredPassTimings }) {
+  if (mode === 'vbao') return []
+
+  return measuredPassTimings.map((row) => ({
+    pass: row.pass,
+    status: 'measured',
+    gpuMs: row.gpuMs,
+    reason: `Median WebGPU timestamp from ${row.sampleCount} steady-state samples; render target ${row.label} (${row.renderTargetSize}).`,
   }))
 }
 
@@ -553,6 +588,12 @@ try {
                   await setVbaoReconstructionStage(page, vbaoReconstructionStage)
                   await resetBenchmark(page)
                   await page.waitForTimeout(650)
+                  if (mode === 'vbao' && vbaoTemporalMode === 'velocity-internal') {
+                    await resetVbaoTemporalEvidence(page, vbaoTemporalResetEvidenceReason)
+                    if (vbaoTemporalResetEvidenceReason !== undefined) {
+                      await page.waitForTimeout(120)
+                    }
+                  }
                   await resetBenchmark(page)
                   await waitForLatest(page, {
                     mode,
@@ -565,7 +606,7 @@ try {
                     cleanupMode: vbaoCleanupMode,
                     resolvePolishMode: vbaoResolvePolishMode,
                   })
-                  const measuredPassTimings = await collectVbaoGpuPassTimings(page, mode)
+                  const measuredPassTimings = await collectAoGpuPassTimings(page, mode)
                   const snapshot = await readSnapshot(page)
                   const latest = snapshot?.latest
                   const outputLabel =
@@ -592,7 +633,7 @@ try {
                       ? '-fused-resolve-polish'
                       : ''
                   const softnessLabel =
-                    mode === 'vbao' && vbaoDemoSoftness !== 0.45
+                    mode === 'vbao' && vbaoDemoSoftness !== vbaoDemoSoftnessDefault
                       ? `-soft${String(Math.round(vbaoDemoSoftness * 100)).padStart(3, '0')}`
                       : ''
                   const label =
@@ -642,6 +683,20 @@ try {
                     vbaoSoftness: mode === 'vbao' ? vbaoDemoSoftness : 0,
                     temporalDiagnostics:
                       mode === 'vbao' ? (latest?.vbaoTemporalDiagnostics ?? null) : null,
+                    temporalTargetInventory:
+                      mode === 'vbao' ? (latest?.vbaoTemporalTargetInventory ?? null) : null,
+                    computeCandidateLabel:
+                      mode === 'vbao' ? (latest?.vbaoComputeCandidateLabel ?? 'n/a') : 'n/a',
+                    computeCandidateInventory:
+                      mode === 'vbao' ? (latest?.vbaoComputeCandidateInventory ?? null) : null,
+                    computeCandidateTiming:
+                      mode === 'vbao' ? (latest?.vbaoComputeCandidateTiming ?? null) : null,
+                    temporalResetEvidenceReason:
+                      mode === 'vbao' &&
+                      vbaoTemporalMode === 'velocity-internal' &&
+                      vbaoTemporalResetEvidenceReason !== undefined
+                        ? vbaoTemporalResetEvidenceReason
+                        : 'n/a',
                     motionEvidenceKind:
                       mode === 'vbao' &&
                       vbaoTemporalMode === 'velocity-internal' &&
@@ -656,15 +711,32 @@ try {
                       vbaoMotionEvidenceKind !== undefined
                         ? 'ao-benchmark-motion'
                         : 'n/a',
-                    passTimings: createVbaoPassTimingRows({
-                      mode,
-                      denoise,
-                      fullResolutionVbao,
-                      cleanupMode: vbaoCleanupMode,
-                      resolvePolishMode: vbaoResolvePolishMode,
-                      temporalMode: vbaoTemporalMode,
-                      measuredPassTimings,
-                    }),
+                    passTimings:
+                      mode === 'vbao'
+                        ? [
+                            ...createVbaoPassTimingRows({
+                              mode,
+                              denoise,
+                              fullResolutionVbao,
+                              cleanupMode: vbaoCleanupMode,
+                              resolvePolishMode: vbaoResolvePolishMode,
+                              temporalMode: vbaoTemporalMode,
+                              measuredPassTimings,
+                            }),
+                            ...(latest?.vbaoComputeCandidateTiming === null ||
+                            latest?.vbaoComputeCandidateTiming === undefined
+                              ? []
+                              : [
+                                  {
+                                    pass: latest.vbaoComputeCandidateTiming.pass,
+                                    status: latest.vbaoComputeCandidateTiming.status,
+                                    gpuMs: null,
+                                    cpuMs: latest.vbaoComputeCandidateTiming.cpuMs,
+                                    reason: latest.vbaoComputeCandidateTiming.reason,
+                                  },
+                                ]),
+                          ]
+                        : createAoPassTimingRows({ mode, measuredPassTimings }),
                     qualityMetrics,
                     screenshotPath,
                     latest,
@@ -681,6 +753,14 @@ try {
                         .map((passTiming) => passTiming.pass)
                         .join(', ')}`,
                     )
+                  }
+                  const missingFinalTiming =
+                    mode !== 'vbao' &&
+                    mode !== 'off' &&
+                    vbaoReconstructionStage === 'final' &&
+                    !row.passTimings.some((passTiming) => passTiming.pass === 'final')
+                  if (missingFinalTiming) {
+                    throw new Error(`Missing final WebGPU pass timestamp for ${label}`)
                   }
                   const failureLabels = classifyFailureLabels(row)
                   if (isHalfResolutionStageRow(row)) {
@@ -699,7 +779,7 @@ try {
                 if (reconstructionStages.length > 0) {
                   rows.push({
                     ...rows[rows.length - 1],
-                    label: `${viewport.width}x${viewport.height}-${scene}-${mode}-${vbaoSampleMode}-${vbaoTemporalMode}${gateCleanupLabel}${gateResolvePolishLabel}${vbaoDemoSoftness === 0.45 ? '' : `-soft${String(Math.round(vbaoDemoSoftness * 100)).padStart(3, '0')}`}-half-res-reconstruction-gate-product-ao`,
+                    label: `${viewport.width}x${viewport.height}-${scene}-${mode}-${vbaoSampleMode}-${vbaoTemporalMode}${gateCleanupLabel}${gateResolvePolishLabel}${vbaoDemoSoftness === vbaoDemoSoftnessDefault ? '' : `-soft${String(Math.round(vbaoDemoSoftness * 100)).padStart(3, '0')}`}-half-res-reconstruction-gate-product-ao`,
                     reconstructionStages,
                   })
                 }
