@@ -52,48 +52,48 @@ temporal, or compute promotion.
   only if source/render-target evidence supports it.
 - [x] 3.3 Compute confidence from observable receiver-state terms.
 - [x] 3.4 Use confidence to modulate cleanup/polish, not public options.
-- [ ] 3.5 Compare scalar control vs confidence candidate with screenshots,
+- [x] 3.5 Compare scalar control vs confidence candidate with screenshots,
   labels, and pass timings.
-- [ ] 3.6 Reject or keep private unless it improves a named label or reduces
+- [x] 3.6 Reject or keep private unless it improves a named label or reduces
   pass cost without regressions.
 
 ## Phase 4: Input Preparation And Optimization
 
-- [ ] 4.1 Decide whether depth hierarchy/representative depth is needed from a
+- [x] 4.1 Decide whether depth hierarchy/representative depth is needed from a
   failing reference or radius-stress gate.
-- [ ] 4.2 Decide whether edge metadata can replace repeated reconstruction
+- [x] 4.2 Decide whether edge metadata can replace repeated reconstruction
   compatibility work.
-- [ ] 4.3 Add compute only when storage/tiled data shape has a named win.
-- [ ] 4.4 Include target format, lifetime, backend, and dispatch timing in
+- [x] 4.3 Add compute only when storage/tiled data shape has a named win.
+- [x] 4.4 Include target format, lifetime, backend, and dispatch timing in
   evidence rows.
-- [ ] 4.5 Reject compute candidates that are only architecturally neat.
+- [x] 4.5 Reject compute candidates that are only architecturally neat.
 
 ## Phase 5: Receiver Reuse
 
-- [ ] 5.1 Reframe temporal docs/tests as receiver-state reuse.
-- [ ] 5.2 Keep camera-only temporal rejected.
-- [ ] 5.3 Keep velocity-backed temporal private until same-cost motion evidence
+- [x] 5.1 Reframe temporal docs/tests as receiver-state reuse.
+- [x] 5.2 Keep camera-only temporal rejected.
+- [x] 5.3 Keep velocity-backed temporal private until same-cost motion evidence
   wins.
-- [ ] 5.4 Do not add public temporal options from this SDD.
-- [ ] 5.5 If confidence exists, evaluate it as validation input only after the
+- [x] 5.4 Do not add public temporal options from this SDD.
+- [x] 5.5 If confidence exists, evaluate it as validation input only after the
   base velocity path wins.
 
 ## Phase 6: Directional Visibility
 
-- [ ] 6.1 Keep directional visibility reference-only until scalar gates are
+- [x] 6.1 Keep directional visibility reference-only until scalar gates are
   stable.
-- [ ] 6.2 Derive buckets/moments from open sectors, not from normals or a second
+- [x] 6.2 Derive buckets/moments from open sectors, not from normals or a second
   estimator.
-- [ ] 6.3 Prove separated lobes stay separated.
-- [ ] 6.4 Do not expose public bent/directional output without a consumer SDD.
+- [x] 6.3 Prove separated lobes stay separated.
+- [x] 6.4 Do not expose public bent/directional output without a consumer SDD.
 
 ## Phase 7: Evidence And Claims
 
-- [ ] 7.1 Update `EVIDENCE.md` only when screenshots, timings, labels, and
+- [x] 7.1 Update `EVIDENCE.md` only when screenshots, timings, labels, and
   reference rows exist.
-- [ ] 7.2 Keep README/product claims blocked until release gates are complete.
-- [ ] 7.3 Record rejected candidates with measured reasons.
-- [ ] 7.4 Preserve scalar AO as public output until metadata or directional
+- [x] 7.2 Keep README/product claims blocked until release gates are complete.
+- [x] 7.3 Record rejected candidates with measured reasons.
+- [x] 7.4 Preserve scalar AO as public output until metadata or directional
   output earns promotion.
 
 ## Verification
@@ -108,3 +108,9 @@ temporal, or compute promotion.
 - [x] 8.5 Run `pnpm --filter @horizonao/demo typecheck` when demo/evidence code
   changes.
 - [x] 8.6 Do not run production build unless explicitly requested.
+- [x] 8.7 Run Phase 3.5 scalar-control and confidence-diagnostic benchmark
+  captures with screenshots and pass timings.
+- [x] 8.8 Run Phase 4.4 compute-inventory benchmark capture with target
+  format, lifetime, backend, and dispatch timing rows.
+- [x] 8.9 Run final Phase 5-7 verification: focused core tests, production
+  report test, core/demo typecheck, SDD scans, and diff hygiene.

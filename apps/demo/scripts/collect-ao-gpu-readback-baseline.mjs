@@ -333,12 +333,18 @@ async function collectGpuReadback(page) {
         {
           name: 'output',
           role: 'storage-copy-source',
+          backend: 'webgpu-compute',
+          targetFormat: 'float32x4-fixture-values',
+          targetLifetime: 'single-benchmark-run',
           byteLength: outputByteLength,
           usage: 'STORAGE | COPY_SRC',
         },
         {
           name: 'readback',
           role: 'map-read-copy-destination',
+          backend: 'webgpu-compute',
+          targetFormat: 'float32x4-fixture-values',
+          targetLifetime: 'single-benchmark-run',
           byteLength: outputByteLength,
           usage: 'COPY_DST | MAP_READ',
         },

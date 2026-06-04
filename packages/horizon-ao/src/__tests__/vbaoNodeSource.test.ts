@@ -24,6 +24,7 @@ import profilingProductionReportSource from '../../../../apps/demo/scripts/profi
 import profilingScreenshotMetricsSource from '../../../../apps/demo/scripts/profiling/screenshotMetrics.mjs?raw'
 import benchmarkNoiseSource from '../../../../apps/demo/src/scenes/vbaoBenchmarkNoise.ts?raw'
 import computeCandidateSource from '../../../../apps/demo/src/scenes/vbaoComputeCandidate.ts?raw'
+import readmeSource from '../../../../README.md?raw'
 
 const runtimeSources = [museumSource, aoCompareSource, benchmarkSource].join('\n')
 
@@ -86,6 +87,27 @@ describe('modernized VBAO production source contract', () => {
       'const stepFrac = float(j).add(stepJitter).div(float(this.samples))',
     )
     expect(source).not.toContain('radialBase')
+  })
+
+  it('keeps directional visibility reference out of public options and exports', () => {
+    expect(indexSource).not.toContain('reconstructDirectionalVisibility')
+    expect(indexSource).not.toContain('DirectionalVisibility')
+    expect(indexSource).not.toContain('bentNormal')
+    expect(indexSource).not.toContain('visibilityBuckets')
+
+    expect(optionsSource).not.toContain('directional')
+    expect(optionsSource).not.toContain('bentNormal')
+    expect(optionsSource).not.toContain('visibilityBuckets')
+  })
+
+  it('keeps README product claims scalar, release-blocked, and slice-weight truthful', () => {
+    expect(readmeSource).toContain('The current release-readiness verdict is **incomplete**, not production-ready.')
+    expect(readmeSource).toContain('AO scalar only in v1')
+    expect(readmeSource).toContain('no GI, no bent normals, no denoise without evidence')
+    expect(readmeSource).toContain('Final accessibility is accumulated with projected-normal slice weights')
+    expect(readmeSource).not.toContain('Almost path traced')
+    expect(readmeSource).not.toContain('public temporal')
+    expect(readmeSource).not.toContain('public directional')
   })
 
   it('uses a non-interpolated phase atlas noise texture to avoid visible tiled ramps', () => {
@@ -395,7 +417,7 @@ describe('modernized VBAO production source contract', () => {
     expect(benchmarkSource).toContain("temporalMode: mode === 'vbao' ? vbaoTemporalMode : 'n/a'")
     expect(benchmarkSource).toContain('hostTaaMode: mode === ')
     expect(benchmarkSource).toContain(
-      '${vbaoSampleMode}${temporalLabel}${hostTaaLabel}${cleanupLabel}${softnessLabel}-${vbaoResolutionLabel}',
+      '${vbaoSampleMode}${temporalLabel}${hostTaaLabel}${cleanupLabel}${gateReceiverConfidenceLabel}${softnessLabel}-${vbaoResolutionLabel}',
     )
     expect(museumSource).toContain("type VbaoHostTaaMode = 'off' | 'traa'")
     expect(museumSource).toContain('function getRequestedVbaoHostTaaMode()')
@@ -834,6 +856,10 @@ describe('modernized VBAO production source contract', () => {
     expect(source).not.toContain('renderer.compute')
     expect(computeCandidateSource).toContain('VBAO_COMPUTE_CANDIDATE_LABEL')
     expect(computeCandidateSource).toContain('sector-confidence-smoke')
+    expect(computeCandidateSource).toContain('VBAO_COMPUTE_CANDIDATE_TARGET_FORMAT')
+    expect(computeCandidateSource).toContain('targetFormat: VBAO_COMPUTE_CANDIDATE_TARGET_FORMAT')
+    expect(computeCandidateSource).toContain('targetLifetime: VBAO_COMPUTE_CANDIDATE_TARGET_LIFETIME')
+    expect(computeCandidateSource).toContain('backend: VBAO_COMPUTE_CANDIDATE_BACKEND')
     expect(computeCandidateSource).toContain('new StorageTexture')
     expect(computeCandidateSource).toContain('storageTexture')
     expect(computeCandidateSource).toContain('textureStore')
@@ -848,6 +874,10 @@ describe('modernized VBAO production source contract', () => {
     expect(museumSource).toContain("type VbaoReconstructionStage = 'raw' | 'cleanup' | 'resolve' | 'polish' | 'final' | 'confidence'")
     expect(museumSource).toContain("requested === 'confidence'")
     expect(museumSource).toContain('const receiverConfidenceScalar = receiverConfidenceNode?.getTextureNode().r')
+    expect(museumSource).toContain("type VbaoReceiverConfidenceMode = 'confidence-guided' | 'scalar-control'")
+    expect(museumSource).toContain('getRequestedVbaoReceiverConfidenceMode')
+    expect(museumSource).toContain("get('vbaoReceiverConfidence')")
+    expect(museumSource).toContain("vbaoReceiverConfidenceMode === 'confidence-guided'")
     expect(museumSource).toContain('confidence: makeAoPipeline(')
     expect(museumSource).not.toContain('vbaoProductNode.r.mul(sectorConfidenceScalar)')
     expect(museumSource).not.toContain('polishScalar.mul(sectorConfidenceScalar)')
@@ -859,19 +889,27 @@ describe('modernized VBAO production source contract', () => {
     expect(benchmarkSource).toContain('computeCandidateInventory')
     expect(benchmarkSource).toContain('computeCandidateTiming')
     expect(benchmarkSource).toContain('AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE')
+    expect(benchmarkSource).toContain('AO_BENCHMARK_VBAO_RECEIVER_CONFIDENCE')
+    expect(benchmarkSource).toContain("url.searchParams.set('vbaoReceiverConfidence', vbaoReceiverConfidenceMode)")
     expect(benchmarkSource).toContain("url.searchParams.set('vbaoComputeCandidate', vbaoComputeCandidateMode)")
     expect(benchmarkSource).toContain("'confidence'")
     expect(benchmarkSource).toContain("if (label === 'VBAO.ReceiverConfidence') return 'confidence'")
     expect(benchmarkSource).toContain("pass: 'confidence'")
     expect(benchmarkSource).toContain('confidence-diagnostic')
     expect(profilingProductionReportSource).toContain('VBAO Compute Candidate Status')
+    expect(profilingProductionReportSource).toContain('Target formats')
+    expect(profilingProductionReportSource).toContain('Lifetimes')
+    expect(profilingProductionReportSource).toContain('Dispatch timing')
     expect(profilingProductionReportSource).toContain('VBAO_RECONSTRUCTION_DIAGNOSTIC_STAGES')
     expect(profilingProductionReportSource).toContain("return 'confidence-diagnostic'")
+    expect(profilingProductionReportSource).toContain("row.receiverConfidenceMode === 'scalar-control'")
     expect(profilingProductionReportSource).toContain('CPU ms')
     expect(gpuReadbackSource).toContain('@compute @workgroup_size(1)')
     expect(gpuReadbackSource).toContain('var<storage, read_write> output')
     expect(gpuReadbackSource).toContain('computeDispatchTimings')
     expect(gpuReadbackSource).toContain('storageTargetInventory')
+    expect(gpuReadbackSource).toContain("targetFormat: 'float32x4-fixture-values'")
+    expect(gpuReadbackSource).toContain("targetLifetime: 'single-benchmark-run'")
     expect(gpuReadbackSource).toContain('outputResolution')
     expect(gpuReadbackSource).toContain('webgpuBackendStatus')
     expect(gpuReadbackSource).toContain('backend: ')
@@ -1051,7 +1089,7 @@ describe('modernized VBAO production source contract', () => {
     expect(benchmarkSource).toContain("'same-cost-2x16'")
     expect(benchmarkSource).toContain('sampleMode: mode === ')
     expect(benchmarkSource).toContain(
-      '${mode}-${vbaoSampleMode}${temporalLabel}${hostTaaLabel}${cleanupLabel}${softnessLabel}-${vbaoResolutionLabel}',
+      '${mode}-${vbaoSampleMode}${temporalLabel}${hostTaaLabel}${cleanupLabel}${gateReceiverConfidenceLabel}${softnessLabel}-${vbaoResolutionLabel}',
     )
     expect(profilingProductionReportSource).toContain('VBAO sample mode')
   })

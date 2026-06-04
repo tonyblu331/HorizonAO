@@ -15,7 +15,8 @@ Each pixel marches `slices` slice directions. Per slice:
 1. March `samples` steps outward on both sides of the slice axis.
 2. Each sample contributes a bit range `[k₀, k₁)` to a 32-sector visibility mask.
 3. Accessibility is computed with a cosine-weighted reduction: `A_i = Σ_k open(k)·max(0, cos(θ_k − γ_i)) / Σ_k max(0, cos(θ_k − γ_i))`.
-4. Final: `A = mean(A_i)`, stored as `pow(A, scale)` in the R channel.
+4. Final accessibility is accumulated with projected-normal slice weights and
+   stored as `pow(A, scale)` in the R channel.
 
 Reference: [arXiv:2301.11376](https://arxiv.org/abs/2301.11376).
 

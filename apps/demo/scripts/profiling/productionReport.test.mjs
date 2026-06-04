@@ -132,14 +132,23 @@ describe('production AO promotion verdicts', () => {
 
   it('keeps private evidence lanes candidate-only', () => {
     const verdicts = createProductPromotionVerdictRows(
-      [productRow({ temporalMode: 'velocity-internal' })],
+      [
+        productRow({ label: 'velocity temporal', temporalMode: 'velocity-internal' }),
+        productRow({ label: 'scalar control', receiverConfidenceMode: 'scalar-control' }),
+      ],
       {
-        evidenceArtifactRows: [completeEvidenceRow],
-        thresholdGateRows: [passingThresholdRow],
+        evidenceArtifactRows: [
+          { ...completeEvidenceRow, label: 'velocity temporal' },
+          { ...completeEvidenceRow, label: 'scalar control' },
+        ],
+        thresholdGateRows: [
+          { ...passingThresholdRow, label: 'velocity temporal' },
+          { ...passingThresholdRow, label: 'scalar control' },
+        ],
       },
     )
 
-    expect(verdicts[0]?.verdict).toBe('candidate-only')
+    expect(verdicts.map((row) => row.verdict)).toEqual(['candidate-only', 'candidate-only'])
   })
 
   it('does not treat n/a compute candidate sentinels as private lanes', () => {
@@ -261,6 +270,74 @@ describe('production AO promotion verdicts', () => {
         '| 1x1 | vbao | product-preset | off | off | half-res | ao | confidence-diagnostic |',
       )
       expect(report.productPromotionRows[0]?.output).toBe('confidence-diagnostic')
+    } finally {
+      await rm(tempDir, { force: true, recursive: true })
+    }
+  })
+
+  it('writes compute target inventory and dispatch timing into markdown', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'vbao-compute-report-'))
+    const outputJson = path.join(tempDir, 'report.json')
+    const outputMd = path.join(tempDir, 'report.md')
+
+    try {
+      await writeProductionQualityReports({
+        outputJson,
+        outputMd,
+        report: {
+          generatedAt: '2026-06-05T00:00:00.000Z',
+          rows: [
+            productRow({
+              label: 'vbao compute candidate',
+              resolution: { width: 1, height: 1 },
+              sampleMode: 'product-preset',
+              temporalMode: 'off',
+              hostTaaMode: 'off',
+              vbaoResolution: 'full-res',
+              backend: 'webgpu',
+              computeCandidateLabel: 'sector-confidence-smoke',
+              computeCandidateInventory: [
+                {
+                  name: 'VBAO.ComputeCandidate.SectorConfidence',
+                  role: 'sector-confidence-storage-texture',
+                  targetFormat: 'rgba8unorm',
+                  targetLifetime: 'active-vbao-pipeline',
+                  backend: 'webgpu',
+                },
+              ],
+              computeCandidateTiming: {
+                pass: 'sector-confidence-smoke',
+                status: 'measured',
+                cpuMs: 1.25,
+              },
+              qualityMetrics: {
+                patternNoiseScore: 0,
+                stripeScore: 0,
+                edgeBleedProxy: 0,
+                thinGapPreservationProxy: 1,
+                horizontalStripeScore: 0,
+                verticalStripeScore: 0,
+                directionalAnisotropy: 0,
+              },
+              passTimings: [],
+              latest: {
+                medianFrameMs: 16,
+                p95FrameMs: 17,
+              },
+              screenshotPath: path.join(tempDir, 'compute.png'),
+            }),
+          ],
+        },
+      })
+
+      const markdown = await readFile(outputMd, 'utf8')
+
+      expect(markdown).toContain(
+        '| Row | Candidate | Backend | Storage targets | Target formats | Lifetimes | Dispatch timing |',
+      )
+      expect(markdown).toContain(
+        '| vbao compute candidate | sector-confidence-smoke | webgpu | VBAO.ComputeCandidate.SectorConfidence:sector-confidence-storage-texture | rgba8unorm | active-vbao-pipeline | sector-confidence-smoke:measured:cpu 1.250 ms |',
+      )
     } finally {
       await rm(tempDir, { force: true, recursive: true })
     }

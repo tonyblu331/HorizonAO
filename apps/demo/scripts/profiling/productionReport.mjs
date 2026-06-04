@@ -146,6 +146,7 @@ function isPrivateCandidateRow(row) {
     !AO_DEFAULT_PRODUCT_NOISE_SOURCES.includes(row.noiseSource) ||
     row.temporalMode === 'host' ||
     row.temporalMode === 'velocity-internal' ||
+    row.receiverConfidenceMode === 'scalar-control' ||
     (computeCandidateLabel !== undefined && computeCandidateLabel !== 'n/a') ||
     row.cleanupMode === 'skip' ||
     row.vbaoCleanupMode === 'skip'
@@ -155,6 +156,29 @@ function isPrivateCandidateRow(row) {
 function blockingFailureLabels(row) {
   const labels = row.failureLabels ?? classifyFailureLabels(row)
   return labels.filter((label) => label !== 'none')
+}
+
+function computeInventoryForRow(row) {
+  const inventory = row.computeCandidateInventory ?? row.latest?.vbaoComputeCandidateInventory ?? []
+  return Array.isArray(inventory) ? inventory : []
+}
+
+function uniqueInventoryValues(inventory, keys) {
+  const values = inventory
+    .flatMap((target) => keys.map((key) => target?.[key]))
+    .filter((value) => value !== undefined && value !== null && value !== '')
+  return [...new Set(values)].join(',') || 'n/a'
+}
+
+function formatComputeCandidateTiming(row) {
+  const timing = row.computeCandidateTiming ?? row.latest?.vbaoComputeCandidateTiming
+  if (timing === undefined || timing === null) return 'n/a'
+
+  const pass = timing.pass ?? 'compute'
+  const status = timing.status ?? 'unknown'
+  if (typeof timing.cpuMs === 'number') return `${pass}:${status}:cpu ${timing.cpuMs.toFixed(3)} ms`
+  if (typeof timing.gpuMs === 'number') return `${pass}:${status}:gpu ${timing.gpuMs.toFixed(3)} ms`
+  return `${pass}:${status}:n/a`
 }
 
 export function createProductThresholdGateRows(rows, options = {}) {
@@ -519,21 +543,29 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
     'Compute candidates are private evidence paths. A listed candidate is not a public `VBAONodeOptions` feature and is not promoted unless it wins a named gate.',
   )
   lines.push('')
-  lines.push('| Row | Candidate | Storage targets |')
-  lines.push('| --- | --- | --- |')
+  lines.push(
+    '| Row | Candidate | Backend | Storage targets | Target formats | Lifetimes | Dispatch timing |',
+  )
+  lines.push('| --- | --- | --- | --- | --- | --- | --- |')
   const computeRows = report.rows.filter((row) => row.mode === 'vbao')
   if (computeRows.length === 0) {
-    lines.push('| n/a | n/a | n/a |')
+    lines.push('| n/a | n/a | n/a | n/a | n/a | n/a | n/a |')
   } else {
     for (const row of computeRows) {
-      const inventory = row.computeCandidateInventory ?? row.latest?.vbaoComputeCandidateInventory ?? []
-      const inventoryLabel = Array.isArray(inventory)
-        ? inventory
-            .map((target) => `${target.name ?? 'unknown'}:${target.role ?? 'unknown'}`)
-            .join(',')
-        : 'n/a'
+      const inventory = computeInventoryForRow(row)
+      const inventoryLabel = inventory
+        .map((target) => `${target.name ?? 'unknown'}:${target.role ?? 'unknown'}`)
+        .join(',')
+      const backend =
+        row.computeCandidateBackend ??
+        row.backend ??
+        row.latest?.rendererBackend ??
+        uniqueInventoryValues(inventory, ['backend'])
+      const targetFormats = uniqueInventoryValues(inventory, ['targetFormat', 'format'])
+      const targetLifetimes = uniqueInventoryValues(inventory, ['targetLifetime', 'lifetime'])
+      const dispatchTiming = formatComputeCandidateTiming(row)
       lines.push(
-        `| ${row.label ?? 'n/a'} | ${row.computeCandidateLabel ?? row.latest?.vbaoComputeCandidateLabel ?? 'n/a'} | ${inventoryLabel.length === 0 ? 'none' : inventoryLabel} |`,
+        `| ${row.label ?? 'n/a'} | ${row.computeCandidateLabel ?? row.latest?.vbaoComputeCandidateLabel ?? 'n/a'} | ${backend} | ${inventoryLabel.length === 0 ? 'none' : inventoryLabel} | ${targetFormats} | ${targetLifetimes} | ${dispatchTiming} |`,
       )
     }
   }
