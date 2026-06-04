@@ -42,6 +42,8 @@ export const VBAO_RECONSTRUCTION_STAGES: readonly [
   'final',
 ]
 
+export const VBAO_RECONSTRUCTION_DIAGNOSTIC_STAGES: readonly ['confidence']
+
 export const AO_DEFAULT_PRODUCT_SAMPLE_MODES: readonly [undefined, 'product-preset', 'n/a']
 
 export const AO_DEFAULT_PRODUCT_NOISE_SOURCES: readonly [
@@ -51,7 +53,9 @@ export const AO_DEFAULT_PRODUCT_NOISE_SOURCES: readonly [
 ]
 
 export interface VbaoReconstructionStageEvidence {
-  stage: (typeof VBAO_RECONSTRUCTION_STAGES)[number]
+  stage:
+    | (typeof VBAO_RECONSTRUCTION_STAGES)[number]
+    | (typeof VBAO_RECONSTRUCTION_DIAGNOSTIC_STAGES)[number]
   failureLabels: string[]
 }
 
@@ -212,8 +216,6 @@ export interface AOProductPromotionVerdictInputRow
   noiseSource?: string
   cleanupMode?: string
   vbaoCleanupMode?: string
-  resolvePolishMode?: string
-  vbaoResolvePolishMode?: string
   failureLabels?: string[]
   latest?: AOEvidenceArtifactStatusInputRow['latest']
 }

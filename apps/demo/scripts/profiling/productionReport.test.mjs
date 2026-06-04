@@ -159,25 +159,16 @@ describe('production AO promotion verdicts', () => {
     expect(verdicts[0]?.verdict).toBe('pass')
   })
 
-  it('keeps benchmark-shaped cleanup and fused resolve rows candidate-only', () => {
+  it('keeps benchmark-shaped cleanup rows candidate-only', () => {
     const verdicts = createProductPromotionVerdictRows(
-      [
-        productRow({ label: 'cleanup skip', cleanupMode: 'skip' }),
-        productRow({ label: 'resolve polish fused', resolvePolishMode: 'fused' }),
-      ],
+      [productRow({ label: 'cleanup skip', cleanupMode: 'skip' })],
       {
-        evidenceArtifactRows: [
-          { ...completeEvidenceRow, label: 'cleanup skip' },
-          { ...completeEvidenceRow, label: 'resolve polish fused' },
-        ],
-        thresholdGateRows: [
-          { ...passingThresholdRow, label: 'cleanup skip' },
-          { ...passingThresholdRow, label: 'resolve polish fused' },
-        ],
+        evidenceArtifactRows: [{ ...completeEvidenceRow, label: 'cleanup skip' }],
+        thresholdGateRows: [{ ...passingThresholdRow, label: 'cleanup skip' }],
       },
     )
 
-    expect(verdicts.map((row) => row.verdict)).toEqual(['candidate-only', 'candidate-only'])
+    expect(verdicts.map((row) => row.verdict)).toEqual(['candidate-only'])
   })
 
   it('keeps same-cost and spatial sample variants candidate-only', () => {
@@ -214,6 +205,65 @@ describe('production AO promotion verdicts', () => {
       output: 'raw-debug',
       verdict: 'pass',
     })
+  })
+
+  it('labels receiver confidence rows as private diagnostics, not product output', async () => {
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), 'vbao-confidence-report-'))
+    const outputJson = path.join(tempDir, 'report.json')
+    const outputMd = path.join(tempDir, 'report.md')
+
+    try {
+      await writeProductionQualityReports({
+        outputJson,
+        outputMd,
+        report: {
+          generatedAt: '2026-06-05T00:00:00.000Z',
+          rows: [
+            productRow({
+              label: 'vbao confidence diagnostic',
+              resolution: { width: 1, height: 1 },
+              sampleMode: 'product-preset',
+              temporalMode: 'off',
+              hostTaaMode: 'off',
+              vbaoResolution: 'half-res',
+              fullResolutionVbao: false,
+              vbaoReconstructionStage: 'confidence',
+              qualityMetrics: {
+                patternNoiseScore: 0,
+                stripeScore: 0,
+                edgeBleedProxy: 0,
+                thinGapPreservationProxy: 1,
+                horizontalStripeScore: 0,
+                verticalStripeScore: 0,
+                directionalAnisotropy: 0,
+              },
+              passTimings: [
+                {
+                  pass: 'confidence',
+                  status: 'measured',
+                  gpuMs: 0.1,
+                },
+              ],
+              latest: {
+                medianFrameMs: 16,
+                p95FrameMs: 17,
+              },
+              screenshotPath: path.join(tempDir, 'confidence.png'),
+            }),
+          ],
+        },
+      })
+
+      const markdown = await readFile(outputMd, 'utf8')
+      const report = JSON.parse(await readFile(outputJson, 'utf8'))
+
+      expect(markdown).toContain(
+        '| 1x1 | vbao | product-preset | off | off | half-res | ao | confidence-diagnostic |',
+      )
+      expect(report.productPromotionRows[0]?.output).toBe('confidence-diagnostic')
+    } finally {
+      await rm(tempDir, { force: true, recursive: true })
+    }
   })
 
   it('does not pass product rows without an explicit threshold gate', () => {

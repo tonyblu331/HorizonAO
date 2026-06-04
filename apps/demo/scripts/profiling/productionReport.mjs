@@ -26,6 +26,7 @@ export const AO_REQUIRED_REFERENCE_FIXTURE_IDS = [
 ]
 
 export const VBAO_RECONSTRUCTION_STAGES = ['raw', 'cleanup', 'resolve', 'polish', 'final']
+export const VBAO_RECONSTRUCTION_DIAGNOSTIC_STAGES = ['confidence']
 
 export const AO_DEFAULT_PRODUCT_SAMPLE_MODES = [undefined, 'product-preset', 'n/a']
 export const AO_DEFAULT_PRODUCT_NOISE_SOURCES = [undefined, 'phase-atlas-stable-hash', 'n/a']
@@ -92,6 +93,9 @@ function isReferenceGateProductRow(row) {
 }
 
 function promotionOutputLabelForRow(row) {
+  if (row.mode === 'vbao' && row.vbaoReconstructionStage === 'confidence') {
+    return 'confidence-diagnostic'
+  }
   if (row.mode === 'vbao') return row.denoise === false ? 'raw-debug' : 'product'
   if (row.mode === 'n8ao') return 'internally-filtered'
   return 'denoised'
@@ -144,9 +148,7 @@ function isPrivateCandidateRow(row) {
     row.temporalMode === 'velocity-internal' ||
     (computeCandidateLabel !== undefined && computeCandidateLabel !== 'n/a') ||
     row.cleanupMode === 'skip' ||
-    row.vbaoCleanupMode === 'skip' ||
-    row.resolvePolishMode === 'fused' ||
-    row.vbaoResolvePolishMode === 'fused'
+    row.vbaoCleanupMode === 'skip'
   )
 }
 
@@ -228,6 +230,9 @@ export function createProductPromotionVerdictRows(rows, options = {}) {
 }
 
 function outputLabelForRow(row) {
+  if (row.mode === 'vbao' && row.vbaoReconstructionStage === 'confidence') {
+    return 'confidence-diagnostic'
+  }
   if (row.mode === 'vbao') return row.denoise ? 'product' : 'raw-debug'
   return row.denoise ? 'denoised' : 'raw'
 }
@@ -282,7 +287,9 @@ export function createRenderedProxyReferenceComparisonRows(rows, options = {}) {
       blockers.push('referenceGate')
     } else if (reference.status !== 'compared') {
       blockers.push(reference.status)
-      blockers.push(...reference.missingRequiredFixtureIds.map((fixtureId) => `fixture.${fixtureId}`))
+      blockers.push(
+        ...(reference.missingRequiredFixtureIds ?? []).map((fixtureId) => `fixture.${fixtureId}`),
+      )
     }
 
     return {
@@ -334,11 +341,21 @@ function hasTemporalTargetInventory(row) {
     inventory.aoHistory?.owner === 'VBAOVelocityTemporalNode' &&
     inventory.aoHistory?.format === 'RedFormat' &&
     inventory.aoHistory?.type === 'HalfFloatType' &&
+    inventory.aoHistory?.lifetime === 'reset-on-first-frame-resize-explicit-reset' &&
     inventory.diagnostics?.owner === 'VBAOVelocityTemporalNode' &&
     inventory.diagnostics?.format === 'RGBAFormat' &&
+    inventory.diagnostics?.type === 'HalfFloatType' &&
+    inventory.diagnostics?.lifetime === 'active-vbao-pipeline' &&
     inventory.velocity?.owner === 'host-pass' &&
+    inventory.velocity?.source === 'mrt-velocity' &&
+    inventory.velocity?.convention === 'historyUv = uv - velocity.xy * vec2(0.5, -0.5)' &&
+    inventory.velocity?.lifetime === 'host-pass-current-frame' &&
     inventory.previousDepth?.owner === 'host-pass' &&
-    inventory.previousNormal?.owner === 'host-pass'
+    inventory.previousDepth?.source === "PassNode.getPreviousTextureNode('depth')" &&
+    inventory.previousDepth?.lifetime === 'host-pass-previous-frame' &&
+    inventory.previousNormal?.owner === 'host-pass' &&
+    inventory.previousNormal?.source === "PassNode.getPreviousTextureNode('output')" &&
+    inventory.previousNormal?.lifetime === 'host-pass-previous-frame'
   )
 }
 
@@ -367,6 +384,19 @@ function requiredPassesForEvidenceRow(row) {
   }
 }
 
+function isVelocityTemporalProductRow(row) {
+  return row.mode === 'vbao' && row.denoise === true && row.temporalMode === 'velocity-internal'
+}
+
+function hasMeasuredPassTiming(row, passName) {
+  return (row.passTimings ?? []).some(
+    (passTiming) =>
+      passTiming.pass === passName &&
+      passTiming.status === 'measured' &&
+      isFiniteNumber(passTiming.gpuMs),
+  )
+}
+
 export function createEvidenceArtifactStatusRows(rows) {
   return rows.map((row) => {
     const missing = []
@@ -392,6 +422,11 @@ export function createEvidenceArtifactStatusRows(rows) {
     }
     if (!hasRequestedTemporalResetEvidence(row)) {
       missing.push('temporalResetEvidence')
+    }
+    if (isVelocityTemporalProductRow(row)) {
+      for (const passName of ['temporal', 'diagnostics']) {
+        if (!hasMeasuredPassTiming(row, passName)) missing.push(`passTimings.${passName}`)
+      }
     }
     for (const passTiming of row.passTimings ?? []) {
       if (requiredPasses !== null && !requiredPasses.has(passTiming.pass)) {
@@ -435,14 +470,7 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
   lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |')
   for (const row of report.rows) {
     const metrics = row.qualityMetrics
-    const outputLabel =
-      row.mode === 'vbao'
-        ? row.denoise
-          ? 'product'
-          : 'raw-debug'
-        : row.denoise
-          ? 'denoised'
-          : 'raw'
+    const outputLabel = outputLabelForRow(row)
     lines.push(
       `| ${row.resolution.width}x${row.resolution.height} | ${row.mode} | ${row.sampleMode ?? 'n/a'} | ${row.temporalMode ?? 'n/a'} | ${row.hostTaaMode ?? 'n/a'} | ${row.vbaoResolution} | ${row.view} | ${outputLabel} | ${metrics.patternNoiseScore.toFixed(5)} | ${metrics.stripeScore.toFixed(5)} | ${metrics.edgeBleedProxy.toFixed(5)} | ${metrics.thinGapPreservationProxy.toFixed(5)} | ${metrics.horizontalStripeScore.toFixed(5)} | ${metrics.verticalStripeScore.toFixed(5)} | ${metrics.directionalAnisotropy.toFixed(5)} |`,
     )
@@ -457,14 +485,7 @@ export async function writeProductionQualityReports({ outputJson, outputMd, repo
   lines.push('| Resolution | Algorithm | VBAO sample mode | VBAO temporal | Host TAA | VBAO res | View | Output | Pass | Status | GPU ms | CPU ms |')
   lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: |')
   for (const row of report.rows) {
-    const outputLabel =
-      row.mode === 'vbao'
-        ? row.denoise
-          ? 'product'
-          : 'raw-debug'
-        : row.denoise
-          ? 'denoised'
-          : 'raw'
+    const outputLabel = outputLabelForRow(row)
     for (const passTiming of row.passTimings ?? []) {
       const gpuMs =
         passTiming.gpuMs === null || passTiming.gpuMs === undefined

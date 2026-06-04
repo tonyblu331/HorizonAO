@@ -39,6 +39,7 @@ export interface VBAOHalfResCleanupNodeOptions {
   readonly enabled?: boolean
   readonly strength?: number
   readonly resolutionScale?: number
+  readonly confidenceNode?: TextureNode | undefined
 }
 
 const HALF_RES_CLEANUP_OFFSETS = Object.freeze([
@@ -84,6 +85,7 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
   readonly normalNode: SampleableNode
   readonly camera: Camera
   readonly radiusNode: Node
+  readonly confidenceNode: TextureNode | undefined
   readonly strengthUniform = uniform(1)
   updateBeforeType = NodeUpdateType.FRAME
 
@@ -117,6 +119,7 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
     this.normalNode = normalNode as SampleableNode
     this.camera = camera
     this.radiusNode = radiusNode
+    this.confidenceNode = options.confidenceNode
     this.enabled = options.enabled ?? true
     this.strength = clamp01(options.strength ?? 1)
     this.resolutionScale = clampResolutionScale(options.resolutionScale ?? 0.5)
@@ -179,6 +182,7 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
   setup(builder: any): TextureNode {
     const uvNode = uv()
     const rawAo = this.rawAoNode as any
+    const confidence = this.confidenceNode as any
     const depthNode = this.depthNode as any
     const normalNode = this.normalNode as any
 
@@ -197,6 +201,9 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
       const rawSize = vec2((textureSize as any)(rawAo, 0) as any).toVar('vbaoHalfResCleanupRawSize')
       const texelSize = vec2(1).div(rawSize).toVar('vbaoHalfResCleanupTexelSize')
       const centerAo = rawAo.sample(uvNode).r.toVar('vbaoHalfResCleanupCenterAo')
+      const centerConfidence = (confidence === undefined ? float(1) : confidence.sample(uvNode).r)
+        .clamp(0, 1)
+        .toVar('vbaoHalfResCleanupCenterConfidence')
       const centerDepth = sampleDepth(uvNode).toVar('vbaoHalfResCleanupCenterDepth')
       const centerNormal = sampleNormal(uvNode).toVar('vbaoHalfResCleanupCenterNormal')
       const centerPosition = getViewPosition(
@@ -263,9 +270,12 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
       const cleanedAo = weightedAo
         .div(max(totalWeight, float(1e-6)))
         .toVar('vbaoHalfResCleanupCleanedAo')
+      const confidenceGuidedStrength = this.strengthUniform
+        .mul(float(1).sub(centerConfidence))
+        .toVar('vbaoHalfResCleanupConfidenceGuidedStrength')
       const filteredAo = centerAo
-        .mul(float(1).sub(this.strengthUniform))
-        .add(cleanedAo.mul(this.strengthUniform))
+        .mul(float(1).sub(confidenceGuidedStrength))
+        .add(cleanedAo.mul(confidenceGuidedStrength))
         .toVar('vbaoHalfResCleanupFilteredAo')
       return centerValid.select(clamp(filteredAo, float(0), float(1)), centerAo)
     })

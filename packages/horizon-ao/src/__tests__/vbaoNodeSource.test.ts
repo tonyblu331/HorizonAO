@@ -9,8 +9,8 @@ import effectPassSource from '../VBAOEffectPass.ts?raw'
 import fullResPolishSource from '../VBAOFullResPolishNode.ts?raw'
 import halfResCleanupSource from '../VBAOHalfResCleanupNode.ts?raw'
 import resolveSource from '../VBAOResolveNode.ts?raw'
-import resolvePolishSource from '../VBAOResolvePolishNode.ts?raw'
 import velocityTemporalSource from '../VBAOVelocityTemporalNode.ts?raw'
+import receiverConfidenceSource from '../VBAOReceiverConfidenceNode.ts?raw'
 import museumSource from '../../../../apps/demo/src/scenes/MuseumScene.tsx?raw'
 import labSource from '../../../../apps/demo/src/scenes/VbaoLabScene.tsx?raw'
 import aoPipelinesSource from '../../../../apps/demo/src/scenes/aoPipelines.ts?raw'
@@ -169,13 +169,16 @@ describe('modernized VBAO production source contract', () => {
     expect(source).not.toContain('this.noiseTexture.dispose()')
   })
 
-  it('stores raw AO in half-float and nearest-filters the manual product resolve source', () => {
+  it('stores raw receiver estimate in half-float and nearest-filters reconstruction sources', () => {
     expect(source).toContain('HalfFloatType')
     expect(source).toContain('type: HalfFloatType')
-    expect(source).toContain('this.renderTarget.texture.magFilter = NearestFilter')
-    expect(source).toContain('this.renderTarget.texture.minFilter = NearestFilter')
-    expect(source).toContain('this.renderTarget.texture.generateMipmaps = false')
-    expect(source).toContain('this.renderTarget.texture.colorSpace = NoColorSpace')
+    expect(source).toContain('private readonly rawEstimateTarget = new RenderTarget')
+    expect(source).toContain("this.rawEstimateTarget.texture.name = 'VBAO.Raw'")
+    expect(source).toContain('this.rawEstimateTarget.texture.magFilter = NearestFilter')
+    expect(source).toContain('this.rawEstimateTarget.texture.minFilter = NearestFilter')
+    expect(source).toContain('this.rawEstimateTarget.texture.generateMipmaps = false')
+    expect(source).toContain('this.rawEstimateTarget.texture.colorSpace = NoColorSpace')
+    expect(source).toContain('passTexture(this as never, this.rawEstimateTarget.texture)')
     expect(halfResCleanupSource).toContain('NearestFilter')
     expect(halfResCleanupSource).toContain('this.renderTarget.texture.magFilter = NearestFilter')
     expect(halfResCleanupSource).toContain('this.renderTarget.texture.minFilter = NearestFilter')
@@ -297,34 +300,41 @@ describe('modernized VBAO production source contract', () => {
     expect(source).not.toContain('sinTheta')
   })
 
-  it('returns one final product AO node with lazy internal pass elision', () => {
+  it('returns one receiver product AO node with lazy internal reconstruction elision', () => {
     expect(source).toContain('private resolveNode?: VBAOResolveNode')
     expect(source).toContain('private halfCleanupNode?: VBAOHalfResCleanupNode')
     expect(source).toContain('private fullPolishNode?: VBAOFullResPolishNode')
-    expect(source).toContain('private rebuildOutputGraph(): void')
-    expect(source).toContain('private outputGraphCreated = false')
-    expect(source).toContain('private currentOutputGraphKey(): string')
-    expect(source).toContain('private assertOutputGraphStable(): void')
+    expect(source).toContain('private rebuildReceiverProductGraph(): void')
+    expect(source).toContain('private receiverProductGraphCreated = false')
+    expect(source).toContain('private currentReceiverProductGraphKey(): string')
+    expect(source).toContain('private assertReceiverProductGraphStable(): void')
+    expect(source).toContain('private productAoTextureNode?: TextureNode')
+    expect(source).toContain('private readonly rawEstimateTextureNode: TextureNode')
     expect(source).toContain('if (this.resolutionScale < 0.99)')
     expect(source).toContain('const cleanupStrength = this.lowResolutionCleanupStrength()')
     expect(source).toContain('const polishStrength = this.fullResolutionPolishStrength()')
     expect(source).toContain('softness and resolutionScale affect the pass graph')
     expect(source).toMatch(
-      /this\.outputGraphCreated &&[\s\S]*next\.softness !== this\.softness\.value[\s\S]*next\.resolutionScale !== this\.resolutionScale/,
+      /this\.receiverProductGraphCreated &&[\s\S]*next\.softness !== this\.softness\.value[\s\S]*next\.resolutionScale !== this\.resolutionScale/,
     )
     expect(source).toMatch(
-      /getTextureNode\(\): TextureNode \{\s*this\.assertOutputGraphStable\(\)\s*this\.rebuildOutputGraph\(\)[\s\S]*this\.outputGraphCreated = true/,
+      /getTextureNode\(\): TextureNode \{\s*this\.assertReceiverProductGraphStable\(\)\s*this\.rebuildReceiverProductGraph\(\)[\s\S]*this\.receiverProductGraphCreated = true/,
     )
     expect(source).toMatch(
-      /setSize\(width: number, height: number\): void \{\s*this\.assertOutputGraphStable\(\)/,
+      /setSize\(width: number, height: number\): void \{\s*this\.assertReceiverProductGraphStable\(\)/,
     )
     expect(source).not.toContain('private readonly resolvedTextureNode')
     expect(source).not.toContain('private readonly resolveNode: VBAOResolveNode')
     expect(source).not.toContain('this.resolvedTextureNode = this.resolveNode.getTextureNode()')
+    expect(source).not.toContain('private outputTextureNode?: TextureNode')
+    expect(source).not.toContain('private outputGraphCreated = false')
+    expect(source).not.toContain('private currentOutputGraphKey(): string')
     expect(source).toMatch(
-      /getTextureNode\(\): TextureNode \{\s*this\.assertOutputGraphStable\(\)\s*this\.rebuildOutputGraph\(\)\s*this\.outputGraphCreated = true\s*return this\.outputTextureNode \?\? this\.textureNode\s*\}/,
+      /getTextureNode\(\): TextureNode \{\s*this\.assertReceiverProductGraphStable\(\)\s*this\.rebuildReceiverProductGraph\(\)\s*this\.receiverProductGraphCreated = true\s*return this\.productAoTextureNode \?\? this\.rawEstimateTextureNode\s*\}/,
     )
-    expect(source).toMatch(/getRawTextureNode\(\): TextureNode \{\s*return this\.textureNode\s*\}/)
+    expect(source).toMatch(
+      /getRawTextureNode\(\): TextureNode \{\s*return this\.rawEstimateTextureNode\s*\}/,
+    )
     expect(source).not.toContain('getSampleTextureNode')
     expect(source).not.toContain('getRenderTarget')
     expect(source).not.toContain('return this.denoise ?')
@@ -385,7 +395,7 @@ describe('modernized VBAO production source contract', () => {
     expect(benchmarkSource).toContain("temporalMode: mode === 'vbao' ? vbaoTemporalMode : 'n/a'")
     expect(benchmarkSource).toContain('hostTaaMode: mode === ')
     expect(benchmarkSource).toContain(
-      '${vbaoSampleMode}${temporalLabel}${hostTaaLabel}${cleanupLabel}${resolvePolishLabel}${softnessLabel}-${vbaoResolutionLabel}',
+      '${vbaoSampleMode}${temporalLabel}${hostTaaLabel}${cleanupLabel}${softnessLabel}-${vbaoResolutionLabel}',
     )
     expect(museumSource).toContain("type VbaoHostTaaMode = 'off' | 'traa'")
     expect(museumSource).toContain('function getRequestedVbaoHostTaaMode()')
@@ -402,6 +412,8 @@ describe('modernized VBAO production source contract', () => {
     expect(temporalGateSource).toContain('function hasMotionEvidenceSource(row)')
     expect(temporalGateSource).toContain('hostTaaEvidence')
     expect(temporalGateSource).not.toContain('internalPrototypeAllowed')
+    expect(temporalGateSource).toContain('hostEvidenceComplete &&')
+    expect(temporalGateSource).toContain('sameCostAlternativeEvidence &&')
     expect(temporalGateSource).toContain('internalTemporalAllowed: internalTemporalPassesPromotion')
     expect(temporalGateSource).not.toContain("'prototype-only'")
     expect(temporalGateSource).toContain('materialPatternWin')
@@ -442,7 +454,10 @@ describe('modernized VBAO production source contract', () => {
     expect(temporalGateSource).toContain("diagnostics.renderTargetName === 'VBAO.VelocityTemporalDiagnostics'")
     expect(temporalGateSource).toContain('missingVelocityDiagnosticsRows')
     expect(temporalGateSource).toContain(
-      'hostEvidenceComplete &&\n  hostTaaEvidence &&\n  sameCostAlternativeEvidence &&\n  resetEvidenceComplete &&\n  motionEvidenceCompleteForReview',
+      'const hostTaaLaneComplete =\n  hostEvidenceComplete && hostTaaEvidence && sameCostAlternativeEvidence',
+    )
+    expect(temporalGateSource).toContain(
+      'const velocityLaneComplete =\n  hostEvidenceComplete &&\n  velocityTemporalEvidence &&\n  resetEvidenceComplete &&\n  motionEvidenceCompleteForReview &&\n  sameCostAlternativeEvidence',
     )
     expect(temporalGateSource).toContain('createExistingScreenshotPathSet')
     expect(temporalGateSource).toContain('qualityMetricsComplete')
@@ -536,11 +551,15 @@ describe('modernized VBAO production source contract', () => {
     expect(optionsSource).not.toContain('diagnosticField')
   })
 
-  it('uses artist strength plus contrast, while preserving scale/intensity aliases', () => {
+  it('uses artist strength plus advanced contrast, while preserving scale/intensity aliases', () => {
     expect(optionsSource).toContain('readonly strength?: number')
     expect(optionsSource).toContain('readonly contrast?: number')
+    expect(optionsSource).toContain('readonly advanced?: {')
+    expect(optionsSource).toContain('readonly contrast?: number')
     expect(source).toContain('strength: options.strength ?? options.intensity ?? fallback.strength')
-    expect(source).toContain('contrast: options.contrast ?? options.scale ?? fallback.contrast')
+    expect(source).toContain(
+      'contrast: advanced.contrast ?? options.contrast ?? options.scale ?? fallback.contrast',
+    )
     expect(source).toContain('const contrastedAo = pow(accessibility, this.contrast)')
     expect(source).toContain('return float(1).sub(float(1).sub(contrastedAo).mul(this.strength))')
     expect(source).not.toContain('return pow(accessibility, this.scale)')
@@ -579,6 +598,9 @@ describe('modernized VBAO production source contract', () => {
     expect(fullResPolishSource).toContain('getViewPosition')
     expect(fullResPolishSource).toContain('computeVbaoBilateralGeometryWeight')
     expect(fullResPolishSource).toContain('clampedPolishAo')
+    expect(fullResPolishSource).toContain('readonly confidenceNode?: TextureNode')
+    expect(fullResPolishSource).toContain('vbaoFullResPolishCenterConfidence')
+    expect(fullResPolishSource).toContain('vbaoFullResPolishConfidenceGuidedStrength')
     expect(fullResPolishSource).not.toContain('start: int(-2), end: int(3)')
     expect(fullResPolishSource).not.toContain('abs(centerDepth.sub(tapDepth))')
     expect(halfResCleanupSource).toContain('class VBAOHalfResCleanupNode')
@@ -587,6 +609,9 @@ describe('modernized VBAO production source contract', () => {
     expect(halfResCleanupSource).toContain('totalWeight = float(4).toVar')
     expect(halfResCleanupSource).toContain('getViewPosition')
     expect(halfResCleanupSource).toContain('computeVbaoBilateralGeometryWeight')
+    expect(halfResCleanupSource).toContain('readonly confidenceNode?: TextureNode')
+    expect(halfResCleanupSource).toContain('vbaoHalfResCleanupCenterConfidence')
+    expect(halfResCleanupSource).toContain('vbaoHalfResCleanupConfidenceGuidedStrength')
     expect(halfResCleanupSource).not.toContain('start: int(-2), end: int(3)')
     expect(effectPassSource).toContain('passTexture(this as never, this.renderTarget.texture)')
     expect(halfResCleanupSource).toContain('passTexture(this as never, this.renderTarget.texture)')
@@ -602,28 +627,6 @@ describe('modernized VBAO production source contract', () => {
     expect(fullResPolishSource).not.toContain('frameIndex')
     expect(fullResPolishSource).not.toContain('historyTexture')
     expect(fullResPolishSource).not.toContain('reprojection')
-  })
-
-  it('keeps the fused resolve-polish candidate private, spatial, and evidence-only', () => {
-    expect(resolvePolishSource).toContain('class VBAOResolvePolishNode extends VBAOEffectPass')
-    expect(resolvePolishSource).toContain('VBAO.ResolvePolish')
-    expect(resolvePolishSource).toContain('JBU4')
-    expect(resolvePolishSource).toContain('POISSON8')
-    expect(resolvePolishSource).toContain('computeVbaoBilateralGeometryWeight')
-    expect(resolvePolishSource).toContain('vbaoResolvePolishWeightedAo')
-    expect(resolvePolishSource).toContain('vbaoResolvePolishTotalWeight')
-    expect(resolvePolishSource).toContain('`${prefix}FallbackAo`')
-    expect(resolvePolishSource).toContain('`${prefix}BilinearFracY`')
-    expect(resolvePolishSource).toContain('vbaoResolvePolishIgnNoise')
-    expect(resolvePolishSource).toContain('vbaoResolvePolishClampedAo')
-    expect(resolvePolishSource).not.toContain('historyTexture')
-    expect(resolvePolishSource).not.toContain('previousDepth')
-    expect(resolvePolishSource).not.toContain('previousNormal')
-    expect(resolvePolishSource).not.toContain('reprojection')
-    expect(resolvePolishSource).not.toContain('frameIndex')
-    expect(resolvePolishSource).not.toContain('temporal')
-    expect(optionsSource).not.toContain('resolvePolishMode')
-    expect(indexSource).not.toContain('VBAOResolvePolishNode')
   })
 
   it('reconstructs JBU fallback from the same manual four-tap AO footprint', () => {
@@ -647,11 +650,9 @@ describe('modernized VBAO production source contract', () => {
     expect(resolveSource).toContain('computeVbaoBilateralGeometryWeight')
     expect(halfResCleanupSource).toContain('computeVbaoBilateralGeometryWeight')
     expect(fullResPolishSource).toContain('computeVbaoBilateralGeometryWeight')
-    expect(resolvePolishSource).toContain('computeVbaoBilateralGeometryWeight')
     expect(resolveSource).not.toContain('const normalAgreement =')
     expect(halfResCleanupSource).not.toContain('const normalAgreement =')
     expect(fullResPolishSource).not.toContain('const normalAgreement =')
-    expect(resolvePolishSource).not.toContain('const normalAgreement =')
   })
 
   it('keeps deprecated VBAO option aliases explicit until migration policy changes', () => {
@@ -678,11 +679,8 @@ describe('modernized VBAO production source contract', () => {
     expect(effectPassSource).toContain('this.renderTarget.setSize')
     expect(effectPassSource).toContain('this.renderTarget.dispose()')
     expect(fullResPolishSource).toContain('extends VBAOEffectPass')
-    expect(resolvePolishSource).toContain('extends VBAOEffectPass')
     expect(fullResPolishSource).not.toContain('new RenderTarget(1, 1')
-    expect(resolvePolishSource).not.toContain('new RenderTarget(1, 1')
     expect(fullResPolishSource).not.toContain('RendererUtils.resetRendererState')
-    expect(resolvePolishSource).not.toContain('RendererUtils.resetRendererState')
     expect(indexSource).not.toContain('VBAOEffectPass')
   })
 
@@ -806,8 +804,16 @@ describe('modernized VBAO production source contract', () => {
     expect(benchmarkSource).not.toContain("'temporal-depth'")
     expect(benchmarkSource).not.toContain("'temporal-normal'")
     expect(benchmarkSource).toContain("if (label === 'VBAO.VelocityTemporal') return 'temporal'")
-    expect(benchmarkSource).toContain("const temporalEnabled = productOutput && temporalMode === 'velocity-internal'")
+    expect(benchmarkSource).toContain(
+      "if (label === 'VBAO.VelocityTemporalDiagnostics') return 'diagnostics'",
+    )
+    expect(benchmarkSource).toContain("if (label === 'VBAO.ReceiverConfidence') return 'confidence'")
+    expect(benchmarkSource).not.toContain("if (label === 'VBAO.ResolvePolish') return 'resolve-polish'")
+    expect(benchmarkSource).toContain("const temporalEnabled = productOutput && !diagnosticOutput && temporalMode === 'velocity-internal'")
+    expect(benchmarkSource).toContain('const diagnosticsEnabled = temporalEnabled')
+    expect(benchmarkSource).toContain("pass: 'confidence'")
     expect(benchmarkSource).toContain("pass: 'temporal'")
+    expect(benchmarkSource).toContain("pass: 'diagnostics'")
     expect(benchmarkSource).toContain("if (!enabled) return measuredByPass.has(pass) ? 'unexpected' : 'skipped'")
     expect(benchmarkSource).toContain('resolveGpuPassTimings')
     expect(benchmarkSource).toContain("['missing', 'unexpected'].includes(passTiming.status)")
@@ -835,12 +841,16 @@ describe('modernized VBAO production source contract', () => {
     expect(computeCandidateSource).toContain('computeAsync')
     expect(computeCandidateSource).toContain('textureNode: texture(target)')
     expect(museumSource).toContain('createVbaoSectorConfidenceComputeCandidate')
+    expect(museumSource).toContain('new VBAOReceiverConfidenceNode')
     expect(museumSource).toContain('getRequestedVbaoComputeCandidateMode')
     expect(museumSource).toContain("get('vbaoComputeCandidate')")
     expect(museumSource).toContain('sectorConfidence.compute(renderer)')
-    expect(museumSource).toContain('const sectorConfidenceScalar = sectorConfidence?.textureNode.r ?? float(1)')
-    expect(museumSource).toContain('vbaoProductNode.r.mul(sectorConfidenceScalar)')
-    expect(museumSource).toContain('polishScalar.mul(sectorConfidenceScalar)')
+    expect(museumSource).toContain("type VbaoReconstructionStage = 'raw' | 'cleanup' | 'resolve' | 'polish' | 'final' | 'confidence'")
+    expect(museumSource).toContain("requested === 'confidence'")
+    expect(museumSource).toContain('const receiverConfidenceScalar = receiverConfidenceNode?.getTextureNode().r')
+    expect(museumSource).toContain('confidence: makeAoPipeline(')
+    expect(museumSource).not.toContain('vbaoProductNode.r.mul(sectorConfidenceScalar)')
+    expect(museumSource).not.toContain('polishScalar.mul(sectorConfidenceScalar)')
     expect(museumSource).toContain('vbaoComputeCandidateLabel')
     expect(museumSource).toContain('getVbaoComputeCandidateLabel')
     expect(museumSource).toContain('getVbaoComputeCandidateInventory')
@@ -850,7 +860,13 @@ describe('modernized VBAO production source contract', () => {
     expect(benchmarkSource).toContain('computeCandidateTiming')
     expect(benchmarkSource).toContain('AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE')
     expect(benchmarkSource).toContain("url.searchParams.set('vbaoComputeCandidate', vbaoComputeCandidateMode)")
+    expect(benchmarkSource).toContain("'confidence'")
+    expect(benchmarkSource).toContain("if (label === 'VBAO.ReceiverConfidence') return 'confidence'")
+    expect(benchmarkSource).toContain("pass: 'confidence'")
+    expect(benchmarkSource).toContain('confidence-diagnostic')
     expect(profilingProductionReportSource).toContain('VBAO Compute Candidate Status')
+    expect(profilingProductionReportSource).toContain('VBAO_RECONSTRUCTION_DIAGNOSTIC_STAGES')
+    expect(profilingProductionReportSource).toContain("return 'confidence-diagnostic'")
     expect(profilingProductionReportSource).toContain('CPU ms')
     expect(gpuReadbackSource).toContain('@compute @workgroup_size(1)')
     expect(gpuReadbackSource).toContain('var<storage, read_write> output')
@@ -861,29 +877,65 @@ describe('modernized VBAO production source contract', () => {
     expect(gpuReadbackSource).toContain('backend: ')
   })
 
-  it('ships product-first quality presets without platform labels', () => {
+  it('keeps receiver confidence private and computes it from receiver-state support terms', () => {
+    expect(receiverConfidenceSource).toContain('class VBAOReceiverConfidenceNode extends TempNode')
+    expect(receiverConfidenceSource).toContain("this.receiverConfidenceTarget.texture.name = 'VBAO.ReceiverConfidence'")
+    expect(receiverConfidenceSource).toContain('format: RedFormat')
+    expect(receiverConfidenceSource).toContain('type: HalfFloatType')
+    expect(receiverConfidenceSource).toContain('vbaoReceiverConfidenceCandidateCount')
+    expect(receiverConfidenceSource).toContain('vbaoReceiverConfidenceAcceptedCount')
+    expect(receiverConfidenceSource).toContain('vbaoReceiverConfidenceSliceAgreement')
+    expect(receiverConfidenceSource).toContain('vbaoReceiverConfidenceSupport')
+    expect(receiverConfidenceSource).toContain('sqrt(receiverSupport.mul(sliceAgreement))')
+    expect(receiverConfidenceSource).toContain('sampleValid')
+    expect(receiverConfidenceSource).toContain('occludedMask')
+    expect(source).toContain("import { VBAOReceiverConfidenceNode } from './VBAOReceiverConfidenceNode'")
+    expect(source).toContain('private getOrCreateReceiverConfidenceNode(): VBAOReceiverConfidenceNode')
+    expect(source).toContain('const usesConfidenceGuidedReconstruction = cleanupStrength > 0 || polishStrength > 0')
+    expect(source).toContain('confidenceNode,')
+    expect(museumSource).toContain('vbaoComputeCandidateMode === VBAO_COMPUTE_CANDIDATE_LABEL || vbaoSoftness > 0')
+    expect(museumSource).toContain('const receiverConfidenceTextureNode = receiverConfidenceNode?.getTextureNode()')
+    expect(receiverConfidenceSource).not.toContain('readonly confidence?:')
+    expect(receiverConfidenceSource).not.toContain('readonly metadata?:')
+    expect(indexSource).not.toContain('VBAOReceiverConfidenceNode')
+    expect(optionsSource).not.toContain('receiverConfidence')
+    expect(optionsSource).not.toContain('readonly confidence?:')
+    expect(source).not.toContain('getReceiverConfidenceTextureNode')
+  })
+
+  it('ships artist-safe contact controls and product-first quality presets', () => {
     expect(source).toContain('VBAO_QUALITY_TIERS')
-    expect(source).toContain('slices: options.slices ?? quality?.slices ?? fallback.slices')
-    expect(source).toContain('samples: options.samples ?? quality?.samples ?? fallback.samples')
+    expect(source).toContain('contact: options.contact ?? fallback.contact')
+    expect(source).toContain('advanced.thickness ??')
+    expect(source).toContain('options.thickness ??')
+    expect(source).toContain('advanced.slices ?? options.slices ?? quality?.slices ?? fallback.slices')
+    expect(source).toContain('advanced.samples ?? options.samples ?? quality?.samples ?? fallback.samples')
     expect(source).toMatch(
-      /resolutionScale:\s*options\.resolutionScale \?\? quality\?\.resolutionScale \?\? fallback\.resolutionScale/,
+      /advanced\.resolutionScale\s*\?\?\s*options\.resolutionScale\s*\?\?\s*quality\?\.resolutionScale\s*\?\?\s*fallback\.resolutionScale/,
     )
     expect(source).not.toContain('slices: options.slices ?? fallback.slices')
     expect(source).not.toContain('samples: options.samples ?? fallback.samples')
+    expect(optionsSource).toContain('export const VBAO_DEFAULT_CONTACT = 0.45 as const')
+    expect(optionsSource).toContain('export function resolveVbaoContactThickness')
+    expect(optionsSource).toContain('readonly contact?: number')
+    expect(optionsSource).toContain('readonly advanced?: {')
+    expect(optionsSource).toContain('readonly thickness?: number')
+    expect(optionsSource).toContain('readonly contact: number')
     expect(optionsSource).toContain(
       'performance: { resolutionScale: 0.5, slices: 2, samples: 4, sectors: 32 }',
     )
     expect(optionsSource).not.toContain('mobile: {')
     expect(optionsSource).not.toContain('fast: {')
     expect(optionsSource).toContain(
-      'balanced: { resolutionScale: 0.5, slices: 3, samples: 6, sectors: 32 }',
+      'balanced: { resolutionScale: 0.75, slices: 3, samples: 6, sectors: 32 }',
     )
     expect(optionsSource).toContain(
-      'quality: { resolutionScale: 0.5, slices: 4, samples: 8, sectors: 32 }',
+      'quality: { resolutionScale: 1.0, slices: 4, samples: 8, sectors: 32 }',
     )
     expect(optionsSource).toContain(
-      'ultra: { resolutionScale: 0.5, slices: 4, samples: 10, sectors: 32 }',
+      'ultra: { resolutionScale: 1.0, slices: 4, samples: 10, sectors: 32 }',
     )
+    expect(optionsSource).toContain('contact: { min: 0, max: 1 }')
     expect(optionsSource).toContain('slices: { min: 1, max: 4 }')
     expect(optionsSource).toContain('samples: { min: 2, max: 16 }')
   })
@@ -960,38 +1012,25 @@ describe('modernized VBAO production source contract', () => {
 
   it('keeps cleanup removal as an evidence-only benchmark path', () => {
     expect(museumSource).toContain("type VbaoCleanupMode = 'on' | 'skip'")
-    expect(museumSource).toContain("type VbaoResolvePolishMode = 'separate' | 'fused'")
     expect(museumSource).toContain('function getRequestedVbaoCleanupMode()')
-    expect(museumSource).toContain('function getRequestedVbaoResolvePolishMode()')
     expect(museumSource).toContain('function getRequestedVbaoSoftness()')
     expect(museumSource).toContain("window.location.search).get('vbaoCleanup')")
-    expect(museumSource).toContain("window.location.search).get('vbaoResolvePolish')")
     expect(museumSource).toContain("window.location.search).get('vbaoSoftness')")
     expect(museumSource).toContain("return requested === 'skip' ? 'skip' : 'on'")
-    expect(museumSource).toContain("return requested === 'fused' ? 'fused' : 'separate'")
     expect(museumSource).toContain('readonly vbaoCleanupMode: VbaoBenchmarkCleanupMode')
-    expect(museumSource).toContain('readonly vbaoResolvePolishMode: VbaoBenchmarkResolvePolishMode')
     expect(museumSource).toContain('vbaoCleanupMode: usesVbao ? vbaoCleanupMode : ')
-    expect(museumSource).toContain('vbaoResolvePolishMode: usesVbao ? vbaoResolvePolishMode : ')
     expect(museumSource).toContain("enabled: vbaoCleanupMode === 'on'")
     expect(museumSource).toContain(
       "vbaoCleanupMode === 'on' ? cleanupTextureNode : vbaoNode.getRawTextureNode()",
     )
-    expect(museumSource).toContain("vbaoResolvePolishMode === 'fused' && polishStrength > 0")
-    expect(museumSource).toContain('new VBAOResolvePolishNode')
     expect(benchmarkSource).toContain('AO_BENCHMARK_VBAO_CLEANUP_MODE')
     expect(benchmarkSource).toContain('AO_BENCHMARK_VBAO_SOFTNESS')
-    expect(benchmarkSource).toContain('AO_BENCHMARK_VBAO_RESOLVE_POLISH_MODE')
     expect(benchmarkSource).toContain("url.searchParams.set('vbaoCleanup', 'skip')")
     expect(benchmarkSource).toContain("url.searchParams.set('vbaoSoftness', String(vbaoDemoSoftness))")
-    expect(benchmarkSource).toContain("url.searchParams.set('vbaoResolvePolish', 'fused')")
     expect(benchmarkSource).toContain('cleanupMode: mode === ')
-    expect(benchmarkSource).toContain('resolvePolishMode: mode === ')
     expect(benchmarkSource).toContain('vbaoSoftness: mode === ')
     expect(benchmarkSource).toContain("cleanupMode !== 'skip'")
-    expect(benchmarkSource).toContain("if (label === 'VBAO.ResolvePolish') return 'resolve-polish'")
     expect(benchmarkSource).toContain('Evidence-only final product AO with half-resolution cleanup skipped before resolve')
-    expect(benchmarkSource).toContain('Evidence-only final product AO with fused half-resolution resolve-polish candidate')
     expect(optionsSource).not.toContain('cleanupMode')
     expect(optionsSource).not.toContain('resolvePolishMode')
     expect(indexSource).not.toContain('cleanupMode')
@@ -1012,7 +1051,7 @@ describe('modernized VBAO production source contract', () => {
     expect(benchmarkSource).toContain("'same-cost-2x16'")
     expect(benchmarkSource).toContain('sampleMode: mode === ')
     expect(benchmarkSource).toContain(
-      '${mode}-${vbaoSampleMode}${temporalLabel}${hostTaaLabel}${cleanupLabel}${resolvePolishLabel}${softnessLabel}-${vbaoResolutionLabel}',
+      '${mode}-${vbaoSampleMode}${temporalLabel}${hostTaaLabel}${cleanupLabel}${softnessLabel}-${vbaoResolutionLabel}',
     )
     expect(profilingProductionReportSource).toContain('VBAO sample mode')
   })

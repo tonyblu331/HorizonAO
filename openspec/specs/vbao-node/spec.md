@@ -102,4 +102,20 @@ The package SHALL expose product AO through one public `VBAONode` product bounda
 
 ### Requirement: GTAONode-Shaped Public API
 
-`VBAONode` SHALL match `GTAONode`'s integration shape where the semantics overlap: depth/normal/camera + factory + `getTextureNode()` + `setSize()`. Public raw-pass options SHALL remain compact (`quality`, deprecated alias `preset`, `radius`, `thickness`, `strength`, `contrast`, `softness`, legacy aliases `scale`/`intensity`, `slices`, `samples`, `resolutionScale`) and SHALL NOT expose denoise, research, or debug gates. Extra smoothing is controlled by `softness` and implemented as internal pass-elision, not public pass composition.
+`VBAONode` SHALL match `GTAONode`'s integration shape where the semantics overlap: depth/normal/camera + factory + `getTextureNode()` + `setSize()`. Public product options SHALL remain compact (`quality`, deprecated alias `preset`, `radius`, `contact`, `strength`, `softness`, legacy alias `intensity`, and `advanced`). `contact` SHALL be the artist-facing finite-occluder prior and SHALL resolve to internal thickness. Low-level controls (`thickness`, `contrast`, `slices`, `samples`, `resolutionScale`) SHALL be available only as deprecated compatibility aliases or under `advanced`, and SHALL NOT be presented as peer product controls. `VBAONodeOptions` SHALL NOT expose denoise, temporal, research, debug, sector-count, mask, or directional output gates. Extra smoothing is controlled by `softness` and implemented as internal pass-elision, not public pass composition.
+
+#### Scenario: Contact maps to internal thickness
+
+- **GIVEN** callers provide `radius` and `contact`
+- **WHEN** `VBAONodeOptions` are resolved
+- **THEN** internal `thickness` SHALL be derived from the configured radius and clamped contact value
+- **AND** the product API SHALL treat `contact` as the primary finite-occluder/contact-density control
+- **AND** `advanced.thickness` or deprecated top-level `thickness` SHALL override the derived value only as an explicit low-level escape hatch.
+
+#### Scenario: Product quality presets are not all half-resolution
+
+- **GIVEN** callers select product `quality`
+- **WHEN** quality tier defaults are resolved
+- **THEN** `performance` MAY use half-resolution raw AO
+- **AND** `balanced` SHALL use a higher-than-half raw resolution
+- **AND** `quality` and `ultra` SHALL use full-resolution raw AO unless a later evidence gate changes the preset policy.

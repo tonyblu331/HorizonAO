@@ -47,6 +47,8 @@ export interface ScalarVbaoReferenceResult {
   readonly sliceMasks: readonly number[]
   readonly sliceAccessibilities: readonly number[]
   readonly sliceWeights: readonly number[]
+  readonly sliceAcceptedSampleCounts: readonly number[]
+  readonly sliceCandidateSampleCounts: readonly number[]
 }
 
 function dot3(a: Vec3, b: Vec3): number {
@@ -167,6 +169,8 @@ export function evaluateScalarVbaoReference(input: ScalarVbaoReferenceInput): Sc
   const sliceMasks: number[] = []
   const sliceAccessibilities: number[] = []
   const sliceWeights: number[] = []
+  const sliceAcceptedSampleCounts: number[] = []
+  const sliceCandidateSampleCounts: number[] = []
   const normal = normalize3(input.normal)
   const thicknessPolicy = input.thicknessPolicy ?? 'current'
 
@@ -181,6 +185,8 @@ export function evaluateScalarVbaoReference(input: ScalarVbaoReferenceInput): Sc
     const normalAngle = normalAngleForSlice(normal, viewDir, sliceDir)
     const sliceWeight = projectNormalIntoSlice(normal, viewDir, sliceDir).projectedLength
     let mask = 0
+    let acceptedSampleCount = 0
+    let candidateSampleCount = 0
 
     for (const sideSign of [1, -1] as const) {
       const sampleDir = scale3(sliceDir, sideSign)
@@ -188,6 +194,7 @@ export function evaluateScalarVbaoReference(input: ScalarVbaoReferenceInput): Sc
 
       for (const sample of samples) {
         if (mask === 0xffffffff) break
+        candidateSampleCount++
         if (sample.valid === false) continue
 
         const delta = sub3(sample.position, input.pixelPosition)
@@ -195,6 +202,7 @@ export function evaluateScalarVbaoReference(input: ScalarVbaoReferenceInput): Sc
         const along = dot3(delta, sampleDir)
         if (dist2 <= 1e-8 || dist2 > maxValidRadius2 || along <= 0) continue
 
+        acceptedSampleCount++
         const sampleDist = Math.sqrt(Math.max(dist2, 1e-8))
         const effectiveThickness = resolveEffectiveThickness(
           thicknessPolicy,
@@ -216,6 +224,8 @@ export function evaluateScalarVbaoReference(input: ScalarVbaoReferenceInput): Sc
     sliceMasks.push(mask >>> 0)
     sliceAccessibilities.push(cosineMeasureReduction(mask))
     sliceWeights.push(sliceWeight)
+    sliceAcceptedSampleCounts.push(acceptedSampleCount)
+    sliceCandidateSampleCounts.push(candidateSampleCount)
   }
 
   const uniformAccessibility =
@@ -236,6 +246,8 @@ export function evaluateScalarVbaoReference(input: ScalarVbaoReferenceInput): Sc
     sliceMasks,
     sliceAccessibilities,
     sliceWeights,
+    sliceAcceptedSampleCounts,
+    sliceCandidateSampleCounts,
   }
 }
 
