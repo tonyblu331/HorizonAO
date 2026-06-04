@@ -782,18 +782,18 @@ describe('modernized VBAO production source contract', () => {
     expect(source).not.toContain('slices: options.slices ?? fallback.slices')
     expect(source).not.toContain('samples: options.samples ?? fallback.samples')
     expect(optionsSource).toContain(
-      'performance: { resolutionScale: 1.0, slices: 2, samples: 4, sectors: 32 }',
+      'performance: { resolutionScale: 0.5, slices: 2, samples: 4, sectors: 32 }',
     )
     expect(optionsSource).not.toContain('mobile: {')
     expect(optionsSource).not.toContain('fast: {')
     expect(optionsSource).toContain(
-      'balanced: { resolutionScale: 1.0, slices: 3, samples: 6, sectors: 32 }',
+      'balanced: { resolutionScale: 0.5, slices: 3, samples: 6, sectors: 32 }',
     )
     expect(optionsSource).toContain(
-      'quality: { resolutionScale: 1.0, slices: 4, samples: 8, sectors: 32 }',
+      'quality: { resolutionScale: 0.5, slices: 4, samples: 8, sectors: 32 }',
     )
     expect(optionsSource).toContain(
-      'ultra: { resolutionScale: 1.0, slices: 4, samples: 10, sectors: 32 }',
+      'ultra: { resolutionScale: 0.5, slices: 4, samples: 10, sectors: 32 }',
     )
     expect(optionsSource).toContain('slices: { min: 1, max: 4 }')
     expect(optionsSource).toContain('samples: { min: 2, max: 16 }')

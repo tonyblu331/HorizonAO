@@ -36,7 +36,7 @@ export const VBAO_DEFAULTS = Object.freeze({
   softness: 0.0,
   slices: 3,
   samples: 8,
-  resolutionScale: 1.0,
+  resolutionScale: 0.5,
 } as const)
 
 /**
@@ -67,10 +67,10 @@ export const VBAO_CLAMP_RANGES = Object.freeze({
  * spec amendment.
  */
 export const VBAO_QUALITY_TIERS = Object.freeze({
-  performance: { resolutionScale: 1.0, slices: 2, samples: 4, sectors: 32 },
-  balanced: { resolutionScale: 1.0, slices: 3, samples: 6, sectors: 32 },
-  quality: { resolutionScale: 1.0, slices: 4, samples: 8, sectors: 32 },
-  ultra: { resolutionScale: 1.0, slices: 4, samples: 10, sectors: 32 },
+  performance: { resolutionScale: 0.5, slices: 2, samples: 4, sectors: 32 },
+  balanced: { resolutionScale: 0.5, slices: 3, samples: 6, sectors: 32 },
+  quality: { resolutionScale: 0.5, slices: 4, samples: 8, sectors: 32 },
+  ultra: { resolutionScale: 0.5, slices: 4, samples: 10, sectors: 32 },
 } as const)
 
 export type VBAOQualityPreset = keyof typeof VBAO_QUALITY_TIERS

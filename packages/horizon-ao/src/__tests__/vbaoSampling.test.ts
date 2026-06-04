@@ -92,6 +92,22 @@ describe('single production VBAO sampling scheme', () => {
       samples: 16,
     })
   })
+
+  it('defaults product presets to half-resolution raw visibility work', () => {
+    expect(clampVbaoNodeOptions({})).toMatchObject({
+      resolutionScale: 0.5,
+    })
+    expect(clampVbaoNodeOptions({ quality: 'quality' })).toMatchObject({
+      resolutionScale: 0.5,
+      slices: 4,
+      samples: 8,
+    })
+    expect(clampVbaoNodeOptions({ quality: 'quality', resolutionScale: 1.0 })).toMatchObject({
+      resolutionScale: 1.0,
+      slices: 4,
+      samples: 8,
+    })
+  })
 })
 
 // Phase index API keeps atlas semantics independent from slice/sample names.
