@@ -38,3 +38,19 @@ Continue only the private velocity-backed path:
   temporal promotion.
 - Candidate review requires same-cost static evidence, reset/lifetime evidence,
   and camera-motion/object-motion/disocclusion evidence.
+
+## 2026-06-05 Update
+
+Tracked `velocity-internal` artifacts prove private temporal smoke exists, but
+the current product-quality verdict remains `reject-promotion`. The temporal
+lane is incomplete private evidence, not a product candidate:
+
+- clean-checkout reproducibility is not yet proven for the temporal evidence
+  packet;
+- motion/disocclusion and reset/lifetime evidence remain gate requirements;
+- same-cost static controls must be complete before temporal can influence a
+  product decision;
+- stripe regression remains a blocker in the current temporal verdict.
+
+Temporal stays out of public API, README claims, and release evidence until the
+static product matrix and temporal-specific gates both pass.

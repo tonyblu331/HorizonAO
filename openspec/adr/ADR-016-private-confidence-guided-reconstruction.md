@@ -60,3 +60,19 @@ Phase 3.5 of `vbao-receiver-visibility-solver` must compare scalar control rows
 against confidence-guided rows with screenshots, labels, and pass timings. If
 confidence does not improve a named label or cost tradeoff, keep it private and
 revise or remove the policy.
+
+## 2026-06-05 Update
+
+The product-quality hardening matrix keeps confidence-guided reconstruction as a
+private candidate. It must be compared against:
+
+- `scalar-control`;
+- `same-cost-3x10`;
+- `same-cost-2x16`;
+- full-res product controls;
+- `compute-off-control` and `temporal-off-baseline` axes.
+
+Confidence is not promotable while `missing-reference-observation` remains, even
+if screenshot proxies improve. If same-cost raw sampling beats confidence at a
+similar or lower cost, confidence stays private and the next work moves toward
+sampling/noise provenance instead of API promotion.

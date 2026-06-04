@@ -68,6 +68,22 @@ Local translation:
   variance-like diagnostics exist;
 - temporal cannot be used to hide static hatch/stripe noise.
 
+### XeGTAO
+
+XeGTAO's relevant lesson is evidence discipline. Its documented tuning compares
+screen-space AO against ray-traced ground truth across scenes and locations, then
+uses aggregate error to select heuristics. It also defaults to a spatial path
+that can be used without TAA, while treating temporal noise as something that
+must remain low enough for host TAA to classify correctly.
+
+Local translation:
+
+- reference observations must precede promotion;
+- screenshot proxies are useful steering signals, not ground truth;
+- same-cost spatial controls are required before temporal or adaptive claims;
+- sampling distribution changes are fair candidates only when measured against
+  the reference and same-cost matrix.
+
 ## Local Audit
 
 ### What Already Exists
@@ -100,6 +116,27 @@ Local translation:
    depth/normal compatibility at filter taps, but there is no named edge/support
    metadata target with lifetime, format, owner, and timing.
 5. Temporal is a later private gate. It should not replace static quality work.
+
+### Current Evidence Read
+
+The latest tracked 2560x1440 continuity rows are not promotable and predate
+matrix classification:
+
+| Row | Pattern/noise | Stripe | Edge proxy | Thin-gap proxy | Total GPU | Read |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `product-preset` | 0.07012 | 0.10459 | 0.06653 | 0.01464 | 4.823ms | baseline candidate, still `noise,edge-bleed` |
+| `same-cost-3x10` | 0.07027 | 0.10367 | 0.06682 | 0.01479 | 4.930ms | nearly flat versus product-preset |
+| `same-cost-2x16` | 0.06580 | 0.09836 | 0.05914 | 0.01355 | 5.186ms | improves noise/edge proxies but costs more and reduces thin-gap proxy |
+| `spatial-ultra` | 0.07027 | 0.10375 | 0.06673 | 0.01467 | 6.127ms | poor value as a product direction |
+
+The temporal verdict remains `reject-promotion`: clean-checkout reproducibility
+is not proven, velocity-backed internal evidence exists only as incomplete
+private smoke, motion/disocclusion gates are incomplete, and stripe regression
+remains.
+
+These rows predate the new product-quality matrix report section. Treat them as
+planning input until regenerated artifacts carry matrix classification,
+reference status, pass timing, and screenshot metrics together.
 
 ## What This Replaces
 
@@ -197,4 +234,6 @@ right ideas, but make each one buy its way into the product with evidence.
 - SSILVB / VBAO paper: https://arxiv.org/abs/2301.11376
 - Intel ASSAO: https://www.intel.com/content/www/us/en/developer/articles/technical/adaptive-screen-space-ambient-occlusion.html
 - AMD FidelityFX CACAO: https://gpuopen.com/manuals/fidelityfx_sdk/techniques/combined-adaptive-compute-ambient-occlusion/
+- AMD FidelityFX CACAO SDK pass reference: https://gpuopen.com/manuals/fidelityfx_sdk/reference_documentation/sdk/effect_components/fidelityfx_cacao/ffx_cacao/
 - NVIDIA SVGF: https://research.nvidia.com/labs/rtr/publication/schied2017spatiotemporal/
+- Intel XeGTAO: https://github.com/GameTechDev/XeGTAO

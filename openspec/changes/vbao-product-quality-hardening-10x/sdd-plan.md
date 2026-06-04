@@ -8,13 +8,41 @@ separated, and public API boundaries are guarded.
 Evidence discipline: 7/10. Captures, pass timings, candidate labels, and target
 inventory are now present for the recent lanes.
 
-Rendered product quality: 5/10. The scalar control is too washed out, confidence
-diagnostics reveal useful structure but add obvious noise, and compute-smoke
-product rows are more legible but still visibly hatched/striped.
+Rendered product quality: 5/10. The scalar control is too washed out, and the
+confidence-guided candidate reveals useful structure but still carries obvious
+noise and visible hatch/stripe artifacts.
 
 Promotion readiness: 3/10. Current rows are blocked by `noise`,
 `missing-reference-observation`, incomplete threshold gates, and candidate-only
 status.
+
+## Revised Decision Snapshot
+
+External practice supports the stricter gate order in this SDD. SSILVB/VBAO
+justifies preserving the bitmask receiver model. ASSAO and CACAO both separate
+AO generation from edge-aware filtering, application, and upscale stages.
+CACAO's adaptive path also treats extra cost as something that must be spent
+where an importance signal proves value. SVGF keeps temporal credible only when
+history and variance-style evidence are valid. XeGTAO tunes heuristics against
+ray-traced reference instead of screenshots alone.
+
+Local evidence points to the same order:
+
+- reference observations are still the first hard blocker;
+- captured markdown reports predate the new product-quality matrix output and
+  need regeneration before final packaging decisions;
+- `same-cost-2x16` improves pattern, stripe, and edge proxies, but costs more
+  and reduces thin-gap proxy, so it is a useful control, not a product decision;
+- `spatial-ultra` is a negative control for now because its cost increase does
+  not buy a material image-quality change;
+- temporal remains rejected because current evidence is not clean-checkout
+  reproducible, velocity-backed evidence exists only as incomplete private smoke,
+  and stripe regression remains.
+
+Decision implication: do not jump to temporal, compute, edge metadata, public
+API, or release claims. Normalize the report evidence, attach reference truth,
+then run the same-cost matrix before choosing sampling, reconstruction, or edge
+metadata as the next implementation slice.
 
 ## North Star
 
@@ -27,14 +55,13 @@ stays scalar.
 
 ```mermaid
 flowchart TD
-  A["Candidate: confidence-guided scalar product"] --> G["Promotion gate"]
-  B["Control: scalar-control"] --> G
-  C["Control: same-cost raw samples"] --> G
-  D["Control: full-res product"] --> G
-  E["Control: compute off"] --> G
-  F["Private: sector-confidence-smoke"] --> H["Observability only"]
-  I["Private: velocity-internal"] --> H
-  J["Reference: directional buckets"] --> H
+  A["Role: candidate<br/>confidence-guided scalar product"] --> G["Promotion gate"]
+  B["Role: control<br/>scalar-control, same-cost, full-res"] --> H["Control-only"]
+  C["Role: observability<br/>sector-confidence-smoke"] --> I["Observability-only"]
+  D["Role: private<br/>velocity-internal"] --> J["Private-only"]
+  E["Axes: compute-off<br/>temporal-off-baseline"] --> A
+  E --> B
+  F["Diagnostics/reference-only<br/>confidence, raw debug, directional buckets"] --> K["Diagnostic or reference-only"]
 ```
 
 The candidate wins only if it beats controls on visible labels and metrics at
@@ -48,9 +75,11 @@ Deliverables:
 
 - freeze the candidate and control matrix;
 - record existing screenshot metrics and pass timings;
+- regenerate product reports that predate the matrix section before relying on
+  them for final decisions;
 - define pass-cost budget for candidate overhead;
-- ensure row labels distinguish product, diagnostic, compute, temporal, and
-  same-cost controls.
+- ensure row labels distinguish candidate, control, private, diagnostic, and
+  observability roles plus compute, temporal, and same-cost axes.
 
 Acceptance:
 
@@ -94,6 +123,8 @@ Acceptance:
 
 - same resolutions: 1920x1080 and 1280x720;
 - same scene/view coverage;
+- include any legacy 2560x1440 rows only as continuity evidence, not as the
+  release matrix;
 - pass timing separates raw, confidence, cleanup, resolve, polish, compute;
 - candidate must reduce a named blocking label or beat same-cost samples.
 
@@ -110,6 +141,8 @@ Allowed investigations:
 
 Acceptance:
 
+- one knob changes per run unless the artifact explicitly declares a coupled
+  experiment;
 - `noise` and stripe metrics improve without introducing `mud`, `halo`,
   `thin-gap`, `edge-bleed`, `false-curvature`, or `scale-mismatch`;
 - screenshots visually confirm metric movement;
@@ -150,6 +183,7 @@ Decision table:
 Acceptance:
 
 - decision is based on tracked artifacts;
+- decision records the dominant blocker and the cheapest credible next fix;
 - rejected candidates are recorded with measured reasons;
 - no README or EVIDENCE release claim unless release gates pass.
 
@@ -176,8 +210,7 @@ Acceptance:
 Focused checks:
 
 ```sh
-pnpm --filter @horizonao/core test -- --run packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts
-pnpm --filter @horizonao/core test -- --run packages/horizon-ao/reference/__tests__/vbaoReference.test.ts packages/horizon-ao/reference/__tests__/aoProductionReferenceGate.test.ts
+pnpm --filter @horizonao/core exec vitest run --root ../.. packages/horizon-ao/src/__tests__/vbaoNodeSource.test.ts packages/horizon-ao/reference/__tests__/aoProductionReferenceGate.test.ts
 pnpm --filter @horizonao/demo test -- scripts/profiling/productionReport.test.mjs
 pnpm --filter @horizonao/core typecheck
 pnpm --filter @horizonao/demo typecheck
@@ -186,13 +219,15 @@ git diff --check -- openspec/changes/vbao-product-quality-hardening-10x
 
 Benchmark families:
 
-```sh
-AO_BENCHMARK_MODES=vbao
-AO_BENCHMARK_VIEWS=ao
-AO_BENCHMARK_DENOISE_STATES=true
-AO_BENCHMARK_VBAO_TEMPORAL_MODE=off
-AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE=off
-AO_BENCHMARK_VBAO_RECEIVER_CONFIDENCE=scalar-control,confidence-guided
+```powershell
+$env:AO_BENCHMARK_MODES='vbao'
+$env:AO_BENCHMARK_VIEWS='ao'
+$env:AO_BENCHMARK_DENOISE_STATES='true'
+$env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='off'
+$env:AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE='off'
+$env:AO_BENCHMARK_VBAO_RECEIVER_CONFIDENCE='confidence-guided'
+pnpm --filter @horizonao/demo benchmark:ao
+$env:AO_BENCHMARK_VBAO_RECEIVER_CONFIDENCE='scalar-control'
 pnpm --filter @horizonao/demo benchmark:ao
 ```
 

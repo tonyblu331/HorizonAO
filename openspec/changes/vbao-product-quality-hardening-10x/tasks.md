@@ -5,11 +5,15 @@
 - [x] 0.0 Record external research translation and local audit before new
   implementation.
 - [x] 0.1 Freeze candidate/control row matrix.
-- [ ] 0.2 Record current metrics for scalar-control, confidence-guided,
+- [x] 0.2 Add metaprompt and revised decision plan for remaining slices.
+- [ ] 0.3 Regenerate reports that predate the product-quality matrix section.
+- [ ] 0.4 Record current metrics for scalar-control, confidence-guided,
   full-res, and same-cost sample controls.
-- [ ] 0.3 Define candidate overhead budget from pass timings.
-- [x] 0.4 Ensure report rows classify product, diagnostic, compute, temporal,
-  and control lanes unambiguously.
+- [ ] 0.5 Define candidate overhead budget from pass timings.
+- [x] 0.6 Ensure report rows classify candidate, control, private, diagnostic,
+  and observability roles while keeping compute and temporal as matrix axes.
+- [ ] 0.7 Confirm clean-checkout reproducibility for the regenerated evidence
+  packet.
 
 ## Phase 1: Reference Observation Gate
 
@@ -22,9 +26,13 @@
 
 - [ ] 2.1 Capture scalar-control baseline rows.
 - [ ] 2.2 Capture confidence-guided candidate rows.
-- [ ] 2.3 Capture same-cost raw sample rows.
-- [ ] 2.4 Capture full-res product control rows.
-- [ ] 2.5 Compare cost-normalized quality deltas.
+- [ ] 2.3 Capture `same-cost-3x10` raw sample rows.
+- [ ] 2.4 Capture `same-cost-2x16` raw sample rows.
+- [ ] 2.5 Capture full-res product control rows.
+- [ ] 2.6 Capture `compute-off-control` and `temporal-off-baseline` axes,
+  `compute-smoke-observability`, and `velocity-internal-private` without
+  making promotion claims.
+- [ ] 2.7 Compare cost-normalized quality deltas.
 
 ## Phase 3: Noise Kill Gate
 
