@@ -201,7 +201,7 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
       const rawSize = vec2((textureSize as any)(rawAo, 0) as any).toVar('vbaoHalfResCleanupRawSize')
       const texelSize = vec2(1).div(rawSize).toVar('vbaoHalfResCleanupTexelSize')
       const centerAo = rawAo.sample(uvNode).r.toVar('vbaoHalfResCleanupCenterAo')
-      const centerConfidence = (confidence === undefined ? float(1) : confidence.sample(uvNode).r)
+      const centerConfidence = (confidence === undefined ? float(1) : confidence.sample(uvNode).g)
         .clamp(0, 1)
         .toVar('vbaoHalfResCleanupCenterConfidence')
       const centerDepth = sampleDepth(uvNode).toVar('vbaoHalfResCleanupCenterDepth')

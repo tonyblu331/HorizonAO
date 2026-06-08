@@ -157,7 +157,7 @@ export class VBAOFullResPolishNode extends VBAOEffectPass {
       const aoSize = vec2((textureSize as any)(aoNode, 0) as any).toVar('vbaoFullResPolishAoSize')
       const texelSize = vec2(1).div(aoSize).toVar('vbaoFullResPolishTexelSize')
       const centerAo = aoNode.sample(uvNode).r.toVar('vbaoFullResPolishCenterAo')
-      const centerConfidence = (confidence === undefined ? float(1) : confidence.sample(uvNode).r)
+      const centerConfidence = (confidence === undefined ? float(1) : confidence.sample(uvNode).g)
         .clamp(0, 1)
         .toVar('vbaoFullResPolishCenterConfidence')
       const centerDepth = sampleDepth(uvNode).toVar('vbaoFullResPolishCenterDepth')

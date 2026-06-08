@@ -583,7 +583,8 @@ describe('modernized VBAO production source contract', () => {
       'contrast: advanced.contrast ?? options.contrast ?? options.scale ?? fallback.contrast',
     )
     expect(source).toContain('const contrastedAo = pow(accessibility, this.contrast)')
-    expect(source).toContain('return float(1).sub(float(1).sub(contrastedAo).mul(this.strength))')
+    // AO is now the R channel of the folded RG raw output (R=AO, G=confidence).
+    expect(source).toContain('float(1).sub(contrastedAo).mul(this.strength)')
     expect(source).not.toContain('return pow(accessibility, this.scale)')
   })
 
@@ -928,8 +929,15 @@ describe('modernized VBAO production source contract', () => {
     expect(receiverConfidenceSource).toContain('sqrt(receiverSupport.mul(sliceAgreement))')
     expect(receiverConfidenceSource).toContain('sampleValid')
     expect(receiverConfidenceSource).toContain('occludedMask')
-    expect(source).toContain("import { VBAOReceiverConfidenceNode } from './VBAOReceiverConfidenceNode'")
-    expect(source).toContain('private getOrCreateReceiverConfidenceNode(): VBAOReceiverConfidenceNode')
+    // Receiver confidence is folded into the raw RG pass (R=AO, G=confidence): the
+    // product node computes it from the SAME march and no longer runs a second
+    // confidence estimator. The standalone VBAOReceiverConfidenceNode is retained
+    // only as a demo-only diagnostic oracle (used to validate the folded G channel).
+    expect(source).not.toContain("import { VBAOReceiverConfidenceNode } from './VBAOReceiverConfidenceNode'")
+    expect(source).not.toContain('getOrCreateReceiverConfidenceNode')
+    expect(source).toContain('format: RGFormat')
+    expect(source).toContain('const vbaoConfidence = sqrt(vbaoReceiverSupport.mul(vbaoSliceAgreement))')
+    expect(source).toContain('return vec4(vbaoAo, vbaoConfidence, float(0), float(1))')
     expect(source).toContain('const usesConfidenceGuidedReconstruction = cleanupStrength > 0 || polishStrength > 0')
     expect(source).toContain('confidenceNode,')
     expect(museumSource).toContain('vbaoComputeCandidateMode === VBAO_COMPUTE_CANDIDATE_LABEL || vbaoSoftness > 0')

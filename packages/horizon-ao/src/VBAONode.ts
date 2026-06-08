@@ -5,7 +5,7 @@ import {
   NodeMaterial,
   NoColorSpace,
   QuadMesh,
-  RedFormat,
+  RGFormat,
   RenderTarget,
   RendererUtils,
   TempNode,
@@ -52,6 +52,7 @@ import {
   uv,
   vec2,
   vec3,
+  vec4,
   viewZToPerspectiveDepth,
 } from 'three/tsl'
 
@@ -66,7 +67,6 @@ import {
 } from './vbaoConstants'
 import { VBAOFullResPolishNode } from './VBAOFullResPolishNode'
 import { VBAOHalfResCleanupNode } from './VBAOHalfResCleanupNode'
-import { VBAOReceiverConfidenceNode } from './VBAOReceiverConfidenceNode'
 import { VBAOResolveNode } from './VBAOResolveNode'
 import { VBAO_NOISE_TILE_SIZE, getSharedVbaoNoiseTexture } from './vbaoNoise'
 import {
@@ -127,7 +127,7 @@ export class VBAONode extends TempNode<'float'> {
 
   private readonly rawEstimateTarget = new RenderTarget(1, 1, {
     depthBuffer: false,
-    format: RedFormat,
+    format: RGFormat,
     type: HalfFloatType,
   })
   private readonly material = new NodeMaterial()
@@ -135,7 +135,6 @@ export class VBAONode extends TempNode<'float'> {
   private resolveNode?: VBAOResolveNode | undefined
   private halfCleanupNode?: VBAOHalfResCleanupNode | undefined
   private fullPolishNode?: VBAOFullResPolishNode | undefined
-  private receiverConfidenceNode?: VBAOReceiverConfidenceNode | undefined
   private productAoTextureNode?: TextureNode
   private receiverProductGraphKey = ''
   private receiverProductGraphCreated = false
@@ -269,32 +268,6 @@ export class VBAONode extends TempNode<'float'> {
     return this.softness.value
   }
 
-  private getOrCreateReceiverConfidenceNode(): VBAOReceiverConfidenceNode {
-    if (this.receiverConfidenceNode === undefined) {
-      this.receiverConfidenceNode = new VBAOReceiverConfidenceNode(
-        this.depthNode,
-        this.normalNode,
-        this.camera,
-        this.radius,
-        this.thickness,
-        {
-          noiseTexture: this.noiseTexture,
-          resolutionScale: this.resolutionScale,
-          slices: this.rawLoopShape.slices,
-          samples: this.rawLoopShape.samples,
-        },
-      )
-    } else {
-      this.receiverConfidenceNode.configure({
-        resolutionScale: this.resolutionScale,
-        slices: this.rawLoopShape.slices,
-        samples: this.rawLoopShape.samples,
-      })
-    }
-
-    return this.receiverConfidenceNode
-  }
-
   private getOrCreateHalfCleanupNode(
     input: TextureNode,
     strength: number,
@@ -382,11 +355,6 @@ export class VBAONode extends TempNode<'float'> {
     this.fullPolishNode = undefined
   }
 
-  private disposeReceiverConfidenceGraph(): void {
-    this.receiverConfidenceNode?.dispose()
-    this.receiverConfidenceNode = undefined
-  }
-
   private currentReceiverProductGraphKey(): string {
     const cleanupStrength = this.lowResolutionCleanupStrength()
     const polishStrength = this.fullResolutionPolishStrength()
@@ -420,8 +388,10 @@ export class VBAONode extends TempNode<'float'> {
 
     let output: TextureNode = this.rawEstimateTextureNode
     const usesConfidenceGuidedReconstruction = cleanupStrength > 0 || polishStrength > 0
+    // Confidence is folded into the raw pass (G channel of the RG raw target),
+    // so reconstruction reads it directly from the raw texture — no second march.
     const confidenceTextureNode = usesConfidenceGuidedReconstruction
-      ? this.getOrCreateReceiverConfidenceNode().getTextureNode()
+      ? this.rawEstimateTextureNode
       : undefined
 
     if (this.resolutionScale < 0.99) {
@@ -449,10 +419,6 @@ export class VBAONode extends TempNode<'float'> {
       ).getTextureNode()
     } else {
       this.disposeFullPolishGraph()
-    }
-
-    if (!usesConfidenceGuidedReconstruction) {
-      this.disposeReceiverConfidenceGraph()
     }
 
     this.productAoTextureNode = output
@@ -674,6 +640,13 @@ export class VBAONode extends TempNode<'float'> {
       const safeTexel = vec2(0.5).div(this.sourceResolution).toVar('vbaoSafeTexel')
       const weightedAccessibility = float(0).toVar('weightedAccessibility')
       const weightSum = float(0).toVar('weightSum')
+      // Folded receiver-confidence accumulators (computed from the SAME march —
+      // no second estimator pass). Confidence = sqrt(receiverSupport * sliceAgreement).
+      const vbaoCandidateCount = float(0).toVar('vbaoCandidateCount')
+      const vbaoAcceptedCount = float(0).toVar('vbaoAcceptedCount')
+      const vbaoSliceCounter = float(0).toVar('vbaoSliceCounter')
+      const vbaoSliceMean = float(0).toVar('vbaoSliceMean')
+      const vbaoSliceM2 = float(0).toVar('vbaoSliceM2')
 
       ;(Loop as any)(
         { start: int(0), end: sliceLoopEnd, type: 'int', condition: '<' },
@@ -743,6 +716,15 @@ export class VBAONode extends TempNode<'float'> {
                       .and(sampleDist2.lessThanEqual(maxValidRadius2))
                       .and(sampleAlong.greaterThan(float(0)))
                       .toVar('sampleValid')
+                    // Confidence support: candidate = on-screen sample with valid depth;
+                    // accepted = candidate that also passed the full validity test.
+                    const vbaoCandidateSample = onScreen
+                      .and(sD.lessThan(float(1.0)))
+                      .and(sD.greaterThanEqual(float(0)))
+                      .toVar('vbaoCandidateSample')
+                    // Branchless accumulation (matches the kernel's select-not-branch contract).
+                    vbaoCandidateCount.addAssign((vbaoCandidateSample as any).select(float(1), float(0)))
+                    vbaoAcceptedCount.addAssign((sampleValid as any).select(float(1), float(0)))
                     const sampleDist = sqrt(max(sampleDist2, float(1e-8))).toVar('sampleDist')
                     const effectiveThickness = min(
                       baseThickness,
@@ -799,6 +781,14 @@ export class VBAONode extends TempNode<'float'> {
             .toVar('sliceAccessibility')
           weightedAccessibility.addAssign(sliceAccessibility.mul(NprojLen))
           weightSum.addAssign(NprojLen)
+          // Welford online variance of per-slice accessibility → slice agreement.
+          vbaoSliceCounter.addAssign(float(1))
+          const vbaoSliceDelta = sliceAccessibility.sub(vbaoSliceMean).toVar('vbaoSliceDelta')
+          vbaoSliceMean.addAssign(vbaoSliceDelta.div(vbaoSliceCounter))
+          const vbaoSliceDeltaAfterMean = sliceAccessibility
+            .sub(vbaoSliceMean)
+            .toVar('vbaoSliceDeltaAfterMean')
+          vbaoSliceM2.addAssign(vbaoSliceDelta.mul(vbaoSliceDeltaAfterMean))
         },
       )
 
@@ -808,7 +798,27 @@ export class VBAONode extends TempNode<'float'> {
         float(1),
       ).toVar('accessibility')
       const contrastedAo = pow(accessibility, this.contrast)
-      return float(1).sub(float(1).sub(contrastedAo).mul(this.strength))
+      const vbaoAo = float(1)
+        .sub(float(1).sub(contrastedAo).mul(this.strength))
+        .toVar('vbaoAo')
+      // Receiver confidence folded into the G channel (R = AO).
+      const vbaoReceiverSupport = vbaoAcceptedCount
+        .div(max(vbaoCandidateCount, float(1e-6)))
+        .clamp(0, 1)
+        .toVar('vbaoReceiverSupport')
+      const vbaoSliceVariance = vbaoSliceM2
+        .div(max(vbaoSliceCounter, float(1)))
+        .toVar('vbaoSliceVariance')
+      const vbaoSliceStdDev = sqrt(max(vbaoSliceVariance, float(0))).toVar('vbaoSliceStdDev')
+      const vbaoSliceAgreement = clamp(
+        float(1).sub(vbaoSliceStdDev.div(float(0.5))),
+        float(0),
+        float(1),
+      ).toVar('vbaoSliceAgreement')
+      const vbaoConfidence = sqrt(vbaoReceiverSupport.mul(vbaoSliceAgreement))
+        .clamp(0, 1)
+        .toVar('vbaoConfidence')
+      return vec4(vbaoAo, vbaoConfidence, float(0), float(1))
     })
 
     this.material.fragmentNode = vbaoKernel().context(builder.getSharedContext())
@@ -821,7 +831,6 @@ export class VBAONode extends TempNode<'float'> {
     this.resolveNode?.dispose()
     this.halfCleanupNode?.dispose()
     this.fullPolishNode?.dispose()
-    this.receiverConfidenceNode?.dispose()
     this.rawEstimateTarget.dispose()
     this.material.dispose()
   }
