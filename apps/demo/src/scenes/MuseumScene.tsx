@@ -1002,7 +1002,6 @@ function createReferencePipelines(
           )
         : undefined
     const receiverConfidenceScalar = receiverConfidenceNode?.getTextureNode().r
-    const receiverConfidenceTextureNode = receiverConfidenceNode?.getTextureNode()
     const sectorConfidence =
       vbaoComputeCandidateMode === VBAO_COMPUTE_CANDIDATE_LABEL
         ? createVbaoSectorConfidenceComputeCandidate(1, 1)
@@ -1032,7 +1031,7 @@ function createReferencePipelines(
           enabled: vbaoCleanupMode === 'on',
           strength: vbaoSoftness,
           resolutionScale: 0.5,
-          confidenceNode: receiverConfidenceTextureNode,
+          confidenceNode: vbaoNode.getRawTextureNode(),
         },
       )
       const cleanupTextureNode = cleanupNode.getTextureNode()
@@ -1053,7 +1052,7 @@ function createReferencePipelines(
         {
           enabled: polishStrength > 0,
           strength: polishStrength,
-          confidenceNode: receiverConfidenceTextureNode,
+          confidenceNode: vbaoNode.getRawTextureNode(),
         },
       )
       const cleanupScalar = cleanupTextureNode.r

@@ -4,6 +4,35 @@ Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
 This file is the gate for later adaptive thickness, sampling, denoise, or depth
 hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
+## 2026-06-08 — VBAO pass unification + half-res confidence reconciliation (P0)
+
+Status: **EffectPass unification WebGPU-validated; half-res benchmark green again**.
+
+`VBAOResolveNode` + `VBAOHalfResCleanupNode` now extend `VBAOEffectPass` (shared render
+target / material / renderer-state save+restore), removing per-node module-global renderer
+state and ~160 LOC of boilerplate. The demo's half-res reconstruction (MuseumScene) now feeds
+cleanup/polish the folded confidence from `vbaoNode.getRawTextureNode().g` instead of a
+standalone confidence node; the standalone `VBAOReceiverConfidenceNode` remains only as the
+diagnostic confidence-view oracle. Benchmark pass-timing model expects a separate confidence
+pass only for the diagnostic view.
+
+Command:
+
+```sh
+AO_BENCHMARK_SCENES=museum AO_BENCHMARK_MODES=vbao AO_BENCHMARK_VIEWS=ao AO_BENCHMARK_DENOISE_STATES=true AO_BENCHMARK_VBAO_RESOLUTION_STATES=half AO_BENCHMARK_PASS_TIMING_SAMPLES=3 AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_PORT=5322 AO_BENCHMARK_OUTPUT_JSON=artifacts/benchmarks/vbao-effectpass-unify-halfres.json AO_BENCHMARK_OUTPUT_MD=artifacts/benchmarks/vbao-effectpass-unify-halfres.md pnpm --filter @horizonao/demo benchmark:ao
+```
+
+| Resolution | View | Output | raw | confidence | cleanup | resolve | polish | total-product GPU ms |
+| --- | --- | --- | ---: | --- | ---: | ---: | --- | ---: |
+| 1920x1080 | ao | product (half-res) | 0.766 | skipped (folded) | 0.048 | 0.100 | skipped | 0.914 |
+
+Outcome:
+
+- EffectPass-unified `cleanup` and `resolve` passes render under WebGPU (measured timings, no
+  errors), confirming the pure-plumbing refactor is behavior-preserving on the half-res path.
+- `confidence` pass is `skipped` in the half-res product pipeline (folded into `raw`).
+- Boundary: per-pixel numeric equivalence of folded-G vs the diagnostic node is still a future check.
+
 ## 2026-06-08 — VBAO receiver-confidence folded into raw RG pass (P0)
 
 Status: **product-path second march eliminated; WebGPU-validated; quality neutral**.
