@@ -2,10 +2,9 @@ import {
   SECTOR_COUNT,
   VBAO_CONTACT_THICKNESS_RADIUS_RATIO,
   VBAO_NEAR_SAMPLE_THICKNESS_RATIO,
-  VBAO_THETA_MIN,
-  VBAO_THETA_STEP,
   clampVbaoNodeOptions,
 } from '../src/vbaoConstants'
+import { VBAO_THETA_MIN, VBAO_THETA_STEP } from './vbaoThetaConstants'
 import {
   buildGtVbaoSampleInterval,
   cosineMeasureReduction,
