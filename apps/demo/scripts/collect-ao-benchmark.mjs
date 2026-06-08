@@ -435,10 +435,10 @@ function createVbaoPassTimingRows({
     productOutput &&
     !diagnosticOutput &&
     (lowResolution ? Math.max(0, vbaoDemoSoftness - 0.5) * 2 > 0 : vbaoDemoSoftness > 0)
-  const confidenceEnabled =
-    productOutput &&
-    receiverConfidenceMode === 'confidence-guided' &&
-    (diagnosticOutput || cleanupEnabled || polishEnabled)
+  // Receiver confidence is folded into the raw RG pass (R=AO, G=confidence), so the
+  // product reconstruction no longer renders a separate confidence pass — its cost is
+  // inside `raw`. The only standalone confidence pass is the diagnostic confidence view.
+  const confidenceEnabled = receiverConfidenceMode === 'confidence-guided' && diagnosticOutput
   const measuredByPass = new Map(measuredPassTimings.map((row) => [row.pass, row]))
   const enabledByPass = new Map([
     ['raw', !diagnosticOutput],

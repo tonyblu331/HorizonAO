@@ -4,6 +4,45 @@ Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
 This file is the gate for later adaptive thickness, sampling, denoise, or depth
 hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
+## 2026-06-08 — VBAO receiver-confidence folded into raw RG pass (P0)
+
+Status: **product-path second march eliminated; WebGPU-validated; quality neutral**.
+
+The product reconstruction used to run `VBAOReceiverConfidenceNode` — a full second
+slice/sample march — whenever softness>0 or half-res. Confidence is now folded into the
+raw pass: target `RedFormat → RGFormat`, raw kernel emits `vec4(ao, confidence, 0, 1)`
+with `confidence = sqrt(receiverSupport · sliceAgreement)` computed from the SAME march
+(candidate/accepted counts + Welford variance over per-slice accessibility, no extra
+texture taps). Cleanup/polish read confidence from raw `.g`. The standalone node is kept
+only as the demo diagnostic confidence view (an independent oracle for the folded G).
+
+Commands:
+
+```sh
+AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_PORT=5311 pnpm --filter @horizonao/demo exec node scripts/collect-vbao-generated-shader-inspection.mjs
+AO_BENCHMARK_SCENES=museum AO_BENCHMARK_MODES=vbao AO_BENCHMARK_VIEWS=ao,beauty AO_BENCHMARK_DENOISE_STATES=true AO_BENCHMARK_VBAO_RESOLUTION_STATES=full AO_BENCHMARK_PASS_TIMING_SAMPLES=3 AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_PORT=5314 AO_BENCHMARK_OUTPUT_JSON=artifacts/benchmarks/vbao-confidence-fold-validation.json AO_BENCHMARK_OUTPUT_MD=artifacts/benchmarks/vbao-confidence-fold-validation.md pnpm --filter @horizonao/demo benchmark:ao
+```
+
+Generated-shader inspection: **pass** — product-preset + spatial-ultra, 2 shader programs
+(no separate confidence program), fixed loop bounds, `vbaoDuplicateDeclarationWarnings: 0`,
+0 console diagnostics. Confirms the folded kernel is valid WGSL with no pass-shape regression.
+
+| Resolution | View | Output | raw GPU ms | confidence pass | polish GPU ms | total-product GPU ms | Pattern/noise ↓ | Stripe ↓ |
+| --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: |
+| 1920x1080 | ao | product | 2.917 | skipped (folded) | 0.184 | 3.102 | 0.01278 | 0.14090 |
+| 1920x1080 | beauty | product | 3.931 | skipped (folded) | 0.240 | 4.171 | 0.02289 | 0.08859 |
+| 1280x720 | ao | product | 2.178 | skipped (folded) | — | — | 0.02453 | 0.18166 |
+
+Outcome:
+
+- The `confidence` pass is now `skipped` in the product pipeline (folded into `raw`); the
+  benchmark pass-timing model was updated to expect a separate confidence pass only for the
+  diagnostic confidence view.
+- Quality proxies stay in the historical full-res product band (no regression signal).
+- Boundary: this is timing + screenshot-proxy evidence. Numeric equivalence of the folded
+  G channel vs the standalone diagnostic node (per-pixel) is not yet captured; the retained
+  diagnostic node is the oracle for that future check.
+
 ## 2026-06-04 — VBAO release gap closure Phase 3 capture
 
 Status: **pinned render evidence captured; release promotion remains blocked**.
