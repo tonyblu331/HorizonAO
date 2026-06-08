@@ -37,7 +37,13 @@ The earlier "3 divergent branches" framing was wrong; the old worktree was simpl
 
 ### P0 — foundation / fat-trim
 - `VBAOResolvePolishNode` — **ALREADY DELETED** on tip. ✅
-- `VBAOVelocityTemporalNode` — still present (expanded, private). REMAINING: archive/keep decision.
+- `VBAOVelocityTemporalNode` — **DECISION: KEEP (do NOT archive).** The roadmap's "archive" item
+  assumed (from the stale worktree) this was dead. Verified on the tip: it is +286 LOC, extends
+  `VBAOEffectPass`, is wired into the demo `velocity-internal` temporal mode and the
+  `verify-vbao-temporal-gate` evidence harness, and is the base for committed P6 mask-reservoir
+  temporal work. The temporal verifier returns `reject-promotion`, so it stays private/internal —
+  but it is live infrastructure, not dead code. A retention doc-comment was added to the class to
+  prevent future fat-trim from deleting it.
 - Module-global renderer state (`VBAONode`, `VBAOResolveNode`, `VBAOHalfResCleanupNode`) — REMAINING:
   fix via EffectPass unification (low priority; latent only).
 - `VBAO_THETA_*` relocation — verify on tip; likely REMAINING.

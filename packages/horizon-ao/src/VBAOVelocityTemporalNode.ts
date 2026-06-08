@@ -124,6 +124,14 @@ function clampFinite(value: number, fallback: number, minValue: number, maxValue
  *
  * This consumes host-owned previous depth/normal guide nodes and owns only AO
  * history. It is intentionally not exported from the public package entrypoint.
+ *
+ * RETENTION (P0 decision, 2026-06-08): this node is INTENTIONALLY KEPT, not dead
+ * code. It is wired into the demo `velocity-internal` temporal mode and the
+ * `verify-vbao-temporal-gate` evidence harness, and is the base for the committed
+ * P6 mask-reservoir temporal work. The temporal verifier currently returns
+ * `reject-promotion`, so it stays private/internal — but it must NOT be archived or
+ * deleted by future fat-trim passes. See
+ * `openspec/changes/vbao-foundation-reconciliation/branch-reconciliation.md`.
  */
 export class VBAOVelocityTemporalNode extends VBAOEffectPass {
   static get type(): string {
