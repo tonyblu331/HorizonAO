@@ -40,7 +40,7 @@ export function VbaoBunnyScene() {
       sunPosition: [4, 8, 4],
       sunIntensity: 1.4,
       // Tighter radius to preserve fine ear detail without over-darkening.
-      vbao: { radius: 0.06, thickness: 0.012, samples: 8, slices: 3, resolutionScale: 1.0 },
+      vbao: { radius: 0.06, thickness: 0.012, samples: 8, slices: 3 },
     }).then(
       () => {
         if (!disposed) setPageState('ready')

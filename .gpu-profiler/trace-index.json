@@ -1,0 +1,41 @@
+{
+  "schema": "TraceIndex@1",
+  "entries": [
+    {
+      "schema": "TraceIndexEntry@1",
+      "sessionId": "a3c377fd-7340-44c3-b5c0-ba804b153dc1",
+      "tracePath": "G:\\RWY37\\horizon-ao\\.gpu-profiler\\traces\\a3c377fd-7340-44c3-b5c0-ba804b153dc1\\trace.json",
+      "currentTracePath": "G:\\RWY37\\horizon-ao\\.gpu-profiler\\current-trace.json",
+      "url": "http://127.0.0.1:5188/museum",
+      "label": "horizon-ao-museum-mcp-profiler-own-injection",
+      "mode": "hybrid",
+      "precision": "gpu-quantized",
+      "minPrecision": "gpu-quantized",
+      "backend": "webgpu",
+      "browser": "chromium",
+      "device": "WebGPU device",
+      "frames": 120,
+      "warmup": 20,
+      "createdAt": "2026-06-04T16:20:44.164Z",
+      "summaryHash": "11801f942b830ccf5fa84fcc8c729ba9d11583d08af27edb42ff8ad936e0644a"
+    },
+    {
+      "schema": "TraceIndexEntry@1",
+      "sessionId": "363a9dd8-03e2-406b-b28a-1ca513386234",
+      "tracePath": "G:\\RWY37\\horizon-ao\\.gpu-profiler\\traces\\363a9dd8-03e2-406b-b28a-1ca513386234\\trace.json",
+      "currentTracePath": "G:\\RWY37\\horizon-ao\\.gpu-profiler\\current-trace.json",
+      "url": "http://127.0.0.1:5187/museum?gpuPassTiming=1",
+      "label": "horizon-ao-museum-vbao-mcp-profiler",
+      "mode": "hybrid",
+      "precision": "gpu-quantized",
+      "minPrecision": "gpu-quantized",
+      "backend": "webgpu",
+      "browser": "chromium",
+      "device": "WebGPU device",
+      "frames": 120,
+      "warmup": 20,
+      "createdAt": "2026-06-04T16:19:58.108Z",
+      "summaryHash": "fdd2260ea64d704d570f12ede55026af7b3375a4ca1e3d54ad81e5b75a997a5a"
+    }
+  ]
+}

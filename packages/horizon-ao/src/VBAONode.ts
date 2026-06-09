@@ -678,7 +678,7 @@ export class VBAONode extends TempNode<'float'> {
       ;(Loop as any)(
         { start: int(0), end: sliceLoopEnd, type: 'int', condition: '<' },
         ({ i }: any) => {
-          // GT-VBAO++ axial slice orientation: mirrored two-sided sampling covers π, not 2π.
+          // Axial slice orientation: mirrored two-sided sampling covers π, not 2π.
           const sliceNoiseTexel = sampleNoisePhase(i, int(0))
           const rotation = sliceNoiseTexel.x.toVar('vbaoSliceRotation')
           const phi = float(i).add(rotation).div(sliceCount).mul(PI)

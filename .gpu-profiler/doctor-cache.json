@@ -1,0 +1,37 @@
+{
+  "schema": "DoctorCache@1",
+  "createdAt": "2026-06-04T16:19:42.192Z",
+  "expiresAt": "2026-06-04T16:29:42.192Z",
+  "envKey": "win32|x64|v26.1.0|10.0.26200|",
+  "report": {
+    "schema": "DoctorReport@1",
+    "status": "degraded",
+    "checks": [
+      {
+        "name": "trace-dir",
+        "status": "ready",
+        "detail": "Writable: G:\\RWY37\\horizon-ao\\.gpu-profiler"
+      },
+      {
+        "name": "node",
+        "status": "ready",
+        "detail": "Node 26.1.0"
+      },
+      {
+        "name": "webgpu-timestamp-query",
+        "status": "ready",
+        "detail": "timestamp-query available and GPUDevice creation succeeded via chrome. Features: depth32float-stencil8, rg11b10ufloat-renderable, texture-formats-tier1, bgra8unorm-storage, chromium-experimental-multi-draw-indirect, texture-compression-bc, dual-source-blending, core-features-and-limits, chromium-experimental-timestamp-query-inside-passes, float32-filterable, indirect-first-instance, float32-blendable, depth-clip-control, texture-compression-bc-sliced-3d, clip-distances, shader-f16, timestamp-query, texture-formats-tier2, primitive-index, texture-component-swizzle, subgroups"
+      },
+      {
+        "name": "windows-native-sampler",
+        "status": "degraded",
+        "detail": "Windows GPU Engine PDH counters were not readable from this process.",
+        "fix": "Run PowerShell: Get-Counter \"\\GPU Engine(*)\\Utilization Percentage\". If blocked, check permissions, Windows Performance Counters, or GPU driver support."
+      }
+    ],
+    "blockers": [],
+    "fixes": [
+      "Run PowerShell: Get-Counter \"\\GPU Engine(*)\\Utilization Percentage\". If blocked, check permissions, Windows Performance Counters, or GPU driver support."
+    ]
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "schema": "ChromeTraceSummary@1",
+  "label": "horizon-ao-museum-vbao-mcp-profiler-chrome-context",
+  "source": "chrome-devtools",
+  "tracePath": "G:\\RWY37\\horizon-ao\\.gpu-profiler\\traces\\5d057ec9-6c30-477e-8383-9e8bf4ac0baa\\chrome-trace.json",
+  "durationMs": 20818143.681,
+  "eventCount": 12617,
+  "frameCount": 1088,
+  "fpsApprox": 0.052,
+  "topGpuLike": [
+    {
+      "name": "Scheduler::RunTask",
+      "category": "gpu,toplevel.flow",
+      "pid": 44260,
+      "tid": 16268,
+      "totalMs": 2149.7,
+      "p50Ms": 0.055,
+      "p95Ms": 145.256,
+      "maxMs": 384.924,
+      "count": 163,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "GpuChannel::ExecuteDeferredRequest",
+      "category": "gpu",
+      "pid": 44260,
+      "tid": 16268,
+      "totalMs": 2148.03,
+      "p50Ms": 0.069,
+      "p95Ms": 145.436,
+      "maxMs": 384.917,
+      "count": 147,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "CommandBuffer::Flush",
+      "category": "gpu,toplevel.flow",
+      "pid": 44260,
+      "tid": 16268,
+      "totalMs": 2139.453,
+      "p50Ms": 0.156,
+      "p95Ms": 147.147,
+      "maxMs": 384.897,
+      "count": 103,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "CommandBufferStub::OnAsyncFlush",
+      "category": "gpu",
+      "pid": 44260,
+      "tid": 16268,
+      "totalMs": 2139.281,
+      "p50Ms": 0.153,
+      "p95Ms": 147.147,
+      "maxMs": 384.895,
+      "count": 103,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "WebGL",
+      "category": "gpu",
+      "pid": 44260,
+      "tid": 16268,
+      "totalMs": 2138.199,
+      "p50Ms": 0.096,
+      "p95Ms": 147.15,
+      "maxMs": 384.899,
+      "count": 107,
+      "source": "chrome-devtools-trace"
+    }
+  ],
+  "topMainThread": [
+    {
+      "name": "RunTask",
+      "category": "disabled-by-default-devtools.timeline",
+      "pid": 44260,
+      "tid": 16268,
+      "totalMs": 2167.798,
+      "p50Ms": 0.034,
+      "p95Ms": 28.439,
+      "maxMs": 384.932,
+      "count": 242,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "GPUTask",
+      "category": "disabled-by-default-devtools.timeline",
+      "pid": 44260,
+      "tid": 16268,
+      "totalMs": 2143.153,
+      "p50Ms": 0.023,
+      "p95Ms": 144.704,
+      "maxMs": 384.915,
+      "count": 194,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "Commit",
+      "category": "disabled-by-default-devtools.timeline",
+      "pid": 53976,
+      "tid": 36220,
+      "totalMs": 1666.688,
+      "p50Ms": 149.023,
+      "p95Ms": 172.902,
+      "maxMs": 172.902,
+      "count": 11,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "RunTask",
+      "category": "disabled-by-default-devtools.timeline",
+      "pid": 53976,
+      "tid": 36220,
+      "totalMs": 1547.004,
+      "p50Ms": 0.01,
+      "p95Ms": 152.515,
+      "maxMs": 175.806,
+      "count": 94,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "RunTask",
+      "category": "disabled-by-default-devtools.timeline",
+      "pid": 44260,
+      "tid": 32644,
+      "totalMs": 222.946,
+      "p50Ms": 0.037,
+      "p95Ms": 0.182,
+      "maxMs": 24.016,
+      "count": 429,
+      "source": "chrome-devtools-trace"
+    }
+  ],
+  "topWebGPU": [
+    {
+      "name": "WebGPU",
+      "category": "gpu",
+      "pid": 44260,
+      "tid": 16268,
+      "totalMs": 1.929,
+      "p50Ms": 1.929,
+      "p95Ms": 1.929,
+      "maxMs": 1.929,
+      "count": 1,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "WebGPUBufferStub::Initialize",
+      "category": "gpu",
+      "pid": 44260,
+      "tid": 16268,
+      "totalMs": 1.855,
+      "p50Ms": 1.855,
+      "p95Ms": 1.855,
+      "maxMs": 1.855,
+      "count": 1,
+      "source": "chrome-devtools-trace"
+    }
+  ],
+  "warnings": [
+    "Chrome DevTools traces give browser/GPU-process context, not shader/pass timer-query truth."
+  ]
+}

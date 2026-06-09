@@ -24,7 +24,7 @@
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "three": "0.184.0",
-    "threejs-debug-compose": "^0.1.1"
+    "threejs-debug-view": "0.2.15"
   },
   "devDependencies": {
     "@babel/core": "7.29.0",

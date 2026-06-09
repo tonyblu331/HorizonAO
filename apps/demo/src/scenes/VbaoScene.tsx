@@ -21,6 +21,7 @@ import {
   Fog,
   InstancedMesh,
   Matrix4,
+  Mesh,
   MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
@@ -281,6 +282,14 @@ async function runVbaoScene(container: HTMLDivElement, signal: AbortSignal): Pro
     controls.dispose()
     comparePanel.remove()
     aoPipelines?.dispose()
+    scene.traverse((child) => {
+      if (child instanceof Mesh) {
+        child.geometry?.dispose()
+        const mat = child.material
+        if (Array.isArray(mat)) mat.forEach((m) => m?.dispose())
+        else mat?.dispose()
+      }
+    })
     renderer.dispose()
     canvas.remove()
   })

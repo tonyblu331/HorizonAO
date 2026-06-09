@@ -11,6 +11,8 @@ rejected work. This change separates those categories before any runtime patch.
 ### In Scope
 
 - Contrast pasted claims against current source, specs, and evidence.
+- Contrast pasted GTAO/SSAO/N8AO/noise-source numbers against committed
+  `EVIDENCE.md`.
 - Resolve the half-resolution preset contradiction.
 - Plan runtime/debug boundary cleanup only where current source still carries
   evidence-only code.
@@ -23,6 +25,8 @@ rejected work. This change separates those categories before any runtime patch.
 - Public temporal, denoise, resolve, polish, benchmark, or velocity APIs.
 - Production build commands.
 - Reopening rejected resolve/polish fusion without new evidence.
+- Promoting FAST-like/STBN or temporal constants from pasted-review reasoning
+  without a fresh evidence gate.
 
 ## Capabilities
 
@@ -33,12 +37,14 @@ None.
 ### Modified Capabilities
 
 - `vbao-node`: adds SDD gates for preset/evidence consistency,
-  evidence-only pass boundaries, and renderer-state ownership audits.
+  evidence-only pass boundaries, competitor benchmark reconciliation, temporal
+  constant containment, and renderer-state ownership audits.
 
 ## Success Criteria
 
 - The pasted review has a current-state contrast.
 - Each remaining valid item has an owner phase and an acceptance gate.
 - Already-completed or rejected items are not replanned as implementation work.
+- Pasted benchmark claims are labeled separately from committed evidence.
 - The half-resolution default policy is reconciled with current evidence before
   any release-candidate claim.

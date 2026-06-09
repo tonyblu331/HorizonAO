@@ -1,0 +1,139 @@
+{
+  "schema": "ChromeTraceSummary@1",
+  "label": "horizon-ao-museum-mcp-profiler-own-injection-chrome-context",
+  "source": "chrome-devtools",
+  "tracePath": "G:\\RWY37\\horizon-ao\\.gpu-profiler\\traces\\9c1bf61d-9fbb-4d72-b103-89fb3b59f0d9\\chrome-trace.json",
+  "durationMs": 20863623.402,
+  "eventCount": 13869,
+  "frameCount": 1038,
+  "fpsApprox": 0.05,
+  "topGpuLike": [
+    {
+      "name": "Scheduler::RunTask",
+      "category": "gpu,toplevel.flow",
+      "pid": 50488,
+      "tid": 55124,
+      "totalMs": 1760.353,
+      "p50Ms": 0.053,
+      "p95Ms": 125.72,
+      "maxMs": 270.466,
+      "count": 155,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "GpuChannel::ExecuteDeferredRequest",
+      "category": "gpu",
+      "pid": 50488,
+      "tid": 55124,
+      "totalMs": 1759.377,
+      "p50Ms": 0.051,
+      "p95Ms": 125.71,
+      "maxMs": 270.46,
+      "count": 144,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "WebGL",
+      "category": "gpu",
+      "pid": 50488,
+      "tid": 55124,
+      "totalMs": 1756.155,
+      "p50Ms": 0.06,
+      "p95Ms": 126.764,
+      "maxMs": 270.443,
+      "count": 107,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "CommandBuffer::Flush",
+      "category": "gpu,toplevel.flow",
+      "pid": 50488,
+      "tid": 55124,
+      "totalMs": 1755.655,
+      "p50Ms": 0.064,
+      "p95Ms": 126.762,
+      "maxMs": 270.441,
+      "count": 101,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "CommandBufferStub::OnAsyncFlush",
+      "category": "gpu",
+      "pid": 50488,
+      "tid": 55124,
+      "totalMs": 1755.51,
+      "p50Ms": 0.062,
+      "p95Ms": 126.761,
+      "maxMs": 270.441,
+      "count": 101,
+      "source": "chrome-devtools-trace"
+    }
+  ],
+  "topMainThread": [
+    {
+      "name": "RunTask",
+      "category": "disabled-by-default-devtools.timeline",
+      "pid": 50488,
+      "tid": 55124,
+      "totalMs": 1769.648,
+      "p50Ms": 0.032,
+      "p95Ms": 117.063,
+      "maxMs": 270.473,
+      "count": 229,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "GPUTask",
+      "category": "disabled-by-default-devtools.timeline",
+      "pid": 50488,
+      "tid": 55124,
+      "totalMs": 1758.473,
+      "p50Ms": 0.021,
+      "p95Ms": 124.691,
+      "maxMs": 270.459,
+      "count": 189,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "Commit",
+      "category": "disabled-by-default-devtools.timeline",
+      "pid": 26320,
+      "tid": 46676,
+      "totalMs": 1739.747,
+      "p50Ms": 128.848,
+      "p95Ms": 276.25,
+      "maxMs": 276.25,
+      "count": 12,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "RunTask",
+      "category": "disabled-by-default-devtools.timeline",
+      "pid": 26320,
+      "tid": 46676,
+      "totalMs": 1497.011,
+      "p50Ms": 0.007,
+      "p95Ms": 130.864,
+      "maxMs": 157.174,
+      "count": 102,
+      "source": "chrome-devtools-trace"
+    },
+    {
+      "name": "RunTask",
+      "category": "disabled-by-default-devtools.timeline",
+      "pid": 50488,
+      "tid": 46696,
+      "totalMs": 181.212,
+      "p50Ms": 0.035,
+      "p95Ms": 0.201,
+      "maxMs": 18.069,
+      "count": 351,
+      "source": "chrome-devtools-trace"
+    }
+  ],
+  "topWebGPU": [],
+  "warnings": [
+    "Chrome DevTools traces give browser/GPU-process context, not shader/pass timer-query truth.",
+    "No explicit WebGPU trace events found. Use gpu.profile_url with timestamp-query for pass-level deltas."
+  ]
+}
