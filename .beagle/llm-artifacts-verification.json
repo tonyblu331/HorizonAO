@@ -1,0 +1,182 @@
+{
+  "version": "1.0.0",
+  "created_at": "2026-06-09T18:45:00Z",
+  "source_report": ".beagle/llm-artifacts-review.json",
+  "source_git_head": "bf64f23",
+  "review_scope": "changed",
+  "results": [
+    {
+      "id": 1,
+      "status": "false_positive",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "ripgrep_symbol", "caller_trace"],
+      "notes": "VbaoLabScene.tsx:314 calls render(activeAo, activeView, productOutput) with a user-toggled boolean. The productOutput parameter and its branches are live code."
+    },
+    {
+      "id": 2,
+      "status": "false_positive",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "caller_trace"],
+      "notes": "vbaoRawPipeline and vbaoRawAoPipeline are used in the else branches of the productOutput conditional, which IS exercised by VbaoLabScene."
+    },
+    {
+      "id": 3,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "ripgrep_symbol"],
+      "notes": "computeAsync and textureNode are defined in vbaoComputeCandidate.ts return object but no caller references them. Only compute() is used."
+    },
+    {
+      "id": 4,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "ripgrep_symbol"],
+      "notes": "VBAO_THETA_MAX is exported but never imported. VBAO_THETA_RANGE is only used internally for VBAO_THETA_STEP computation. Both can be made non-exported."
+    },
+    {
+      "id": 5,
+      "status": "inconclusive",
+      "confidence": "medium",
+      "checks_performed": ["read_symbol", "export_trace"],
+      "notes": "Deprecated VBAONodeOptions fields are public API. Removal requires migration plan and major version bump. Keep for now but track."
+    },
+    {
+      "id": 6,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "line_inspection"],
+      "notes": "Each test assigns ownerTerm a constant string then immediately asserts it equals that same string. These assertions always pass regardless of solver correctness."
+    },
+    {
+      "id": 7,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "line_inspection"],
+      "notes": "Tests verify constants equal specific arrays — tests the constant definition, not behavior."
+    },
+    {
+      "id": 8,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "line_inspection"],
+      "notes": "Tests verify VBAO_SAMPLING_SCHEME etc. equal literals — self-documenting constants don't need freeze tests."
+    },
+    {
+      "id": 9,
+      "status": "inconclusive",
+      "confidence": "medium",
+      "checks_performed": ["read_symbol", "pattern_analysis"],
+      "notes": "Source-string tests in vbaoNodeSource.test.ts are intentionally brittle to enforce shader invariants. Refactoring to behavioral tests requires domain expertise."
+    },
+    {
+      "id": 10,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "cross_file_comparison"],
+      "notes": "dot3(), angularSamples(), PIXEL/NORMAL constants are copy-pasted across 6 test files."
+    },
+    {
+      "id": 11,
+      "status": "confirmed_issue",
+      "confidence": "medium",
+      "checks_performed": ["read_symbol", "line_inspection"],
+      "notes": "Numeric thresholds like 0.55, 0.9, 4 appear without geometric reasoning comments."
+    },
+    {
+      "id": 12,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "cross_file_comparison"],
+      "notes": "maskRangeFn and intervalMaskStochasticFn are duplicated between VBAONode.ts and VBAOReceiverConfidenceNode.ts."
+    },
+    {
+      "id": 13,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "cross_file_comparison"],
+      "notes": "Vec3 math functions (dot3, add3, sub3, etc.) are duplicated in aoRaycastReference.ts and vbaoReference.ts."
+    },
+    {
+      "id": 14,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "cross_file_comparison"],
+      "notes": "SampleableNode type alias defined identically in 5 files."
+    },
+    {
+      "id": 15,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "cross_file_comparison"],
+      "notes": "clamp01 helper duplicated in VBAOHalfResCleanupNode, VBAOFullResPolishNode, reference/vbaoReceiverConfidence."
+    },
+    {
+      "id": 16,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "cross_file_comparison"],
+      "notes": "clampResolutionScale duplicated in VBAOHalfResCleanupNode and VBAOReceiverConfidenceNode."
+    },
+    {
+      "id": 17,
+      "status": "inconclusive",
+      "confidence": "medium",
+      "checks_performed": ["read_symbol", "cross_file_comparison"],
+      "notes": "SSAO code in MuseumScene.tsx and aoPipelines.ts serves different rendering contexts. Extraction may require careful interface design."
+    },
+    {
+      "id": 18,
+      "status": "confirmed_issue",
+      "confidence": "medium",
+      "checks_performed": ["read_symbol", "pattern_analysis"],
+      "notes": "Many type aliases in MuseumScene.tsx just add 'n/a' to existing types. Low-value indirection."
+    },
+    {
+      "id": 19,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "pattern_analysis"],
+      "notes": "8 decorative section markers (// ─── ... ───) in VbaoScene.tsx add visual noise without documentation value."
+    },
+    {
+      "id": 20,
+      "status": "confirmed_issue",
+      "confidence": "high",
+      "checks_performed": ["read_symbol", "line_inspection"],
+      "notes": "Comment 'Setup complete — the async function returns here' restates obvious control flow."
+    },
+    {
+      "id": 21,
+      "status": "confirmed_issue",
+      "confidence": "medium",
+      "checks_performed": ["read_symbol", "line_inspection"],
+      "notes": "SECTOR_COUNT JSDoc explains the value is 32 when it's visible. Only the WHY (WGSL optimization) matters."
+    },
+    {
+      "id": 22,
+      "status": "confirmed_issue",
+      "confidence": "medium",
+      "checks_performed": ["read_symbol", "line_inspection"],
+      "notes": "Error message lists every construction-time parameter by name instead of a general statement."
+    },
+    {
+      "id": 23,
+      "status": "confirmed_issue",
+      "confidence": "medium",
+      "checks_performed": ["read_symbol", "line_inspection"],
+      "notes": "Extensive JSDoc on interfaces where field names are already descriptive."
+    },
+    {
+      "id": 24,
+      "status": "inconclusive",
+      "confidence": "low",
+      "checks_performed": ["read_symbol", "pattern_analysis"],
+      "notes": "Runtime null check on normalNode may be defensive for dynamic usage patterns. Needs domain context."
+    }
+  ],
+  "summary": {
+    "confirmed_issue": 18,
+    "false_positive": 2,
+    "inconclusive": 4
+  }
+}

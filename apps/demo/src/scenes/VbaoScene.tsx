@@ -109,7 +109,7 @@ async function runVbaoScene(container: HTMLDivElement, signal: AbortSignal): Pro
   canvas.className = 'scene-canvas'
   container.appendChild(canvas)
 
-  // ── renderer ────────────────────────────────────────────────────────────────
+
   const renderer = new WebGPURenderer({
     canvas,
     antialias: true,
@@ -128,7 +128,7 @@ async function runVbaoScene(container: HTMLDivElement, signal: AbortSignal): Pro
     return
   }
 
-  // ── camera ──────────────────────────────────────────────────────────────────
+
   const camera = new PerspectiveCamera(42, 1, 0.1, 120)
   camera.position.set(9, 7, 12)
   camera.lookAt(0, 0, 0)

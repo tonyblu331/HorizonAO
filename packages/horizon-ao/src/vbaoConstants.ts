@@ -17,8 +17,8 @@
 export const SECTOR_COUNT = 32 as const
 
 export const VBAO_THETA_MIN = -Math.PI * 0.5
-export const VBAO_THETA_MAX = Math.PI * 0.5
-export const VBAO_THETA_RANGE = Math.PI
+const VBAO_THETA_MAX = Math.PI * 0.5
+const VBAO_THETA_RANGE = Math.PI
 export const VBAO_THETA_STEP = VBAO_THETA_RANGE / SECTOR_COUNT
 
 /**
