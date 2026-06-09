@@ -11,7 +11,6 @@ import {
   RendererUtils,
   Vector2,
   type Camera,
-  type Node,
   type NodeFrame,
   type TextureNode,
 } from 'three/webgpu'
@@ -36,6 +35,7 @@ import {
 } from 'three/tsl'
 
 import { VBAOEffectPass } from './VBAOEffectPass'
+import { type Node, type SampleableNode } from './vbaoUtils'
 
 export interface VBAOVelocityTemporalNodeOptions {
   readonly historyWeight?: number
@@ -110,10 +110,6 @@ export interface VBAOVelocityTemporalTargetInventory {
 
 const velocityTemporalQuadMesh = new QuadMesh()
 const velocityTemporalSize = new Vector2()
-
-type SampleableNode = Node & {
-  sample: (uvCoord: Node) => any
-}
 
 function clampFinite(value: number, fallback: number, minValue: number, maxValue: number): number {
   return Number.isFinite(value) ? Math.max(minValue, Math.min(maxValue, value)) : fallback

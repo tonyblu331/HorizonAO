@@ -11,7 +11,6 @@ import {
   TempNode,
   Vector2,
   type Camera,
-  type Node,
   type NodeFrame,
   type TextureNode,
 } from 'three/webgpu'
@@ -75,14 +74,11 @@ import {
   VBAO_PHASE_ATLAS_PHASES,
   VBAO_PHASE_STRIDE,
 } from './vbaoSampling'
+import { type Node, type SampleableNode } from './vbaoUtils'
 
 const quadMesh = new QuadMesh()
 const size = new Vector2()
 let rendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
-
-type SampleableNode = Node & {
-  sample: (uvCoord: Node) => any
-}
 
 type VbaoRawLoopShape = {
   readonly slices: number

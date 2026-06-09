@@ -6,7 +6,7 @@ import {
   evaluateScalarVbaoReference,
   type ScalarVbaoSample,
 } from './vbaoReference'
-import type { Vec3 } from './vbaoGtVbaoMath'
+import { add3, scale3, type Vec3 } from './vec3Math'
 
 export type VbaoCanonicalDriftCaseId =
   | 'open'
@@ -71,14 +71,6 @@ const SLICE_TANGENT: Vec3 = [0, 1, 0]
 const DEFAULT_THRESHOLDS: VbaoCanonicalDriftThresholds = {
   warnAbsDiff: 0.03,
   failAbsDiff: 0.08,
-}
-
-function add3(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-}
-
-function scale3(v: Vec3, s: number): Vec3 {
-  return [v[0] * s, v[1] * s, v[2] * s]
 }
 
 function sampleAt(sideSign: 1 | -1, angleFromView: number, distance: number): VbaoCanonicalDriftSample {

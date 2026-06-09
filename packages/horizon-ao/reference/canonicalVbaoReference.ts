@@ -1,5 +1,13 @@
 import { SECTOR_COUNT } from '../src/vbaoConstants'
-import type { Vec3 } from './vbaoGtVbaoMath'
+import {
+  add3,
+  dot3,
+  length3,
+  normalize3,
+  scale3,
+  sub3,
+  type Vec3,
+} from './vec3Math'
 
 export type { Vec3 }
 
@@ -27,31 +35,6 @@ export interface CanonicalVbaoReferenceResult {
 
 const HALF_PI = Math.PI / 2
 const FULL_MASK = 0xffffffff
-
-function dot3(a: Vec3, b: Vec3): number {
-  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-function sub3(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-function add3(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-}
-
-function scale3(v: Vec3, s: number): Vec3 {
-  return [v[0] * s, v[1] * s, v[2] * s]
-}
-
-function length3(v: Vec3): number {
-  return Math.hypot(v[0], v[1], v[2])
-}
-
-function normalize3(v: Vec3): Vec3 {
-  const len = length3(v)
-  return len < 1e-10 ? [0, 0, 0] : [v[0] / len, v[1] / len, v[2] / len]
-}
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))

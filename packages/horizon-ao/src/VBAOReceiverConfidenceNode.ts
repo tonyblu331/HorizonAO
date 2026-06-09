@@ -66,6 +66,7 @@ import {
   VBAO_PHASE_ATLAS_PHASES,
   VBAO_PHASE_STRIDE,
 } from './vbaoSampling'
+import { clampResolutionScale, type SampleableNode } from './vbaoUtils'
 
 const receiverConfidenceQuadMesh = new QuadMesh()
 const receiverConfidenceSize = new Vector2()
@@ -73,19 +74,11 @@ let receiverConfidenceRendererState:
   | ReturnType<typeof RendererUtils.resetRendererState>
   | undefined
 
-type SampleableNode = Node & {
-  sample: (uvCoord: Node) => any
-}
-
 export interface VBAOReceiverConfidenceNodeOptions {
   readonly resolutionScale?: number
   readonly slices?: number
   readonly samples?: number
   readonly noiseTexture?: DataTexture
-}
-
-function clampResolutionScale(value: number): number {
-  return Number.isFinite(value) ? Math.max(0.05, Math.min(1, value)) : 0.5
 }
 
 function clampLoopBound(value: number, minValue: number, maxValue: number): number {
