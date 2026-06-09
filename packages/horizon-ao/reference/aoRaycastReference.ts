@@ -179,6 +179,23 @@ export function evaluateRaycastAoReference(
   }
 }
 
+/**
+ * Whether a single hemisphere direction is occluded within the fixture's finite
+ * AO radius. Exposed so VBAO-representation estimators can reuse the exact same
+ * occluder intersection as the ground-truth reference (apples-to-apples deltas).
+ */
+export function isRaycastDirectionOccluded(
+  fixture: RaycastAoFixture,
+  direction: RaycastVec3,
+): boolean {
+  const n = normalize3(fixture.normal)
+  const origin = add3(fixture.point, scale3(n, EPSILON))
+  const dir = normalize3(direction)
+  return fixture.occluders.some((occluder) =>
+    intersectsWithinRadius(origin, dir, occluder, fixture.radius),
+  )
+}
+
 export const RAYCAST_AO_FIXTURES = Object.freeze([
   {
     id: 'flat-plane-open',

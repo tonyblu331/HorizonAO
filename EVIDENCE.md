@@ -4,6 +4,44 @@ Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
 This file is the gate for later adaptive thickness, sampling, denoise, or depth
 hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
+## 2026-06-09 — VBAO vs independent ground-truth delta verifier (P1)
+
+Status: **first quantitative truth-vs-VBAO baseline committed; deterministic regression anchor**.
+
+Wired a delta verifier comparing the algorithm-independent ray-cast AO truth
+(`reference/aoRaycastReference.ts`, cosine-hemisphere rays vs analytic occluders) against a
+faithful VBAO *representation* estimate on the SAME geometry (slice × 32-sector visibility
+bitmask, cosine-weighted popcount) in `reference/vbaoGroundTruthDelta.ts`. View-independent;
+deterministic (no RNG) so it serves as a committed regression anchor. NOTE: this measures
+REPRESENTATION error (finite slices + 32-sector quantization), not the screen-space-achievable
+delta (a camera/heightfield reference, roadmap P1-B, still to build).
+
+Reproduce: `pnpm --filter @horizonao/core test -- reference/__tests__/vbaoGroundTruthDelta.test.ts`
+or `createVbaoGroundTruthDeltaReport()` (4 slices, 4096 truth rays).
+
+Baseline (RMSE 0.09938 · MAE 0.07045 · Max |Δ| 0.21678):
+
+| Fixture | Truth | VBAO repr | Δ (truth − vbao) |
+| --- | ---: | ---: | ---: |
+| flat-plane-open | 1.0000 | 1.0000 | 0.0000 |
+| sphere-contact | 0.8066 | 0.8469 | -0.0402 |
+| box-contact | 0.8120 | 0.8457 | -0.0337 |
+| two-wall-corner | 0.5710 | 0.7357 | **-0.1647** |
+| broad-wall-contact | 0.6768 | 0.7312 | -0.0544 |
+| thin-gap-separated-slabs | 0.8096 | 0.8457 | -0.0361 |
+| grazing-surface-wall | 0.6003 | 0.5122 | 0.0882 |
+| normal-sensitive-side-contact | 0.6736 | 0.4568 | **0.2168** |
+| far-object-outside-radius | 1.0000 | 1.0000 | 0.0000 |
+
+Findings (turn quality from vibes into numbers):
+
+- Contact cases (sphere/box/thin-gap): VBAO repr is slightly UNDER-occluded (~+0.03–0.04),
+  consistent with sector-center sampling missing thin occlusion — a P2/P3 quantization signal.
+- `two-wall-corner`: VBAO is materially too accessible (Δ −0.165) — under-occludes corners.
+- `normal-sensitive-side-contact` + `grazing-surface-wall`: VBAO OVER-occludes (Δ +0.22 / +0.09) —
+  the grazing / `normal^8` behavior, a concrete P3 target.
+- Future quality phases must hold or beat this RMSE; the test locks it deterministically.
+
 ## 2026-06-08 — VBAO pass unification + half-res confidence reconciliation (P0)
 
 Status: **EffectPass unification WebGPU-validated; half-res benchmark green again**.
