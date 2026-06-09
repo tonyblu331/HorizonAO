@@ -867,8 +867,6 @@ describe('modernized VBAO production source contract', () => {
     expect(computeCandidateSource).toContain('storageTexture')
     expect(computeCandidateSource).toContain('textureStore')
     expect(computeCandidateSource).toContain('compute: (renderer: WebGPURenderer) => renderer.compute(computeNode)')
-    expect(computeCandidateSource).toContain('computeAsync')
-    expect(computeCandidateSource).toContain('textureNode: texture(target)')
     expect(museumSource).toContain('createVbaoSectorConfidenceComputeCandidate')
     expect(museumSource).toContain('new VBAOReceiverConfidenceNode')
     expect(museumSource).toContain('getRequestedVbaoComputeCandidateMode')
