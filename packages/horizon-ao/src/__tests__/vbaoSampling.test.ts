@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { VBAO_CLAMP_RANGES, clampVbaoNodeOptions } from '../vbaoConstants'
+import {
+  VBAO_CLAMP_RANGES,
+  clampVbaoNodeOptions,
+  resolveVbaoContactThickness,
+} from '../vbaoConstants'
 import {
   VBAO_PHASE_ATLAS_COLUMNS,
   VBAO_PHASE_ATLAS_PHASES,
@@ -91,6 +95,41 @@ describe('single production VBAO sampling scheme', () => {
       slices: 4,
       samples: 16,
     })
+  })
+
+  it('maps artist contact to thickness and keeps quality tiers product-shaped', () => {
+    expect(clampVbaoNodeOptions({})).toMatchObject({
+      resolutionScale: 0.5,
+    })
+    expect(clampVbaoNodeOptions({ radius: 1, contact: 0 })).toMatchObject({
+      contact: 0,
+      thickness: 0.12,
+    })
+    expect(clampVbaoNodeOptions({ radius: 1, contact: 1 })).toMatchObject({
+      contact: 1,
+      thickness: 0.3,
+    })
+    expect(clampVbaoNodeOptions({ radius: 1, contact: 1, advanced: { thickness: 0.07 } }))
+      .toMatchObject({
+        contact: 1,
+        thickness: 0.07,
+      })
+    expect(clampVbaoNodeOptions({ quality: 'quality' })).toMatchObject({
+      resolutionScale: 1.0,
+      slices: 4,
+      samples: 8,
+    })
+    expect(
+      clampVbaoNodeOptions({
+        quality: 'quality',
+        advanced: { resolutionScale: 0.5, slices: 2, samples: 4 },
+      }),
+    ).toMatchObject({
+      resolutionScale: 0.5,
+      slices: 2,
+      samples: 4,
+    })
+    expect(resolveVbaoContactThickness(0.35, 0.55)).toBeCloseTo(0.07665)
   })
 })
 

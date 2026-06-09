@@ -1,0 +1,991 @@
+{
+  "generatedAt": "2026-06-03T11:54:10.5036215Z",
+  "sourceReports": [
+    "artifacts/benchmarks/vbao-temporal-motion-camera.json",
+    "artifacts/benchmarks/vbao-temporal-motion-object.json",
+    "artifacts/benchmarks/vbao-temporal-motion-disocclusion.json"
+  ],
+  "baseUrl": "http://127.0.0.1:5173",
+  "scenes": [
+    "museum"
+  ],
+  "resolutions": [
+    {
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "passTimingSampleCount": 10,
+  "note": "Combined velocity temporal motion evidence from camera-motion, object-motion, and disocclusion captures.",
+  "referenceGate": {
+    "basis": "Product AO rows must provide fixture observations before they can be compared against the ray-cast and canonical reports.",
+    "productRows": [
+      {
+        "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": true,
+      "vbaoResolution": "full-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "Private VBAOVelocityTemporalNode wrapped VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "velocity-internal",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": {
+        "frame": 92,
+        "resetCount": 2,
+        "lastResetFrame": 0,
+        "lastResetReason": "resize",
+        "renderTargetName": "VBAO.VelocityTemporalDiagnostics",
+        "resolution": {
+          "width": 1280,
+          "height": 720
+        },
+        "encodedReasonBits": {
+          "reset": 1,
+          "viewport": 2,
+          "depth": 4,
+          "normal": 8,
+          "velocity": 16,
+          "clampHistoryRange": 32
+        },
+        "channels": {
+          "r": "reasonBitsNormalizedBy63",
+          "g": "depthDelta",
+          "b": "normalDot",
+          "a": "velocityLengthSquared"
+        }
+      },
+      "temporalTargetInventory": {
+        "currentAo": {
+          "owner": "VBAONode",
+          "source": "product-or-reconstruction-output",
+          "lifetime": "active-vbao-pipeline"
+        },
+        "aoHistory": {
+          "owner": "VBAOVelocityTemporalNode",
+          "name": "VBAO.VelocityTemporalHistory",
+          "format": "RedFormat",
+          "type": "HalfFloatType",
+          "lifetime": "reset-on-first-frame-resize-explicit-reset"
+        },
+        "diagnostics": {
+          "owner": "VBAOVelocityTemporalNode",
+          "name": "VBAO.VelocityTemporalDiagnostics",
+          "format": "RGBAFormat",
+          "type": "HalfFloatType",
+          "lifetime": "active-vbao-pipeline"
+        },
+        "velocity": {
+          "owner": "host-pass",
+          "source": "mrt-velocity",
+          "convention": "historyUv = uv - velocity.xy * vec2(0.5, -0.5)",
+          "lifetime": "host-pass-current-frame"
+        },
+        "previousDepth": {
+          "owner": "host-pass",
+          "source": "PassNode.getPreviousTextureNode('depth')",
+          "lifetime": "host-pass-previous-frame"
+        },
+        "previousNormal": {
+          "owner": "host-pass",
+          "source": "PassNode.getPreviousTextureNode('output')",
+          "lifetime": "host-pass-previous-frame"
+        }
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "camera-motion",
+      "motionEvidenceSource": "ao-benchmark-motion",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.224704,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (1280x720)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "resolve",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "polish",
+          "status": "measured",
+          "gpuMs": 0.089088,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.FullResPolish (1280x720)."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "measured",
+          "gpuMs": 0.043008,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.VelocityTemporal (1280x720)."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.3568,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.8077496457295842,
+        "stdLuma": 0.1401402246910818,
+        "patternNoiseScore": 0.02746553500039971,
+        "stripeScore": 0.16257858460077107,
+        "horizontalStripeScore": 0.16257858460077107,
+        "verticalStripeScore": 0.1293049469883201,
+        "directionalAnisotropy": 0.028048481758317666,
+        "edgeBleedProxy": 0.015766221368352974,
+        "thinGapPreservationProxy": 0.009038516106457593,
+        "meanAbsDx": 0.012203601590023986,
+        "meanAbsDy": 0.012907942269902323,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-motion-camera\\1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": true,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "velocity-internal",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": {
+          "frame": 92,
+          "resetCount": 2,
+          "lastResetFrame": 0,
+          "lastResetReason": "resize",
+          "renderTargetName": "VBAO.VelocityTemporalDiagnostics",
+          "resolution": {
+            "width": 1280,
+            "height": 720
+          },
+          "encodedReasonBits": {
+            "reset": 1,
+            "viewport": 2,
+            "depth": 4,
+            "normal": 8,
+            "velocity": 16,
+            "clampHistoryRange": 32
+          },
+          "channels": {
+            "r": "reasonBitsNormalizedBy63",
+            "g": "depthDelta",
+            "b": "normalDot",
+            "a": "velocityLengthSquared"
+          }
+        },
+        "vbaoTemporalTargetInventory": {
+          "currentAo": {
+            "owner": "VBAONode",
+            "source": "product-or-reconstruction-output",
+            "lifetime": "active-vbao-pipeline"
+          },
+          "aoHistory": {
+            "owner": "VBAOVelocityTemporalNode",
+            "name": "VBAO.VelocityTemporalHistory",
+            "format": "RedFormat",
+            "type": "HalfFloatType",
+            "lifetime": "reset-on-first-frame-resize-explicit-reset"
+          },
+          "diagnostics": {
+            "owner": "VBAOVelocityTemporalNode",
+            "name": "VBAO.VelocityTemporalDiagnostics",
+            "format": "RGBAFormat",
+            "type": "HalfFloatType",
+            "lifetime": "active-vbao-pipeline"
+          },
+          "velocity": {
+            "owner": "host-pass",
+            "source": "mrt-velocity",
+            "convention": "historyUv = uv - velocity.xy * vec2(0.5, -0.5)",
+            "lifetime": "host-pass-current-frame"
+          },
+          "previousDepth": {
+            "owner": "host-pass",
+            "source": "PassNode.getPreviousTextureNode('depth')",
+            "lifetime": "host-pass-previous-frame"
+          },
+          "previousNormal": {
+            "owner": "host-pass",
+            "source": "PassNode.getPreviousTextureNode('output')",
+            "lifetime": "host-pass-previous-frame"
+          }
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 0.65,
+        "vbaoThickness": 0.18,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 717.7033492535134,
+        "frameMs": 1.3933333333892126,
+        "avgFrameMs": 1.3933333333892126,
+        "medianFrameMs": 1.400000000372529,
+        "p95FrameMs": 1.7999999998137355,
+        "reportIndex": 4,
+        "sampleCount": 30,
+        "timestamp": 4114
+      },
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": true,
+      "vbaoResolution": "full-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "Private VBAOVelocityTemporalNode wrapped VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "velocity-internal",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": {
+        "frame": 90,
+        "resetCount": 2,
+        "lastResetFrame": 0,
+        "lastResetReason": "resize",
+        "renderTargetName": "VBAO.VelocityTemporalDiagnostics",
+        "resolution": {
+          "width": 1280,
+          "height": 720
+        },
+        "encodedReasonBits": {
+          "reset": 1,
+          "viewport": 2,
+          "depth": 4,
+          "normal": 8,
+          "velocity": 16,
+          "clampHistoryRange": 32
+        },
+        "channels": {
+          "r": "reasonBitsNormalizedBy63",
+          "g": "depthDelta",
+          "b": "normalDot",
+          "a": "velocityLengthSquared"
+        }
+      },
+      "temporalTargetInventory": {
+        "currentAo": {
+          "owner": "VBAONode",
+          "source": "product-or-reconstruction-output",
+          "lifetime": "active-vbao-pipeline"
+        },
+        "aoHistory": {
+          "owner": "VBAOVelocityTemporalNode",
+          "name": "VBAO.VelocityTemporalHistory",
+          "format": "RedFormat",
+          "type": "HalfFloatType",
+          "lifetime": "reset-on-first-frame-resize-explicit-reset"
+        },
+        "diagnostics": {
+          "owner": "VBAOVelocityTemporalNode",
+          "name": "VBAO.VelocityTemporalDiagnostics",
+          "format": "RGBAFormat",
+          "type": "HalfFloatType",
+          "lifetime": "active-vbao-pipeline"
+        },
+        "velocity": {
+          "owner": "host-pass",
+          "source": "mrt-velocity",
+          "convention": "historyUv = uv - velocity.xy * vec2(0.5, -0.5)",
+          "lifetime": "host-pass-current-frame"
+        },
+        "previousDepth": {
+          "owner": "host-pass",
+          "source": "PassNode.getPreviousTextureNode('depth')",
+          "lifetime": "host-pass-previous-frame"
+        },
+        "previousNormal": {
+          "owner": "host-pass",
+          "source": "PassNode.getPreviousTextureNode('output')",
+          "lifetime": "host-pass-previous-frame"
+        }
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "object-motion",
+      "motionEvidenceSource": "ao-benchmark-motion",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.025024,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (1280x720)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "resolve",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "polish",
+          "status": "measured",
+          "gpuMs": 0.083968,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.FullResPolish (1280x720)."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "measured",
+          "gpuMs": 0.043008,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.VelocityTemporal (1280x720)."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.152,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.8077496457295842,
+        "stdLuma": 0.1401402246910818,
+        "patternNoiseScore": 0.02746553500039971,
+        "stripeScore": 0.16257858460077107,
+        "horizontalStripeScore": 0.16257858460077107,
+        "verticalStripeScore": 0.1293049469883201,
+        "directionalAnisotropy": 0.028048481758317666,
+        "edgeBleedProxy": 0.015766221368352974,
+        "thinGapPreservationProxy": 0.009038516106457593,
+        "meanAbsDx": 0.012203601590023986,
+        "meanAbsDy": 0.012907942269902323,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-motion-object\\1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": true,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "velocity-internal",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": {
+          "frame": 90,
+          "resetCount": 2,
+          "lastResetFrame": 0,
+          "lastResetReason": "resize",
+          "renderTargetName": "VBAO.VelocityTemporalDiagnostics",
+          "resolution": {
+            "width": 1280,
+            "height": 720
+          },
+          "encodedReasonBits": {
+            "reset": 1,
+            "viewport": 2,
+            "depth": 4,
+            "normal": 8,
+            "velocity": 16,
+            "clampHistoryRange": 32
+          },
+          "channels": {
+            "r": "reasonBitsNormalizedBy63",
+            "g": "depthDelta",
+            "b": "normalDot",
+            "a": "velocityLengthSquared"
+          }
+        },
+        "vbaoTemporalTargetInventory": {
+          "currentAo": {
+            "owner": "VBAONode",
+            "source": "product-or-reconstruction-output",
+            "lifetime": "active-vbao-pipeline"
+          },
+          "aoHistory": {
+            "owner": "VBAOVelocityTemporalNode",
+            "name": "VBAO.VelocityTemporalHistory",
+            "format": "RedFormat",
+            "type": "HalfFloatType",
+            "lifetime": "reset-on-first-frame-resize-explicit-reset"
+          },
+          "diagnostics": {
+            "owner": "VBAOVelocityTemporalNode",
+            "name": "VBAO.VelocityTemporalDiagnostics",
+            "format": "RGBAFormat",
+            "type": "HalfFloatType",
+            "lifetime": "active-vbao-pipeline"
+          },
+          "velocity": {
+            "owner": "host-pass",
+            "source": "mrt-velocity",
+            "convention": "historyUv = uv - velocity.xy * vec2(0.5, -0.5)",
+            "lifetime": "host-pass-current-frame"
+          },
+          "previousDepth": {
+            "owner": "host-pass",
+            "source": "PassNode.getPreviousTextureNode('depth')",
+            "lifetime": "host-pass-previous-frame"
+          },
+          "previousNormal": {
+            "owner": "host-pass",
+            "source": "PassNode.getPreviousTextureNode('output')",
+            "lifetime": "host-pass-previous-frame"
+          }
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 0.65,
+        "vbaoThickness": 0.18,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 638.2978723151293,
+        "frameMs": 1.5666666667287548,
+        "avgFrameMs": 1.5666666667287548,
+        "medianFrameMs": 1.5,
+        "p95FrameMs": 1.8999999994412065,
+        "reportIndex": 4,
+        "sampleCount": 30,
+        "timestamp": 4881.5
+      },
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": true,
+      "vbaoResolution": "full-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "Private VBAOVelocityTemporalNode wrapped VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "velocity-internal",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": {
+        "frame": 92,
+        "resetCount": 2,
+        "lastResetFrame": 0,
+        "lastResetReason": "resize",
+        "renderTargetName": "VBAO.VelocityTemporalDiagnostics",
+        "resolution": {
+          "width": 1280,
+          "height": 720
+        },
+        "encodedReasonBits": {
+          "reset": 1,
+          "viewport": 2,
+          "depth": 4,
+          "normal": 8,
+          "velocity": 16,
+          "clampHistoryRange": 32
+        },
+        "channels": {
+          "r": "reasonBitsNormalizedBy63",
+          "g": "depthDelta",
+          "b": "normalDot",
+          "a": "velocityLengthSquared"
+        }
+      },
+      "temporalTargetInventory": {
+        "currentAo": {
+          "owner": "VBAONode",
+          "source": "product-or-reconstruction-output",
+          "lifetime": "active-vbao-pipeline"
+        },
+        "aoHistory": {
+          "owner": "VBAOVelocityTemporalNode",
+          "name": "VBAO.VelocityTemporalHistory",
+          "format": "RedFormat",
+          "type": "HalfFloatType",
+          "lifetime": "reset-on-first-frame-resize-explicit-reset"
+        },
+        "diagnostics": {
+          "owner": "VBAOVelocityTemporalNode",
+          "name": "VBAO.VelocityTemporalDiagnostics",
+          "format": "RGBAFormat",
+          "type": "HalfFloatType",
+          "lifetime": "active-vbao-pipeline"
+        },
+        "velocity": {
+          "owner": "host-pass",
+          "source": "mrt-velocity",
+          "convention": "historyUv = uv - velocity.xy * vec2(0.5, -0.5)",
+          "lifetime": "host-pass-current-frame"
+        },
+        "previousDepth": {
+          "owner": "host-pass",
+          "source": "PassNode.getPreviousTextureNode('depth')",
+          "lifetime": "host-pass-previous-frame"
+        },
+        "previousNormal": {
+          "owner": "host-pass",
+          "source": "PassNode.getPreviousTextureNode('output')",
+          "lifetime": "host-pass-previous-frame"
+        }
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "disocclusion",
+      "motionEvidenceSource": "ao-benchmark-motion",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.589248,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (1280x720)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "resolve",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "polish",
+          "status": "measured",
+          "gpuMs": 0.134144,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.FullResPolish (1280x720)."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "measured",
+          "gpuMs": 0.06144,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.VelocityTemporal (1280x720)."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.784832,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.8077496457295842,
+        "stdLuma": 0.1401402246910818,
+        "patternNoiseScore": 0.02746553500039971,
+        "stripeScore": 0.16257858460077107,
+        "horizontalStripeScore": 0.16257858460077107,
+        "verticalStripeScore": 0.1293049469883201,
+        "directionalAnisotropy": 0.028048481758317666,
+        "edgeBleedProxy": 0.015766221368352974,
+        "thinGapPreservationProxy": 0.009038516106457593,
+        "meanAbsDx": 0.012203601590023986,
+        "meanAbsDy": 0.012907942269902323,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-temporal-motion-disocclusion\\1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": true,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "velocity-internal",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": {
+          "frame": 92,
+          "resetCount": 2,
+          "lastResetFrame": 0,
+          "lastResetReason": "resize",
+          "renderTargetName": "VBAO.VelocityTemporalDiagnostics",
+          "resolution": {
+            "width": 1280,
+            "height": 720
+          },
+          "encodedReasonBits": {
+            "reset": 1,
+            "viewport": 2,
+            "depth": 4,
+            "normal": 8,
+            "velocity": 16,
+            "clampHistoryRange": 32
+          },
+          "channels": {
+            "r": "reasonBitsNormalizedBy63",
+            "g": "depthDelta",
+            "b": "normalDot",
+            "a": "velocityLengthSquared"
+          }
+        },
+        "vbaoTemporalTargetInventory": {
+          "currentAo": {
+            "owner": "VBAONode",
+            "source": "product-or-reconstruction-output",
+            "lifetime": "active-vbao-pipeline"
+          },
+          "aoHistory": {
+            "owner": "VBAOVelocityTemporalNode",
+            "name": "VBAO.VelocityTemporalHistory",
+            "format": "RedFormat",
+            "type": "HalfFloatType",
+            "lifetime": "reset-on-first-frame-resize-explicit-reset"
+          },
+          "diagnostics": {
+            "owner": "VBAOVelocityTemporalNode",
+            "name": "VBAO.VelocityTemporalDiagnostics",
+            "format": "RGBAFormat",
+            "type": "HalfFloatType",
+            "lifetime": "active-vbao-pipeline"
+          },
+          "velocity": {
+            "owner": "host-pass",
+            "source": "mrt-velocity",
+            "convention": "historyUv = uv - velocity.xy * vec2(0.5, -0.5)",
+            "lifetime": "host-pass-current-frame"
+          },
+          "previousDepth": {
+            "owner": "host-pass",
+            "source": "PassNode.getPreviousTextureNode('depth')",
+            "lifetime": "host-pass-previous-frame"
+          },
+          "previousNormal": {
+            "owner": "host-pass",
+            "source": "PassNode.getPreviousTextureNode('output')",
+            "lifetime": "host-pass-previous-frame"
+          }
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 0.65,
+        "vbaoThickness": 0.18,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 598.802395236296,
+        "frameMs": 1.6699999999254942,
+        "avgFrameMs": 1.6699999999254942,
+        "medianFrameMs": 1.6000000005587935,
+        "p95FrameMs": 2.199999999254942,
+        "reportIndex": 4,
+        "sampleCount": 30,
+        "timestamp": 4277
+      },
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ]
+    }
+  ],
+  "evidenceArtifactRows": [
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "status": "incomplete",
+      "missing": [
+        "passTimings.diagnostics"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "status": "incomplete",
+      "missing": [
+        "passTimings.diagnostics"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "status": "incomplete",
+      "missing": [
+        "passTimings.diagnostics"
+      ]
+    }
+  ],
+  "productPromotionRows": [
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "scene": "museum",
+      "resolution": "1280x720",
+      "view": "ao",
+      "algorithm": "vbao",
+      "output": "product",
+      "verdict": "candidate-only",
+      "blockers": [
+        "passTimings.diagnostics",
+        "missing-reference-observation",
+        "thresholdGate",
+        "failureLabel.noise",
+        "failureLabel.edge-bleed"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "scene": "museum",
+      "resolution": "1280x720",
+      "view": "ao",
+      "algorithm": "vbao",
+      "output": "product",
+      "verdict": "candidate-only",
+      "blockers": [
+        "passTimings.diagnostics",
+        "missing-reference-observation",
+        "thresholdGate",
+        "failureLabel.noise",
+        "failureLabel.edge-bleed"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "scene": "museum",
+      "resolution": "1280x720",
+      "view": "ao",
+      "algorithm": "vbao",
+      "output": "product",
+      "verdict": "candidate-only",
+      "blockers": [
+        "passTimings.diagnostics",
+        "missing-reference-observation",
+        "thresholdGate",
+        "failureLabel.noise",
+        "failureLabel.edge-bleed"
+      ]
+    }
+  ],
+  "renderedProxyReferenceRows": [
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "view": "ao",
+      "output": "product",
+      "vbaoResolution": "full-res",
+      "proxyStatus": "complete",
+      "referenceStatus": "missing-reference-observation",
+      "observedFixtureCount": 0,
+      "missingRequiredFixtureIds": [],
+      "status": "blocked",
+      "blockers": [
+        "missing-reference-observation"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "view": "ao",
+      "output": "product",
+      "vbaoResolution": "full-res",
+      "proxyStatus": "complete",
+      "referenceStatus": "missing-reference-observation",
+      "observedFixtureCount": 0,
+      "missingRequiredFixtureIds": [],
+      "status": "blocked",
+      "blockers": [
+        "missing-reference-observation"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "view": "ao",
+      "output": "product",
+      "vbaoResolution": "full-res",
+      "proxyStatus": "complete",
+      "referenceStatus": "missing-reference-observation",
+      "observedFixtureCount": 0,
+      "missingRequiredFixtureIds": [],
+      "status": "blocked",
+      "blockers": [
+        "missing-reference-observation"
+      ]
+    }
+  ],
+  "thresholdGate": {
+    "productRows": [
+      {
+        "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+        "status": "incomplete",
+        "blockers": [
+          "thresholdGate"
+        ]
+      },
+      {
+        "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+        "status": "incomplete",
+        "blockers": [
+          "thresholdGate"
+        ]
+      },
+      {
+        "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+        "status": "incomplete",
+        "blockers": [
+          "thresholdGate"
+        ]
+      }
+    ]
+  },
+  "reconstructionGate": {
+    "stageRows": []
+  },
+  "thinGeometryProxyRows": [
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "view": "ao",
+      "output": "product",
+      "vbaoResolution": "full-res",
+      "thinGapProxy": 0.009038516106457593,
+      "edgeBleedProxy": 0.015766221368352974,
+      "stripeScore": 0.16257858460077107,
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ],
+      "status": "complete",
+      "missing": []
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "view": "ao",
+      "output": "product",
+      "vbaoResolution": "full-res",
+      "thinGapProxy": 0.009038516106457593,
+      "edgeBleedProxy": 0.015766221368352974,
+      "stripeScore": 0.16257858460077107,
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ],
+      "status": "complete",
+      "missing": []
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-velocity-internal-full-res-product-ao",
+      "view": "ao",
+      "output": "product",
+      "vbaoResolution": "full-res",
+      "thinGapProxy": 0.009038516106457593,
+      "edgeBleedProxy": 0.015766221368352974,
+      "stripeScore": 0.16257858460077107,
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ],
+      "status": "complete",
+      "missing": []
+    }
+  ]
+}

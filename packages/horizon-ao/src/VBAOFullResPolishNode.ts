@@ -35,6 +35,7 @@ import { VBAOEffectPass } from './VBAOEffectPass'
 export interface VBAOFullResPolishNodeOptions {
   readonly enabled?: boolean
   readonly strength?: number
+  readonly confidenceNode?: TextureNode | undefined
 }
 
 const POISSON8 = Object.freeze([
@@ -76,6 +77,7 @@ export class VBAOFullResPolishNode extends VBAOEffectPass {
   readonly normalNode: SampleableNode
   readonly camera: Camera
   readonly radiusNode: Node
+  readonly confidenceNode: TextureNode | undefined
   readonly strengthUniform = uniform(1)
   updateBeforeType = NodeUpdateType.FRAME
 
@@ -101,6 +103,7 @@ export class VBAOFullResPolishNode extends VBAOEffectPass {
     this.normalNode = normalNode as SampleableNode
     this.camera = camera
     this.radiusNode = radiusNode
+    this.confidenceNode = options.confidenceNode
     this.enabled = options.enabled ?? true
     this.strength = clamp01(options.strength ?? 1)
     this.strengthUniform.value = this.strength
@@ -135,6 +138,7 @@ export class VBAOFullResPolishNode extends VBAOEffectPass {
 
     const uvNode = uv()
     const aoNode = this.aoNode as any
+    const confidence = this.confidenceNode as any
     const depthNode = this.depthNode as any
     const normalNode = this.normalNode as any
 
@@ -153,6 +157,9 @@ export class VBAOFullResPolishNode extends VBAOEffectPass {
       const aoSize = vec2((textureSize as any)(aoNode, 0) as any).toVar('vbaoFullResPolishAoSize')
       const texelSize = vec2(1).div(aoSize).toVar('vbaoFullResPolishTexelSize')
       const centerAo = aoNode.sample(uvNode).r.toVar('vbaoFullResPolishCenterAo')
+      const centerConfidence = (confidence === undefined ? float(1) : confidence.sample(uvNode).g)
+        .clamp(0, 1)
+        .toVar('vbaoFullResPolishCenterConfidence')
       const centerDepth = sampleDepth(uvNode).toVar('vbaoFullResPolishCenterDepth')
       const centerNormal = sampleNormal(uvNode).toVar('vbaoFullResPolishCenterNormal')
       const centerPosition = getViewPosition(
@@ -237,15 +244,18 @@ export class VBAOFullResPolishNode extends VBAOEffectPass {
       })
 
       const meanAo = weightedAo.div(max(totalWeight, float(1e-6))).toVar('vbaoFullResPolishMeanAo')
+      const confidenceGuidedStrength = this.strengthUniform
+        .mul(float(1).sub(centerConfidence))
+        .toVar('vbaoFullResPolishConfidenceGuidedStrength')
       const expand = float(0.025)
-        .add(float(0.075).mul(this.strengthUniform))
+        .add(float(0.075).mul(confidenceGuidedStrength))
         .toVar('vbaoFullResPolishClampExpand')
       const clampedPolishAo = clamp(meanAo, minAo.sub(expand), maxAo.add(expand)).toVar(
         'clampedPolishAo',
       )
       const filteredAo = centerAo
-        .mul(float(1).sub(this.strengthUniform))
-        .add(clampedPolishAo.mul(this.strengthUniform))
+        .mul(float(1).sub(confidenceGuidedStrength))
+        .add(clampedPolishAo.mul(confidenceGuidedStrength))
         .toVar('vbaoFullResPolishFilteredAo')
       return centerValid.select(filteredAo, centerAo)
     })

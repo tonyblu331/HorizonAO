@@ -51,6 +51,37 @@ The next work must improve three things in this order:
 3. **Product polish:** make denoise edge-aware and confidence-aware, but keep it
    internal behind `getTextureNode()`.
 
+## 2026-06-05 Update: Product-Quality Matrix Gate
+
+The `vbao-product-quality-hardening-10x` SDD freezes the next gate as a
+candidate/control matrix, not a feature expansion.
+
+Current decision refinements:
+
+- confidence-guided reconstruction remains a private candidate, not public API;
+- `scalar-control`, same-cost raw samples, and full-res product are controls;
+- `compute-off-control` and `temporal-off-baseline` are matrix axes, not
+  independently promotable product lanes;
+- `compute-smoke-observability` is observability-only;
+- `velocity-internal-private` is private-only temporal evidence;
+- reference-only directional buckets remain outside the scalar product surface.
+
+Captured continuity evidence still labels the candidate with `noise` and
+`edge-bleed`, and all product promotion remains blocked by missing reference
+observations. Reports that predate the product-quality matrix section must be
+regenerated before they support release decisions.
+
+The next implementation slice is therefore:
+
+1. regenerate matrix-aware reports;
+2. attach required fixture observations;
+3. capture the same-cost rows at required resolutions;
+4. only then choose `try-sampling`, `try-edge-metadata`, `keep-control`,
+   `reject-current-candidates`, or `promote-private-candidate`.
+
+Do not jump to temporal, compute, edge metadata, public API changes, or release
+README/EVIDENCE claims from the current evidence shape.
+
 ## Candid Quality Position
 
 ### Why N8AO looks different

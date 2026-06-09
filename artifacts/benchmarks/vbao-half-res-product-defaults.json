@@ -1,0 +1,2838 @@
+{
+  "generatedAt": "2026-06-04T12:08:54.388Z",
+  "baseUrl": "http://127.0.0.1:5173",
+  "scenes": [
+    "museum"
+  ],
+  "resolutions": [
+    {
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "width": 1280,
+      "height": 720
+    }
+  ],
+  "passTimingSampleCount": 10,
+  "note": "Production-only local capture. This is not a formal EVIDENCE.md claim unless copied into EVIDENCE.md with timings review.",
+  "referenceGate": {
+    "basis": "Product AO rows must provide fixture observations before they can be compared against the ray-cast and canonical reports.",
+    "productRows": [
+      {
+        "label": "1920x1080-museum-vbao-product-preset-off-half-res-raw-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1920x1080-museum-vbao-product-preset-off-half-res-cleanup-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1920x1080-museum-vbao-product-preset-off-half-res-resolve-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1920x1080-museum-vbao-product-preset-off-half-res-polish-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1920x1080-museum-vbao-product-preset-off-half-res-final-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1920x1080-museum-vbao-product-preset-off-half-res-reconstruction-gate-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1920x1080-museum-vbao-product-preset-off-full-res-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1280x720-museum-vbao-product-preset-off-half-res-raw-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1280x720-museum-vbao-product-preset-off-half-res-cleanup-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1280x720-museum-vbao-product-preset-off-half-res-resolve-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1280x720-museum-vbao-product-preset-off-half-res-polish-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1280x720-museum-vbao-product-preset-off-half-res-final-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1280x720-museum-vbao-product-preset-off-half-res-reconstruction-gate-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      },
+      {
+        "label": "1280x720-museum-vbao-product-preset-off-full-res-product-ao",
+        "algorithm": "vbao",
+        "output": "product",
+        "observedFixtureCount": 0,
+        "status": "missing-reference-observation"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "label": "1920x1080-museum-vbao-product-preset-off-half-res-raw-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": false,
+      "vbaoResolution": "half-res",
+      "vbaoReconstructionStage": "raw",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 0.7999999998137355,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.316864,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (960x540)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "missing",
+          "gpuMs": null,
+          "reason": "Expected pass did not emit a WebGPU timestamp for this graph."
+        },
+        {
+          "pass": "resolve",
+          "status": "missing",
+          "gpuMs": null,
+          "reason": "Expected pass did not emit a WebGPU timestamp for this graph."
+        },
+        {
+          "pass": "polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the configured softness budget does not fund full-resolution polish in this graph."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.316864,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 0.7999999998137355,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 76,
+          "y0": 129,
+          "x1": 1574,
+          "y1": 928
+        },
+        "meanLuma": 0.8608945150260773,
+        "stdLuma": 0.05732389727994622,
+        "patternNoiseScore": 0.012996172373496725,
+        "stripeScore": 0.13876599677457357,
+        "horizontalStripeScore": 0.07463576676097206,
+        "verticalStripeScore": 0.13876599677457357,
+        "directionalAnisotropy": 0.0026289653349804726,
+        "edgeBleedProxy": 0.006031702493184806,
+        "thinGapPreservationProxy": 0.0040695750958702525,
+        "meanAbsDx": 0.0032389962208878003,
+        "meanAbsDy": 0.003256071528850211,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1920x1080-museum-vbao-product-preset-off-half-res-raw-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": false,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 0.7999999998137355,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "raw",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "devicePixelRatio": 1,
+        "fps": 898.2035928043531,
+        "frameMs": 1.113333333345751,
+        "avgFrameMs": 1.113333333345751,
+        "medianFrameMs": 1.1000000005587935,
+        "p95FrameMs": 1.400000000372529,
+        "reportIndex": 4,
+        "sampleCount": 30,
+        "timestamp": 3928.7000000001863
+      },
+      "failureLabels": [
+        "noise",
+        "false-curvature",
+        "scale-mismatch"
+      ]
+    },
+    {
+      "label": "1920x1080-museum-vbao-product-preset-off-half-res-cleanup-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": false,
+      "vbaoResolution": "half-res",
+      "vbaoReconstructionStage": "cleanup",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 0.7999999998137355,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.429504,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (960x540)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "measured",
+          "gpuMs": 0.129024,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.HalfResCleanup (960x540)."
+        },
+        {
+          "pass": "resolve",
+          "status": "missing",
+          "gpuMs": null,
+          "reason": "Expected pass did not emit a WebGPU timestamp for this graph."
+        },
+        {
+          "pass": "polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the configured softness budget does not fund full-resolution polish in this graph."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.5585280000000001,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 0.7999999998137355,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 76,
+          "y0": 129,
+          "x1": 1574,
+          "y1": 928
+        },
+        "meanLuma": 0.8339222017642195,
+        "stdLuma": 0.10186806567673566,
+        "patternNoiseScore": 0.049142953177516414,
+        "stripeScore": 0.0740572708312819,
+        "horizontalStripeScore": 0.0740572708312819,
+        "verticalStripeScore": 0.05713865257163711,
+        "directionalAnisotropy": 0.03281517698860523,
+        "edgeBleedProxy": 0.03218826080873841,
+        "thinGapPreservationProxy": 0.01969234905410953,
+        "meanAbsDx": 0.014008511378828241,
+        "meanAbsDy": 0.014959088288858441,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1920x1080-museum-vbao-product-preset-off-half-res-cleanup-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": false,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 0.7999999998137355,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "cleanup",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "devicePixelRatio": 1,
+        "fps": 1060.0706714199548,
+        "frameMs": 0.9433333332960804,
+        "avgFrameMs": 0.9433333332960804,
+        "medianFrameMs": 0.900000000372529,
+        "p95FrameMs": 1.2999999998137355,
+        "reportIndex": 8,
+        "sampleCount": 30,
+        "timestamp": 5946.700000000186
+      },
+      "failureLabels": [
+        "noise",
+        "false-curvature",
+        "scale-mismatch"
+      ]
+    },
+    {
+      "label": "1920x1080-museum-vbao-product-preset-off-half-res-resolve-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": false,
+      "vbaoResolution": "half-res",
+      "vbaoReconstructionStage": "resolve",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 0.7999999998137355,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.123328,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (960x540)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "measured",
+          "gpuMs": 0.16384,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.HalfResCleanup (960x540)."
+        },
+        {
+          "pass": "resolve",
+          "status": "measured",
+          "gpuMs": 0.149504,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Resolve (1920x1080)."
+        },
+        {
+          "pass": "polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the configured softness budget does not fund full-resolution polish in this graph."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.4366720000000002,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 0.7999999998137355,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 76,
+          "y0": 129,
+          "x1": 1574,
+          "y1": 928
+        },
+        "meanLuma": 0.8357345243680627,
+        "stdLuma": 0.0969319107457114,
+        "patternNoiseScore": 0.03319804499740667,
+        "stripeScore": 0.08971974378553343,
+        "horizontalStripeScore": 0.08971974378553343,
+        "verticalStripeScore": 0.07432028313911233,
+        "directionalAnisotropy": 0.05801846251671888,
+        "edgeBleedProxy": 0.026944210129493454,
+        "thinGapPreservationProxy": 0.01032597778283641,
+        "meanAbsDx": 0.008536401445648026,
+        "meanAbsDy": 0.009587948355208948,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1920x1080-museum-vbao-product-preset-off-half-res-resolve-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": false,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 0.7999999998137355,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "resolve",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "devicePixelRatio": 1,
+        "fps": 1235.0597609745057,
+        "frameMs": 0.8096774193428217,
+        "avgFrameMs": 0.8096774193428217,
+        "medianFrameMs": 0.7999999998137355,
+        "p95FrameMs": 1.099999999627471,
+        "reportIndex": 12,
+        "sampleCount": 31,
+        "timestamp": 7981.9000000003725
+      },
+      "failureLabels": [
+        "noise",
+        "false-curvature",
+        "scale-mismatch"
+      ]
+    },
+    {
+      "label": "1920x1080-museum-vbao-product-preset-off-half-res-polish-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": false,
+      "vbaoResolution": "half-res",
+      "vbaoReconstructionStage": "polish",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 0.7999999998137355,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.086464,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (960x540)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "measured",
+          "gpuMs": 0.172032,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.HalfResCleanup (960x540)."
+        },
+        {
+          "pass": "resolve",
+          "status": "measured",
+          "gpuMs": 0.1536,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Resolve (1920x1080)."
+        },
+        {
+          "pass": "polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the configured softness budget does not fund full-resolution polish in this graph."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.412096,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 0.7999999998137355,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 76,
+          "y0": 129,
+          "x1": 1574,
+          "y1": 928
+        },
+        "meanLuma": 0.8357345243680627,
+        "stdLuma": 0.0969319107457114,
+        "patternNoiseScore": 0.03319804499740667,
+        "stripeScore": 0.08971974378553343,
+        "horizontalStripeScore": 0.08971974378553343,
+        "verticalStripeScore": 0.07432028313911233,
+        "directionalAnisotropy": 0.05801846251671888,
+        "edgeBleedProxy": 0.026944210129493454,
+        "thinGapPreservationProxy": 0.01032597778283641,
+        "meanAbsDx": 0.008536401445648026,
+        "meanAbsDy": 0.009587948355208948,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1920x1080-museum-vbao-product-preset-off-half-res-polish-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": false,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 0.7999999998137355,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "polish",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "devicePixelRatio": 1,
+        "fps": 1195.2191235237153,
+        "frameMs": 0.836666666654249,
+        "avgFrameMs": 0.836666666654249,
+        "medianFrameMs": 0.7999999998137355,
+        "p95FrameMs": 1.099999999627471,
+        "reportIndex": 17,
+        "sampleCount": 30,
+        "timestamp": 10483.700000000186
+      },
+      "failureLabels": [
+        "noise",
+        "false-curvature",
+        "scale-mismatch"
+      ]
+    },
+    {
+      "label": "1920x1080-museum-vbao-product-preset-off-half-res-final-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": false,
+      "vbaoResolution": "half-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 0.7999999998137355,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.477632,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (960x540)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "measured",
+          "gpuMs": 0.149504,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.HalfResCleanup (960x540)."
+        },
+        {
+          "pass": "resolve",
+          "status": "measured",
+          "gpuMs": 0.242688,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Resolve (1920x1080)."
+        },
+        {
+          "pass": "polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the configured softness budget does not fund full-resolution polish in this graph."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.8698240000000002,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 0.7999999998137355,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 76,
+          "y0": 129,
+          "x1": 1574,
+          "y1": 928
+        },
+        "meanLuma": 0.8608849740546359,
+        "stdLuma": 0.05715341881001781,
+        "patternNoiseScore": 0.011657061703509358,
+        "stripeScore": 0.15391308573211193,
+        "horizontalStripeScore": 0.08077492537881957,
+        "verticalStripeScore": 0.15391308573211193,
+        "directionalAnisotropy": 0.0060368174395825985,
+        "edgeBleedProxy": 0.005144481827661716,
+        "thinGapPreservationProxy": 0.0021368669849506573,
+        "meanAbsDx": 0.0018868921171675279,
+        "meanAbsDy": 0.001909812127565067,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1920x1080-museum-vbao-product-preset-off-half-res-final-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": false,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 0.7999999998137355,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "devicePixelRatio": 1,
+        "fps": 1075.2688171181574,
+        "frameMs": 0.9300000000745058,
+        "avgFrameMs": 0.9300000000745058,
+        "medianFrameMs": 0.900000000372529,
+        "p95FrameMs": 1.1000000005587935,
+        "reportIndex": 21,
+        "sampleCount": 30,
+        "timestamp": 12502.099999999627
+      },
+      "failureLabels": [
+        "noise",
+        "false-curvature",
+        "scale-mismatch"
+      ]
+    },
+    {
+      "label": "1920x1080-museum-vbao-product-preset-off-half-res-reconstruction-gate-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": false,
+      "vbaoResolution": "half-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 0.7999999998137355,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.477632,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (960x540)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "measured",
+          "gpuMs": 0.149504,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.HalfResCleanup (960x540)."
+        },
+        {
+          "pass": "resolve",
+          "status": "measured",
+          "gpuMs": 0.242688,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Resolve (1920x1080)."
+        },
+        {
+          "pass": "polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the configured softness budget does not fund full-resolution polish in this graph."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.8698240000000002,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 0.7999999998137355,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 76,
+          "y0": 129,
+          "x1": 1574,
+          "y1": 928
+        },
+        "meanLuma": 0.8608849740546359,
+        "stdLuma": 0.05715341881001781,
+        "patternNoiseScore": 0.011657061703509358,
+        "stripeScore": 0.15391308573211193,
+        "horizontalStripeScore": 0.08077492537881957,
+        "verticalStripeScore": 0.15391308573211193,
+        "directionalAnisotropy": 0.0060368174395825985,
+        "edgeBleedProxy": 0.005144481827661716,
+        "thinGapPreservationProxy": 0.0021368669849506573,
+        "meanAbsDx": 0.0018868921171675279,
+        "meanAbsDy": 0.001909812127565067,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1920x1080-museum-vbao-product-preset-off-half-res-final-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": false,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 0.7999999998137355,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "devicePixelRatio": 1,
+        "fps": 1075.2688171181574,
+        "frameMs": 0.9300000000745058,
+        "avgFrameMs": 0.9300000000745058,
+        "medianFrameMs": 0.900000000372529,
+        "p95FrameMs": 1.1000000005587935,
+        "reportIndex": 21,
+        "sampleCount": 30,
+        "timestamp": 12502.099999999627
+      },
+      "failureLabels": [
+        "noise",
+        "false-curvature",
+        "scale-mismatch"
+      ],
+      "reconstructionStages": [
+        {
+          "stage": "raw",
+          "failureLabels": [
+            "noise",
+            "false-curvature",
+            "scale-mismatch"
+          ],
+          "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1920x1080-museum-vbao-product-preset-off-half-res-raw-product-ao.png",
+          "qualityMetrics": {
+            "crop": {
+              "x0": 76,
+              "y0": 129,
+              "x1": 1574,
+              "y1": 928
+            },
+            "meanLuma": 0.8608945150260773,
+            "stdLuma": 0.05732389727994622,
+            "patternNoiseScore": 0.012996172373496725,
+            "stripeScore": 0.13876599677457357,
+            "horizontalStripeScore": 0.07463576676097206,
+            "verticalStripeScore": 0.13876599677457357,
+            "directionalAnisotropy": 0.0026289653349804726,
+            "edgeBleedProxy": 0.006031702493184806,
+            "thinGapPreservationProxy": 0.0040695750958702525,
+            "meanAbsDx": 0.0032389962208878003,
+            "meanAbsDy": 0.003256071528850211,
+            "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+          }
+        },
+        {
+          "stage": "cleanup",
+          "failureLabels": [
+            "noise",
+            "false-curvature",
+            "scale-mismatch"
+          ],
+          "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1920x1080-museum-vbao-product-preset-off-half-res-cleanup-product-ao.png",
+          "qualityMetrics": {
+            "crop": {
+              "x0": 76,
+              "y0": 129,
+              "x1": 1574,
+              "y1": 928
+            },
+            "meanLuma": 0.8339222017642195,
+            "stdLuma": 0.10186806567673566,
+            "patternNoiseScore": 0.049142953177516414,
+            "stripeScore": 0.0740572708312819,
+            "horizontalStripeScore": 0.0740572708312819,
+            "verticalStripeScore": 0.05713865257163711,
+            "directionalAnisotropy": 0.03281517698860523,
+            "edgeBleedProxy": 0.03218826080873841,
+            "thinGapPreservationProxy": 0.01969234905410953,
+            "meanAbsDx": 0.014008511378828241,
+            "meanAbsDy": 0.014959088288858441,
+            "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+          }
+        },
+        {
+          "stage": "resolve",
+          "failureLabels": [
+            "noise",
+            "false-curvature",
+            "scale-mismatch"
+          ],
+          "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1920x1080-museum-vbao-product-preset-off-half-res-resolve-product-ao.png",
+          "qualityMetrics": {
+            "crop": {
+              "x0": 76,
+              "y0": 129,
+              "x1": 1574,
+              "y1": 928
+            },
+            "meanLuma": 0.8357345243680627,
+            "stdLuma": 0.0969319107457114,
+            "patternNoiseScore": 0.03319804499740667,
+            "stripeScore": 0.08971974378553343,
+            "horizontalStripeScore": 0.08971974378553343,
+            "verticalStripeScore": 0.07432028313911233,
+            "directionalAnisotropy": 0.05801846251671888,
+            "edgeBleedProxy": 0.026944210129493454,
+            "thinGapPreservationProxy": 0.01032597778283641,
+            "meanAbsDx": 0.008536401445648026,
+            "meanAbsDy": 0.009587948355208948,
+            "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+          }
+        },
+        {
+          "stage": "polish",
+          "failureLabels": [
+            "noise",
+            "false-curvature",
+            "scale-mismatch"
+          ],
+          "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1920x1080-museum-vbao-product-preset-off-half-res-polish-product-ao.png",
+          "qualityMetrics": {
+            "crop": {
+              "x0": 76,
+              "y0": 129,
+              "x1": 1574,
+              "y1": 928
+            },
+            "meanLuma": 0.8357345243680627,
+            "stdLuma": 0.0969319107457114,
+            "patternNoiseScore": 0.03319804499740667,
+            "stripeScore": 0.08971974378553343,
+            "horizontalStripeScore": 0.08971974378553343,
+            "verticalStripeScore": 0.07432028313911233,
+            "directionalAnisotropy": 0.05801846251671888,
+            "edgeBleedProxy": 0.026944210129493454,
+            "thinGapPreservationProxy": 0.01032597778283641,
+            "meanAbsDx": 0.008536401445648026,
+            "meanAbsDy": 0.009587948355208948,
+            "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+          }
+        },
+        {
+          "stage": "final",
+          "failureLabels": [
+            "noise",
+            "false-curvature",
+            "scale-mismatch"
+          ],
+          "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1920x1080-museum-vbao-product-preset-off-half-res-final-product-ao.png",
+          "qualityMetrics": {
+            "crop": {
+              "x0": 76,
+              "y0": 129,
+              "x1": 1574,
+              "y1": 928
+            },
+            "meanLuma": 0.8608849740546359,
+            "stdLuma": 0.05715341881001781,
+            "patternNoiseScore": 0.011657061703509358,
+            "stripeScore": 0.15391308573211193,
+            "horizontalStripeScore": 0.08077492537881957,
+            "verticalStripeScore": 0.15391308573211193,
+            "directionalAnisotropy": 0.0060368174395825985,
+            "edgeBleedProxy": 0.005144481827661716,
+            "thinGapPreservationProxy": 0.0021368669849506573,
+            "meanAbsDx": 0.0018868921171675279,
+            "meanAbsDy": 0.001909812127565067,
+            "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+          }
+        }
+      ]
+    },
+    {
+      "label": "1920x1080-museum-vbao-product-preset-off-full-res-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": true,
+      "vbaoResolution": "full-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 0.8999999994412065,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 4.43392,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (1920x1080)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "resolve",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "polish",
+          "status": "measured",
+          "gpuMs": 0.31744,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.FullResPolish (1920x1080)."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 4.75136,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 0.8999999994412065,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 76,
+          "y0": 129,
+          "x1": 1574,
+          "y1": 928
+        },
+        "meanLuma": 0.8529508863108961,
+        "stdLuma": 0.08557125840364281,
+        "patternNoiseScore": 0.029711307474739986,
+        "stripeScore": 0.0677661468622801,
+        "horizontalStripeScore": 0.049720702720606066,
+        "verticalStripeScore": 0.0677661468622801,
+        "directionalAnisotropy": 0.01388514332640729,
+        "edgeBleedProxy": 0.017027266688891998,
+        "thinGapPreservationProxy": 0.009889367321731714,
+        "meanAbsDx": 0.013925287900753553,
+        "meanAbsDy": 0.014317442256921923,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1920x1080-museum-vbao-product-preset-off-full-res-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": true,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 0.8999999994412065,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "devicePixelRatio": 1,
+        "fps": 1119.402985121307,
+        "frameMs": 0.8933333332960804,
+        "avgFrameMs": 0.8933333332960804,
+        "medianFrameMs": 0.8999999994412065,
+        "p95FrameMs": 1.400000000372529,
+        "reportIndex": 26,
+        "sampleCount": 30,
+        "timestamp": 15004.400000000373
+      },
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-off-half-res-raw-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": false,
+      "vbaoResolution": "half-res",
+      "vbaoReconstructionStage": "raw",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 1,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 0.80896,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (640x360)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "missing",
+          "gpuMs": null,
+          "reason": "Expected pass did not emit a WebGPU timestamp for this graph."
+        },
+        {
+          "pass": "resolve",
+          "status": "missing",
+          "gpuMs": null,
+          "reason": "Expected pass did not emit a WebGPU timestamp for this graph."
+        },
+        {
+          "pass": "polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the configured softness budget does not fund full-resolution polish in this graph."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 0.80896,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.7936531639350887,
+        "stdLuma": 0.1692167702710614,
+        "patternNoiseScore": 0.05705078318166218,
+        "stripeScore": 0.20407136462196693,
+        "horizontalStripeScore": 0.2028766043606322,
+        "verticalStripeScore": 0.20407136462196693,
+        "directionalAnisotropy": 0.02420609965111566,
+        "edgeBleedProxy": 0.041852503587902594,
+        "thinGapPreservationProxy": 0.02993516982410205,
+        "meanAbsDx": 0.020148364820177594,
+        "meanAbsDy": 0.019195991412500397,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1280x720-museum-vbao-product-preset-off-half-res-raw-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": false,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "raw",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 923.0769231033748,
+        "frameMs": 1.0833333333022892,
+        "avgFrameMs": 1.0833333333022892,
+        "medianFrameMs": 1.099999999627471,
+        "p95FrameMs": 1.400000000372529,
+        "reportIndex": 4,
+        "sampleCount": 30,
+        "timestamp": 3099.4000000003725
+      },
+      "failureLabels": [
+        "noise",
+        "false-curvature",
+        "scale-mismatch"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-off-half-res-cleanup-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": false,
+      "vbaoResolution": "half-res",
+      "vbaoReconstructionStage": "cleanup",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 1,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.069056,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (640x360)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "measured",
+          "gpuMs": 0.145408,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.HalfResCleanup (640x360)."
+        },
+        {
+          "pass": "resolve",
+          "status": "missing",
+          "gpuMs": null,
+          "reason": "Expected pass did not emit a WebGPU timestamp for this graph."
+        },
+        {
+          "pass": "polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the configured softness budget does not fund full-resolution polish in this graph."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.214464,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.7942612815424864,
+        "stdLuma": 0.16788304038204874,
+        "patternNoiseScore": 0.052372234450591255,
+        "stripeScore": 0.2034690650939196,
+        "horizontalStripeScore": 0.2001493034070265,
+        "verticalStripeScore": 0.2034690650939196,
+        "directionalAnisotropy": 0.019757096374217763,
+        "edgeBleedProxy": 0.039049366959532386,
+        "thinGapPreservationProxy": 0.025606692950045508,
+        "meanAbsDx": 0.017438947654905772,
+        "meanAbsDy": 0.016763212284771165,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1280x720-museum-vbao-product-preset-off-half-res-cleanup-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": false,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "cleanup",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 1000.000000031044,
+        "frameMs": 0.9999999999689559,
+        "avgFrameMs": 0.9999999999689559,
+        "medianFrameMs": 0.8999999994412065,
+        "p95FrameMs": 1.7000000001862645,
+        "reportIndex": 8,
+        "sampleCount": 30,
+        "timestamp": 5117.600000000559
+      },
+      "failureLabels": [
+        "noise",
+        "false-curvature",
+        "scale-mismatch"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-off-half-res-resolve-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": false,
+      "vbaoResolution": "half-res",
+      "vbaoReconstructionStage": "resolve",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 1,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.164288,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (640x360)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "measured",
+          "gpuMs": 0.160768,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.HalfResCleanup (640x360)."
+        },
+        {
+          "pass": "resolve",
+          "status": "measured",
+          "gpuMs": 0.166912,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Resolve (1280x720)."
+        },
+        {
+          "pass": "polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the configured softness budget does not fund full-resolution polish in this graph."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.491968,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.7965410056150022,
+        "stdLuma": 0.16562831235508846,
+        "patternNoiseScore": 0.040813486844758204,
+        "stripeScore": 0.21924802808016383,
+        "horizontalStripeScore": 0.1947210643595431,
+        "verticalStripeScore": 0.21924802808016383,
+        "directionalAnisotropy": 0.011393284484654976,
+        "edgeBleedProxy": 0.03327387376156147,
+        "thinGapPreservationProxy": 0.015089193894634917,
+        "meanAbsDx": 0.012147925318520249,
+        "meanAbsDy": 0.01187423402320427,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1280x720-museum-vbao-product-preset-off-half-res-resolve-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": false,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "resolve",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 1086.956521680446,
+        "frameMs": 0.9200000000496705,
+        "avgFrameMs": 0.9200000000496705,
+        "medianFrameMs": 0.8999999994412065,
+        "p95FrameMs": 1.199999999254942,
+        "reportIndex": 12,
+        "sampleCount": 30,
+        "timestamp": 7119
+      },
+      "failureLabels": [
+        "noise",
+        "false-curvature",
+        "scale-mismatch"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-off-half-res-polish-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": false,
+      "vbaoResolution": "half-res",
+      "vbaoReconstructionStage": "polish",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 1,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 1.408,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (640x360)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "measured",
+          "gpuMs": 0.118784,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.HalfResCleanup (640x360)."
+        },
+        {
+          "pass": "resolve",
+          "status": "measured",
+          "gpuMs": 0.188416,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Resolve (1280x720)."
+        },
+        {
+          "pass": "polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the configured softness budget does not fund full-resolution polish in this graph."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.7151999999999998,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.8229810541589004,
+        "stdLuma": 0.1531311096338817,
+        "patternNoiseScore": 0.024018933280778084,
+        "stripeScore": 0.18573284598037174,
+        "horizontalStripeScore": 0.18573284598037174,
+        "verticalStripeScore": 0.1816196944074721,
+        "directionalAnisotropy": 0.08382879494451237,
+        "edgeBleedProxy": 0.01168495934545105,
+        "thinGapPreservationProxy": 0.0037052002934781104,
+        "meanAbsDx": 0.0029644143592858327,
+        "meanAbsDy": 0.003506896554936349,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1280x720-museum-vbao-product-preset-off-half-res-polish-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": false,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "polish",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 1255.2301255034474,
+        "frameMs": 0.7966666666790843,
+        "avgFrameMs": 0.7966666666790843,
+        "medianFrameMs": 0.7999999998137355,
+        "p95FrameMs": 1,
+        "reportIndex": 16,
+        "sampleCount": 30,
+        "timestamp": 9120.600000000559
+      },
+      "failureLabels": [
+        "noise",
+        "false-curvature",
+        "scale-mismatch"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-off-half-res-final-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": false,
+      "vbaoResolution": "half-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 1,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 0.840704,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (640x360)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "measured",
+          "gpuMs": 0.137216,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.HalfResCleanup (640x360)."
+        },
+        {
+          "pass": "resolve",
+          "status": "measured",
+          "gpuMs": 0.142336,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Resolve (1280x720)."
+        },
+        {
+          "pass": "polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the configured softness budget does not fund full-resolution polish in this graph."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.120256,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.7965410056150022,
+        "stdLuma": 0.16562831235508846,
+        "patternNoiseScore": 0.040813486844758204,
+        "stripeScore": 0.21924802808016383,
+        "horizontalStripeScore": 0.1947210643595431,
+        "verticalStripeScore": 0.21924802808016383,
+        "directionalAnisotropy": 0.011393284484654976,
+        "edgeBleedProxy": 0.03327387376156147,
+        "thinGapPreservationProxy": 0.015089193894634917,
+        "meanAbsDx": 0.012147925318520249,
+        "meanAbsDy": 0.01187423402320427,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1280x720-museum-vbao-product-preset-off-half-res-final-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": false,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 1463.414634212825,
+        "frameMs": 0.6833333333022893,
+        "avgFrameMs": 0.6833333333022893,
+        "medianFrameMs": 0.6999999992549419,
+        "p95FrameMs": 0.900000000372529,
+        "reportIndex": 20,
+        "sampleCount": 30,
+        "timestamp": 11138.400000000373
+      },
+      "failureLabels": [
+        "noise",
+        "false-curvature",
+        "scale-mismatch"
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-off-half-res-reconstruction-gate-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": false,
+      "vbaoResolution": "half-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 1,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 0.840704,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (640x360)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "measured",
+          "gpuMs": 0.137216,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.HalfResCleanup (640x360)."
+        },
+        {
+          "pass": "resolve",
+          "status": "measured",
+          "gpuMs": 0.142336,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Resolve (1280x720)."
+        },
+        {
+          "pass": "polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the configured softness budget does not fund full-resolution polish in this graph."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 1.120256,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.7965410056150022,
+        "stdLuma": 0.16562831235508846,
+        "patternNoiseScore": 0.040813486844758204,
+        "stripeScore": 0.21924802808016383,
+        "horizontalStripeScore": 0.1947210643595431,
+        "verticalStripeScore": 0.21924802808016383,
+        "directionalAnisotropy": 0.011393284484654976,
+        "edgeBleedProxy": 0.03327387376156147,
+        "thinGapPreservationProxy": 0.015089193894634917,
+        "meanAbsDx": 0.012147925318520249,
+        "meanAbsDy": 0.01187423402320427,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1280x720-museum-vbao-product-preset-off-half-res-final-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": false,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 1463.414634212825,
+        "frameMs": 0.6833333333022893,
+        "avgFrameMs": 0.6833333333022893,
+        "medianFrameMs": 0.6999999992549419,
+        "p95FrameMs": 0.900000000372529,
+        "reportIndex": 20,
+        "sampleCount": 30,
+        "timestamp": 11138.400000000373
+      },
+      "failureLabels": [
+        "noise",
+        "false-curvature",
+        "scale-mismatch"
+      ],
+      "reconstructionStages": [
+        {
+          "stage": "raw",
+          "failureLabels": [
+            "noise",
+            "false-curvature",
+            "scale-mismatch"
+          ],
+          "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1280x720-museum-vbao-product-preset-off-half-res-raw-product-ao.png",
+          "qualityMetrics": {
+            "crop": {
+              "x0": 51,
+              "y0": 86,
+              "x1": 1049,
+              "y1": 619
+            },
+            "meanLuma": 0.7936531639350887,
+            "stdLuma": 0.1692167702710614,
+            "patternNoiseScore": 0.05705078318166218,
+            "stripeScore": 0.20407136462196693,
+            "horizontalStripeScore": 0.2028766043606322,
+            "verticalStripeScore": 0.20407136462196693,
+            "directionalAnisotropy": 0.02420609965111566,
+            "edgeBleedProxy": 0.041852503587902594,
+            "thinGapPreservationProxy": 0.02993516982410205,
+            "meanAbsDx": 0.020148364820177594,
+            "meanAbsDy": 0.019195991412500397,
+            "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+          }
+        },
+        {
+          "stage": "cleanup",
+          "failureLabels": [
+            "noise",
+            "false-curvature",
+            "scale-mismatch"
+          ],
+          "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1280x720-museum-vbao-product-preset-off-half-res-cleanup-product-ao.png",
+          "qualityMetrics": {
+            "crop": {
+              "x0": 51,
+              "y0": 86,
+              "x1": 1049,
+              "y1": 619
+            },
+            "meanLuma": 0.7942612815424864,
+            "stdLuma": 0.16788304038204874,
+            "patternNoiseScore": 0.052372234450591255,
+            "stripeScore": 0.2034690650939196,
+            "horizontalStripeScore": 0.2001493034070265,
+            "verticalStripeScore": 0.2034690650939196,
+            "directionalAnisotropy": 0.019757096374217763,
+            "edgeBleedProxy": 0.039049366959532386,
+            "thinGapPreservationProxy": 0.025606692950045508,
+            "meanAbsDx": 0.017438947654905772,
+            "meanAbsDy": 0.016763212284771165,
+            "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+          }
+        },
+        {
+          "stage": "resolve",
+          "failureLabels": [
+            "noise",
+            "false-curvature",
+            "scale-mismatch"
+          ],
+          "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1280x720-museum-vbao-product-preset-off-half-res-resolve-product-ao.png",
+          "qualityMetrics": {
+            "crop": {
+              "x0": 51,
+              "y0": 86,
+              "x1": 1049,
+              "y1": 619
+            },
+            "meanLuma": 0.7965410056150022,
+            "stdLuma": 0.16562831235508846,
+            "patternNoiseScore": 0.040813486844758204,
+            "stripeScore": 0.21924802808016383,
+            "horizontalStripeScore": 0.1947210643595431,
+            "verticalStripeScore": 0.21924802808016383,
+            "directionalAnisotropy": 0.011393284484654976,
+            "edgeBleedProxy": 0.03327387376156147,
+            "thinGapPreservationProxy": 0.015089193894634917,
+            "meanAbsDx": 0.012147925318520249,
+            "meanAbsDy": 0.01187423402320427,
+            "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+          }
+        },
+        {
+          "stage": "polish",
+          "failureLabels": [
+            "noise",
+            "false-curvature",
+            "scale-mismatch"
+          ],
+          "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1280x720-museum-vbao-product-preset-off-half-res-polish-product-ao.png",
+          "qualityMetrics": {
+            "crop": {
+              "x0": 51,
+              "y0": 86,
+              "x1": 1049,
+              "y1": 619
+            },
+            "meanLuma": 0.8229810541589004,
+            "stdLuma": 0.1531311096338817,
+            "patternNoiseScore": 0.024018933280778084,
+            "stripeScore": 0.18573284598037174,
+            "horizontalStripeScore": 0.18573284598037174,
+            "verticalStripeScore": 0.1816196944074721,
+            "directionalAnisotropy": 0.08382879494451237,
+            "edgeBleedProxy": 0.01168495934545105,
+            "thinGapPreservationProxy": 0.0037052002934781104,
+            "meanAbsDx": 0.0029644143592858327,
+            "meanAbsDy": 0.003506896554936349,
+            "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+          }
+        },
+        {
+          "stage": "final",
+          "failureLabels": [
+            "noise",
+            "false-curvature",
+            "scale-mismatch"
+          ],
+          "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1280x720-museum-vbao-product-preset-off-half-res-final-product-ao.png",
+          "qualityMetrics": {
+            "crop": {
+              "x0": 51,
+              "y0": 86,
+              "x1": 1049,
+              "y1": 619
+            },
+            "meanLuma": 0.7965410056150022,
+            "stdLuma": 0.16562831235508846,
+            "patternNoiseScore": 0.040813486844758204,
+            "stripeScore": 0.21924802808016383,
+            "horizontalStripeScore": 0.1947210643595431,
+            "verticalStripeScore": 0.21924802808016383,
+            "directionalAnisotropy": 0.011393284484654976,
+            "edgeBleedProxy": 0.03327387376156147,
+            "thinGapPreservationProxy": 0.015089193894634917,
+            "meanAbsDx": 0.012147925318520249,
+            "meanAbsDy": 0.01187423402320427,
+            "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+          }
+        }
+      ]
+    },
+    {
+      "label": "1280x720-museum-vbao-product-preset-off-full-res-product-ao",
+      "backend": "webgpu",
+      "scene": "museum",
+      "resolution": {
+        "width": 1280,
+        "height": 720
+      },
+      "mode": "vbao",
+      "view": "ao",
+      "denoise": true,
+      "fullResolutionVbao": true,
+      "vbaoResolution": "full-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "product-preset",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "computeCandidateLabel": "sector-confidence-smoke",
+      "computeCandidateInventory": [
+        {
+          "name": "VBAO.ComputeCandidate.SectorConfidence",
+          "role": "sector-confidence-storage-texture",
+          "width": 1,
+          "height": 1
+        }
+      ],
+      "computeCandidateTiming": {
+        "pass": "sector-confidence-smoke",
+        "status": "measured",
+        "cpuMs": 1,
+        "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+      },
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 2.884608,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.Raw (1280x720)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "resolve",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "polish",
+          "status": "measured",
+          "gpuMs": 0.233472,
+          "reason": "Median WebGPU timestamp from 10 steady-state samples; render target VBAO.FullResPolish (1280x720)."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 3.11808,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        },
+        {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "gpuMs": null,
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 51,
+          "y0": 86,
+          "x1": 1049,
+          "y1": 619
+        },
+        "meanLuma": 0.8133439378956565,
+        "stdLuma": 0.16359152896078452,
+        "patternNoiseScore": 0.03699485180952312,
+        "stripeScore": 0.12702066063305323,
+        "horizontalStripeScore": 0.12702066063305323,
+        "verticalStripeScore": 0.11595844134013607,
+        "directionalAnisotropy": 0.03910752685435873,
+        "edgeBleedProxy": 0.025531267192743328,
+        "thinGapPreservationProxy": 0.011448813996732435,
+        "meanAbsDx": 0.014735222689746492,
+        "meanAbsDy": 0.015934645378859125,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-vbao-half-res-product-defaults\\1280x720-museum-vbao-product-preset-off-full-res-product-ao.png",
+      "latest": {
+        "scene": "museum",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "ao",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": true,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoComputeCandidateLabel": "sector-confidence-smoke",
+        "vbaoComputeCandidateInventory": [
+          {
+            "name": "VBAO.ComputeCandidate.SectorConfidence",
+            "role": "sector-confidence-storage-texture",
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "vbaoComputeCandidateTiming": {
+          "pass": "sector-confidence-smoke",
+          "status": "measured",
+          "cpuMs": 1,
+          "reason": "CPU-side renderer.compute() duration for the private sector-confidence smoke storage texture."
+        },
+        "vbaoSamplePreset": "quality",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 8,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 1280,
+          "height": 720
+        },
+        "devicePixelRatio": 1,
+        "fps": 1395.348837330188,
+        "frameMs": 0.7166666666045785,
+        "avgFrameMs": 0.7166666666045785,
+        "medianFrameMs": 0.7000000001862645,
+        "p95FrameMs": 1,
+        "reportIndex": 24,
+        "sampleCount": 30,
+        "timestamp": 13140.200000000186
+      },
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ]
+    }
+  ]
+}

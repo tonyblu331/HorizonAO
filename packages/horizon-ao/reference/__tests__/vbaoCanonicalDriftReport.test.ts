@@ -13,6 +13,7 @@ describe('VBAO canonical drift report', () => {
       'thin-separated',
       'thick-contact',
       'perspective-thickness',
+      'grazing-normal',
     ])
   })
 
@@ -39,6 +40,20 @@ describe('VBAO canonical drift report', () => {
     expect(report.summary.worstCaseId).toBeDefined()
   })
 
+  it('includes a non-axis-aligned fixture before slice-reduction changes', () => {
+    const row = evaluateVbaoCanonicalDriftCase(
+      VBAO_CANONICAL_DRIFT_CASES.find((testCase) => testCase.id === 'grazing-normal')!,
+    )
+
+    expect(row.caseId).toBe('grazing-normal')
+    expect(row.description).toContain('Non-axis-aligned normal')
+    expect(Number.isFinite(row.canonicalAccessibility)).toBe(true)
+    expect(Number.isFinite(row.productAccessibility)).toBe(true)
+    expect(row.canonicalAccessibility).toBeGreaterThan(0)
+    expect(row.productAccessibility).toBeGreaterThan(0)
+    expect(row.absDiff).toBe(0)
+  })
+
   it('formats markdown for evidence review', () => {
     const report = createVbaoCanonicalDriftReport({
       generatedAt: '2026-06-01T00:00:00.000Z',
@@ -48,6 +63,7 @@ describe('VBAO canonical drift report', () => {
     expect(markdown).toContain('# VBAO Canonical Drift Report')
     expect(markdown).toContain('| Case | Canonical | Product | Abs diff ↓ | Verdict |')
     expect(markdown).toContain('perspective-thickness')
+    expect(markdown).toContain('grazing-normal')
     expect(markdown).toContain('This report measures drift, not visual superiority.')
   })
 })

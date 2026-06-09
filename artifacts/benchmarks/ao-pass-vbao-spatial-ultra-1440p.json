@@ -1,0 +1,156 @@
+{
+  "generatedAt": "2026-06-04T11:52:00.367Z",
+  "baseUrl": "http://127.0.0.1:5241",
+  "scenes": [
+    "city"
+  ],
+  "resolutions": [
+    {
+      "width": 2560,
+      "height": 1440
+    }
+  ],
+  "passTimingSampleCount": 40,
+  "note": "Production-only local capture. This is not a formal EVIDENCE.md claim unless copied into EVIDENCE.md with timings review.",
+  "referenceGate": {
+    "basis": "Product AO rows must provide fixture observations before they can be compared against the ray-cast and canonical reports.",
+    "productRows": []
+  },
+  "rows": [
+    {
+      "label": "2560x1440-city-vbao-spatial-ultra-off-full-res-product-beauty",
+      "backend": "webgpu",
+      "scene": "city",
+      "resolution": {
+        "width": 2560,
+        "height": 1440
+      },
+      "mode": "vbao",
+      "view": "beauty",
+      "denoise": true,
+      "fullResolutionVbao": true,
+      "vbaoResolution": "full-res",
+      "vbaoReconstructionStage": "final",
+      "productOutputContract": "VBAONode.getTextureNode() final product AO with internal reconstruction/polish",
+      "sampling": "phase-atlas-stable-hash",
+      "sampleMode": "spatial-ultra",
+      "temporalMode": "off",
+      "hostTaaMode": "off",
+      "cleanupMode": "on",
+      "resolvePolishMode": "separate",
+      "vbaoSoftness": 0.45,
+      "temporalDiagnostics": null,
+      "temporalTargetInventory": null,
+      "temporalResetEvidenceReason": "n/a",
+      "motionEvidenceKind": "n/a",
+      "motionEvidenceSource": "n/a",
+      "passTimings": [
+        {
+          "pass": "raw",
+          "status": "measured",
+          "gpuMs": 5.808128,
+          "reason": "Median WebGPU timestamp from 40 steady-state samples; render target VBAO.Raw (2560x1440)."
+        },
+        {
+          "pass": "cleanup",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "resolve",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped for full-resolution output."
+        },
+        {
+          "pass": "polish",
+          "status": "measured",
+          "gpuMs": 0.318464,
+          "reason": "Median WebGPU timestamp from 40 steady-state samples; render target VBAO.FullResPolish (2560x1440)."
+        },
+        {
+          "pass": "resolve-polish",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because the default product graph keeps resolve and polish as separate passes."
+        },
+        {
+          "pass": "temporal",
+          "status": "skipped",
+          "gpuMs": null,
+          "reason": "Skipped because velocity-backed internal temporal is disabled."
+        },
+        {
+          "pass": "total-product",
+          "status": "derived",
+          "gpuMs": 6.126592,
+          "reason": "Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph."
+        }
+      ],
+      "qualityMetrics": {
+        "crop": {
+          "x0": 102,
+          "y0": 172,
+          "x1": 2099,
+          "y1": 1238
+        },
+        "meanLuma": 0.5802838854485532,
+        "stdLuma": 0.33858823643275837,
+        "patternNoiseScore": 0.07026547824021905,
+        "stripeScore": 0.10374767533644068,
+        "horizontalStripeScore": 0.08736306736296337,
+        "verticalStripeScore": 0.10374767533644068,
+        "directionalAnisotropy": 0.022697076089089635,
+        "edgeBleedProxy": 0.06673097429363017,
+        "thinGapPreservationProxy": 0.014667675746005682,
+        "meanAbsDx": 0.012514853572343368,
+        "meanAbsDy": 0.013096148433589862,
+        "basis": "Cropped screenshot luma; patternNoiseScore is cross-high-pass RMS, stripeScore is row/column residual coherence normalized by high-pass RMS, edgeBleedProxy is broad contrast beyond local edges, and thinGapPreservationProxy is narrow bright-line contrast."
+      },
+      "screenshotPath": "G:\\RWY37\\horizon-ao\\artifacts\\benchmarks\\screenshots-ao-pass-vbao-spatial-ultra-1440p\\2560x1440-city-vbao-spatial-ultra-off-full-res-product-beauty.png",
+      "latest": {
+        "scene": "city",
+        "rendererBackend": "webgpu",
+        "renderMode": "single",
+        "mode": "vbao",
+        "composeModes": [],
+        "viewMode": "beauty",
+        "denoiseEnabled": true,
+        "fullResolutionVbao": true,
+        "vbaoSamplingSchedule": "phase-atlas-stable-hash",
+        "vbaoNoiseSource": "phase-atlas-stable-hash",
+        "vbaoTemporalMode": "off",
+        "vbaoHostTaaMode": "off",
+        "vbaoCleanupMode": "on",
+        "vbaoResolvePolishMode": "separate",
+        "vbaoTemporalDiagnostics": null,
+        "vbaoTemporalTargetInventory": null,
+        "vbaoSamplePreset": "spatial-ultra",
+        "vbaoReconstructionStage": "final",
+        "vbaoSoftness": 0.2,
+        "vbaoRadius": 1.25,
+        "vbaoThickness": 0.25,
+        "vbaoSamples": 10,
+        "vbaoSlices": 4,
+        "viewport": {
+          "width": 2560,
+          "height": 1440
+        },
+        "devicePixelRatio": 1,
+        "fps": 288.73917227741606,
+        "frameMs": 3.463333333376795,
+        "avgFrameMs": 3.463333333376795,
+        "medianFrameMs": 3.400000000372529,
+        "p95FrameMs": 4.6000000005587935,
+        "reportIndex": 9,
+        "sampleCount": 30,
+        "timestamp": 9722.700000000186
+      },
+      "failureLabels": [
+        "noise",
+        "edge-bleed"
+      ]
+    }
+  ]
+}

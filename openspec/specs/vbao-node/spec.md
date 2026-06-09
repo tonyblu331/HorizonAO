@@ -8,7 +8,7 @@
 
 ### Requirement: Visibility-Bitmask Kernel Contract
 
-The production kernel SHALL use one coherent visibility-bitmask path with GT-VBAO corrections: axial slice directions, two-sided screen-space marching, one signed hemislice mask coordinate, sample-local thickness, cosine-measure CDF remapping, point-sample sector quantization, popcount accessibility reduction, and a uniform slice average after cosine-measure sectorization.
+The production kernel SHALL use one coherent visibility-bitmask path with GT-VBAO corrections: axial slice directions, two-sided screen-space marching, one signed hemislice mask coordinate, sample-local thickness, cosine-measure CDF remapping, point-sample sector quantization, popcount accessibility reduction, and projected-normal weighted slice accumulation after cosine-measure sectorization.
 
 #### Scenario: Axial slice directions match two-sided marching
 
@@ -26,13 +26,13 @@ The production kernel SHALL use one coherent visibility-bitmask path with GT-VBA
 - **AND** the horizon angles SHALL be remapped through the slice-local cosine-measure CDF before quantization
 - **AND** the interval SHALL use point-sample quantized sector treatment, not the old ceil-length sector range.
 
-#### Scenario: Cosine-measure masks reduce by popcount
+#### Scenario: Cosine-measure masks reduce by popcount and projected-normal slice weight
 
 - **GIVEN** the visibility-bitmask `M_i` and projected-normal angle `γ_i_norm`
 - **WHEN** per-slice accessibility is reduced
 - **THEN** the mask bits SHALL already represent equal chunks of cosine-weighted measure
 - **AND** the value SHALL be derived from `A_i = 1 − countOneBits(M_i)/32`
-- **AND** slices SHALL use a uniform slice average after cosine-measure sectorization
+- **AND** slices SHALL be weighted by the projected normal length for that slice
 - **AND** the production kernel SHALL NOT apply a second cosine-weighted sector loop after CDF remapping.
 
 #### Scenario: Sample-local thickness is perspective-correct
@@ -102,4 +102,20 @@ The package SHALL expose product AO through one public `VBAONode` product bounda
 
 ### Requirement: GTAONode-Shaped Public API
 
-`VBAONode` SHALL match `GTAONode`'s integration shape where the semantics overlap: depth/normal/camera + factory + `getTextureNode()` + `setSize()`. Public raw-pass options SHALL remain compact (`quality`, deprecated alias `preset`, `radius`, `thickness`, `strength`, `contrast`, `softness`, legacy aliases `scale`/`intensity`, `slices`, `samples`, `resolutionScale`) and SHALL NOT expose denoise, research, or debug gates. Extra smoothing is controlled by `softness` and implemented as internal pass-elision, not public pass composition.
+`VBAONode` SHALL match `GTAONode`'s integration shape where the semantics overlap: depth/normal/camera + factory + `getTextureNode()` + `setSize()`. Public product options SHALL remain compact (`quality`, deprecated alias `preset`, `radius`, `contact`, `strength`, `softness`, legacy alias `intensity`, and `advanced`). `contact` SHALL be the artist-facing finite-occluder prior and SHALL resolve to internal thickness. Low-level controls (`thickness`, `contrast`, `slices`, `samples`, `resolutionScale`) SHALL be available only as deprecated compatibility aliases or under `advanced`, and SHALL NOT be presented as peer product controls. `VBAONodeOptions` SHALL NOT expose denoise, temporal, research, debug, sector-count, mask, or directional output gates. Extra smoothing is controlled by `softness` and implemented as internal pass-elision, not public pass composition.
+
+#### Scenario: Contact maps to internal thickness
+
+- **GIVEN** callers provide `radius` and `contact`
+- **WHEN** `VBAONodeOptions` are resolved
+- **THEN** internal `thickness` SHALL be derived from the configured radius and clamped contact value
+- **AND** the product API SHALL treat `contact` as the primary finite-occluder/contact-density control
+- **AND** `advanced.thickness` or deprecated top-level `thickness` SHALL override the derived value only as an explicit low-level escape hatch.
+
+#### Scenario: Product quality presets are not all half-resolution
+
+- **GIVEN** callers select product `quality`
+- **WHEN** quality tier defaults are resolved
+- **THEN** `performance` MAY use half-resolution raw AO
+- **AND** `balanced` SHALL use a higher-than-half raw resolution
+- **AND** `quality` and `ultra` SHALL use full-resolution raw AO unless a later evidence gate changes the preset policy.

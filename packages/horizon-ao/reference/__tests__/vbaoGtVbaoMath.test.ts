@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  SECTOR_COUNT,
-  VBAO_THETA_MIN,
-  VBAO_THETA_STEP,
-} from '../../src/vbaoConstants'
+import { SECTOR_COUNT } from '../../src/vbaoConstants'
+import { VBAO_THETA_MIN, VBAO_THETA_STEP } from '../vbaoThetaConstants'
 import {
   buildGtVbaoPointSampleMask,
   buildGtVbaoSampleInterval,

@@ -5,7 +5,7 @@ import {
   NodeMaterial,
   NoColorSpace,
   QuadMesh,
-  RedFormat,
+  RGFormat,
   RenderTarget,
   RendererUtils,
   TempNode,
@@ -52,12 +52,15 @@ import {
   uv,
   vec2,
   vec3,
+  vec4,
   viewZToPerspectiveDepth,
 } from 'three/tsl'
 
 import {
+  VBAO_CONTACT_THICKNESS_RADIUS_RATIO,
   SECTOR_COUNT,
   VBAO_DEFAULTS,
+  VBAO_NEAR_SAMPLE_THICKNESS_RATIO,
   VBAO_QUALITY_TIERS,
   clampVbaoNodeOptions,
   type VBAONodeOptions,
@@ -120,20 +123,21 @@ export class VBAONode extends TempNode<'float'> {
 
   resolutionScale: number = VBAO_DEFAULTS.resolutionScale
   updateBeforeType = NodeUpdateType.FRAME
+  private contactValue: number = VBAO_DEFAULTS.contact
 
-  private readonly renderTarget = new RenderTarget(1, 1, {
+  private readonly rawEstimateTarget = new RenderTarget(1, 1, {
     depthBuffer: false,
-    format: RedFormat,
+    format: RGFormat,
     type: HalfFloatType,
   })
   private readonly material = new NodeMaterial()
-  private readonly textureNode: TextureNode
+  private readonly rawEstimateTextureNode: TextureNode
   private resolveNode?: VBAOResolveNode | undefined
   private halfCleanupNode?: VBAOHalfResCleanupNode | undefined
   private fullPolishNode?: VBAOFullResPolishNode | undefined
-  private outputTextureNode?: TextureNode
-  private outputGraphKey = ''
-  private outputGraphCreated = false
+  private productAoTextureNode?: TextureNode
+  private receiverProductGraphKey = ''
+  private receiverProductGraphCreated = false
   private rawLoopShape: VbaoRawLoopShape = {
     slices: VBAO_DEFAULTS.slices,
     samples: VBAO_DEFAULTS.samples,
@@ -157,13 +161,13 @@ export class VBAONode extends TempNode<'float'> {
     this.depthNode = depthNode as SampleableNode
     this.normalNode = normalNode as SampleableNode
     this.camera = camera
-    this.renderTarget.texture.name = 'VBAO.Raw'
-    this.renderTarget.texture.magFilter = NearestFilter
-    this.renderTarget.texture.minFilter = NearestFilter
-    this.renderTarget.texture.generateMipmaps = false
-    this.renderTarget.texture.colorSpace = NoColorSpace
+    this.rawEstimateTarget.texture.name = 'VBAO.Raw'
+    this.rawEstimateTarget.texture.magFilter = NearestFilter
+    this.rawEstimateTarget.texture.minFilter = NearestFilter
+    this.rawEstimateTarget.texture.generateMipmaps = false
+    this.rawEstimateTarget.texture.colorSpace = NoColorSpace
     this.material.name = 'VBAO'
-    this.textureNode = passTexture(this as never, this.renderTarget.texture)
+    this.rawEstimateTextureNode = passTexture(this as never, this.rawEstimateTarget.texture)
     this.cameraProjectionMatrix = uniform(camera.projectionMatrix)
     this.cameraProjectionMatrixInverse = uniform(camera.projectionMatrixInverse)
     this.cameraNear = reference('near', 'float', camera)
@@ -186,8 +190,10 @@ export class VBAONode extends TempNode<'float'> {
   configure(options: VBAONodeOptions): void {
     const qualityName = options.quality ?? options.preset
     const quality = qualityName === undefined ? undefined : VBAO_QUALITY_TIERS[qualityName]
+    const advanced = options.advanced ?? {}
     const fallback = {
       radius: this.radius.value,
+      contact: this.contactValue,
       thickness: this.thickness.value,
       strength: this.strength.value,
       contrast: this.contrast.value,
@@ -200,20 +206,34 @@ export class VBAONode extends TempNode<'float'> {
       ...(options.quality === undefined ? {} : { quality: options.quality }),
       ...(options.preset === undefined ? {} : { preset: options.preset }),
       radius: options.radius ?? fallback.radius,
-      thickness: options.thickness ?? fallback.thickness,
+      contact: options.contact ?? fallback.contact,
       strength: options.strength ?? options.intensity ?? fallback.strength,
-      contrast: options.contrast ?? options.scale ?? fallback.contrast,
       softness: options.softness ?? fallback.softness,
-      slices: options.slices ?? quality?.slices ?? fallback.slices,
-      samples: options.samples ?? quality?.samples ?? fallback.samples,
-      resolutionScale:
-        options.resolutionScale ?? quality?.resolutionScale ?? fallback.resolutionScale,
+      advanced: {
+        ...(() => {
+          const thickness =
+            advanced.thickness ??
+            options.thickness ??
+            (options.radius === undefined && options.contact === undefined
+              ? fallback.thickness
+              : undefined)
+          return thickness === undefined ? {} : { thickness }
+        })(),
+        contrast: advanced.contrast ?? options.contrast ?? options.scale ?? fallback.contrast,
+        slices: advanced.slices ?? options.slices ?? quality?.slices ?? fallback.slices,
+        samples: advanced.samples ?? options.samples ?? quality?.samples ?? fallback.samples,
+        resolutionScale:
+          advanced.resolutionScale ??
+          options.resolutionScale ??
+          quality?.resolutionScale ??
+          fallback.resolutionScale,
+      },
     } satisfies VBAONodeOptions
     const next = clampVbaoNodeOptions(mergedOptions)
     const nextLoopShape = this.resolveRawLoopShape(next)
 
     if (
-      this.outputGraphCreated &&
+      this.receiverProductGraphCreated &&
       (next.softness !== this.softness.value ||
         next.resolutionScale !== this.resolutionScale ||
         nextLoopShape.slices !== this.rawLoopShape.slices ||
@@ -225,6 +245,7 @@ export class VBAONode extends TempNode<'float'> {
     }
 
     this.radius.value = next.radius
+    this.contactValue = next.contact
     this.thickness.value = next.thickness
     this.strength.value = next.strength
     this.contrast.value = next.contrast
@@ -247,7 +268,11 @@ export class VBAONode extends TempNode<'float'> {
     return this.softness.value
   }
 
-  private getOrCreateHalfCleanupNode(input: TextureNode, strength: number): VBAOHalfResCleanupNode {
+  private getOrCreateHalfCleanupNode(
+    input: TextureNode,
+    strength: number,
+    confidenceNode: TextureNode,
+  ): VBAOHalfResCleanupNode {
     if (this.halfCleanupNode === undefined || this.halfCleanupNode.rawAoNode !== input) {
       this.halfCleanupNode?.dispose()
       this.halfCleanupNode = new VBAOHalfResCleanupNode(
@@ -260,6 +285,7 @@ export class VBAONode extends TempNode<'float'> {
           enabled: true,
           strength,
           resolutionScale: this.resolutionScale,
+          confidenceNode,
         },
       )
     } else {
@@ -288,7 +314,11 @@ export class VBAONode extends TempNode<'float'> {
     return this.resolveNode
   }
 
-  private getOrCreateFullPolishNode(input: TextureNode, strength: number): VBAOFullResPolishNode {
+  private getOrCreateFullPolishNode(
+    input: TextureNode,
+    strength: number,
+    confidenceNode: TextureNode,
+  ): VBAOFullResPolishNode {
     if (this.fullPolishNode === undefined || this.fullPolishNode.aoNode !== input) {
       this.fullPolishNode?.dispose()
       this.fullPolishNode = new VBAOFullResPolishNode(
@@ -300,6 +330,7 @@ export class VBAONode extends TempNode<'float'> {
         {
           enabled: true,
           strength,
+          confidenceNode,
         },
       )
     } else {
@@ -324,7 +355,7 @@ export class VBAONode extends TempNode<'float'> {
     this.fullPolishNode = undefined
   }
 
-  private currentOutputGraphKey(): string {
+  private currentReceiverProductGraphKey(): string {
     const cleanupStrength = this.lowResolutionCleanupStrength()
     const polishStrength = this.fullResolutionPolishStrength()
     return [
@@ -337,29 +368,39 @@ export class VBAONode extends TempNode<'float'> {
     ].join(':')
   }
 
-  private assertOutputGraphStable(): void {
-    if (!this.outputGraphCreated) return
+  private assertReceiverProductGraphStable(): void {
+    if (!this.receiverProductGraphCreated) return
 
-    const currentGraphKey = this.currentOutputGraphKey()
-    if (currentGraphKey === this.outputGraphKey) return
+    const currentGraphKey = this.currentReceiverProductGraphKey()
+    if (currentGraphKey === this.receiverProductGraphKey) return
 
     throw new Error(
       'VBAONode: softness and resolutionScale affect the pass graph and are construction-time only after getTextureNode(); create a new VBAONode or rebuild downstream pipelines.',
     )
   }
 
-  private rebuildOutputGraph(): void {
+  private rebuildReceiverProductGraph(): void {
     const cleanupStrength = this.lowResolutionCleanupStrength()
     const polishStrength = this.fullResolutionPolishStrength()
-    const graphKey = this.currentOutputGraphKey()
+    const graphKey = this.currentReceiverProductGraphKey()
 
-    if (graphKey === this.outputGraphKey && this.outputTextureNode !== undefined) return
+    if (graphKey === this.receiverProductGraphKey && this.productAoTextureNode !== undefined) return
 
-    let output: TextureNode = this.textureNode
+    let output: TextureNode = this.rawEstimateTextureNode
+    const usesConfidenceGuidedReconstruction = cleanupStrength > 0 || polishStrength > 0
+    // Confidence is folded into the raw pass (G channel of the RG raw target),
+    // so reconstruction reads it directly from the raw texture — no second march.
+    const confidenceTextureNode = usesConfidenceGuidedReconstruction
+      ? this.rawEstimateTextureNode
+      : undefined
 
     if (this.resolutionScale < 0.99) {
       if (cleanupStrength > 0) {
-        output = this.getOrCreateHalfCleanupNode(output, cleanupStrength).getTextureNode()
+        output = this.getOrCreateHalfCleanupNode(
+          output,
+          cleanupStrength,
+          confidenceTextureNode as TextureNode,
+        ).getTextureNode()
       } else {
         this.halfCleanupNode?.dispose()
         this.halfCleanupNode = undefined
@@ -371,35 +412,39 @@ export class VBAONode extends TempNode<'float'> {
     }
 
     if (polishStrength > 0) {
-      output = this.getOrCreateFullPolishNode(output, polishStrength).getTextureNode()
+      output = this.getOrCreateFullPolishNode(
+        output,
+        polishStrength,
+        confidenceTextureNode as TextureNode,
+      ).getTextureNode()
     } else {
       this.disposeFullPolishGraph()
     }
 
-    this.outputTextureNode = output
-    this.outputGraphKey = graphKey
+    this.productAoTextureNode = output
+    this.receiverProductGraphKey = graphKey
   }
 
   getTextureNode(): TextureNode {
-    this.assertOutputGraphStable()
-    this.rebuildOutputGraph()
-    this.outputGraphCreated = true
-    return this.outputTextureNode ?? this.textureNode
+    this.assertReceiverProductGraphStable()
+    this.rebuildReceiverProductGraph()
+    this.receiverProductGraphCreated = true
+    return this.productAoTextureNode ?? this.rawEstimateTextureNode
   }
 
   getRawTextureNode(): TextureNode {
-    return this.textureNode
+    return this.rawEstimateTextureNode
   }
 
   setSize(width: number, height: number): void {
-    this.assertOutputGraphStable()
+    this.assertReceiverProductGraphStable()
 
     const scaledWidth = Math.max(1, Math.round(this.resolutionScale * width))
     const scaledHeight = Math.max(1, Math.round(this.resolutionScale * height))
 
     this.sourceResolution.value.set(width, height)
     this.resolution.value.set(scaledWidth, scaledHeight)
-    this.renderTarget.setSize(scaledWidth, scaledHeight)
+    this.rawEstimateTarget.setSize(scaledWidth, scaledHeight)
   }
 
   updateBefore(frame: NodeFrame): boolean | undefined {
@@ -415,7 +460,7 @@ export class VBAONode extends TempNode<'float'> {
     quadMesh.name = 'VBAO'
 
     renderer.setClearColor(0xffffff, 1)
-    renderer.setRenderTarget(this.renderTarget)
+    renderer.setRenderTarget(this.rawEstimateTarget)
     quadMesh.render(renderer)
 
     if (this.temporalMode === 'host') {
@@ -586,13 +631,22 @@ export class VBAONode extends TempNode<'float'> {
         .select(cross(V, vec3(1, 0, 0)), cross(V, vec3(0, 1, 0)))
       const T0 = (normalize(tangentSeed as any) as any).toVar('T0')
       const T1 = (normalize(cross(V as any, T0 as any) as any) as any).toVar('T1')
-      const maxThickness = this.radius.mul(float(0.3)).toVar('vbaoMaxThickness')
+      const maxThickness = this.radius
+        .mul(float(VBAO_CONTACT_THICKNESS_RADIUS_RATIO))
+        .toVar('vbaoMaxThickness')
       const baseThickness = min(this.thickness, maxThickness).toVar('vbaoBaseThickness')
       const maxValidRadius = this.radius.add(baseThickness).toVar('vbaoMaxValidRadius')
       const maxValidRadius2 = maxValidRadius.mul(maxValidRadius).toVar('vbaoMaxValidRadius2')
       const safeTexel = vec2(0.5).div(this.sourceResolution).toVar('vbaoSafeTexel')
       const weightedAccessibility = float(0).toVar('weightedAccessibility')
       const weightSum = float(0).toVar('weightSum')
+      // Folded receiver-confidence accumulators (computed from the SAME march —
+      // no second estimator pass). Confidence = sqrt(receiverSupport * sliceAgreement).
+      const vbaoCandidateCount = float(0).toVar('vbaoCandidateCount')
+      const vbaoAcceptedCount = float(0).toVar('vbaoAcceptedCount')
+      const vbaoSliceCounter = float(0).toVar('vbaoSliceCounter')
+      const vbaoSliceMean = float(0).toVar('vbaoSliceMean')
+      const vbaoSliceM2 = float(0).toVar('vbaoSliceM2')
 
       ;(Loop as any)(
         { start: int(0), end: sliceLoopEnd, type: 'int', condition: '<' },
@@ -662,10 +716,19 @@ export class VBAONode extends TempNode<'float'> {
                       .and(sampleDist2.lessThanEqual(maxValidRadius2))
                       .and(sampleAlong.greaterThan(float(0)))
                       .toVar('sampleValid')
+                    // Confidence support: candidate = on-screen sample with valid depth;
+                    // accepted = candidate that also passed the full validity test.
+                    const vbaoCandidateSample = onScreen
+                      .and(sD.lessThan(float(1.0)))
+                      .and(sD.greaterThanEqual(float(0)))
+                      .toVar('vbaoCandidateSample')
+                    // Branchless accumulation (matches the kernel's select-not-branch contract).
+                    vbaoCandidateCount.addAssign((vbaoCandidateSample as any).select(float(1), float(0)))
+                    vbaoAcceptedCount.addAssign((sampleValid as any).select(float(1), float(0)))
                     const sampleDist = sqrt(max(sampleDist2, float(1e-8))).toVar('sampleDist')
                     const effectiveThickness = min(
                       baseThickness,
-                      sampleDist.mul(float(0.85)),
+                      sampleDist.mul(float(VBAO_NEAR_SAMPLE_THICKNESS_RATIO)),
                     ).toVar('effectiveThickness')
                     const D_front = sampleDelta.div(sampleDist).toVar('D_front')
                     const sampleViewLen = sqrt(max(dot(samplePos, samplePos), float(1e-8))).toVar(
@@ -716,8 +779,16 @@ export class VBAONode extends TempNode<'float'> {
           const sliceAccessibility = float(1)
             .sub(blockedSectors.div(float(SECTOR_COUNT)))
             .toVar('sliceAccessibility')
-          weightedAccessibility.addAssign(sliceAccessibility)
-          weightSum.addAssign(float(1))
+          weightedAccessibility.addAssign(sliceAccessibility.mul(NprojLen))
+          weightSum.addAssign(NprojLen)
+          // Welford online variance of per-slice accessibility → slice agreement.
+          vbaoSliceCounter.addAssign(float(1))
+          const vbaoSliceDelta = sliceAccessibility.sub(vbaoSliceMean).toVar('vbaoSliceDelta')
+          vbaoSliceMean.addAssign(vbaoSliceDelta.div(vbaoSliceCounter))
+          const vbaoSliceDeltaAfterMean = sliceAccessibility
+            .sub(vbaoSliceMean)
+            .toVar('vbaoSliceDeltaAfterMean')
+          vbaoSliceM2.addAssign(vbaoSliceDelta.mul(vbaoSliceDeltaAfterMean))
         },
       )
 
@@ -727,20 +798,40 @@ export class VBAONode extends TempNode<'float'> {
         float(1),
       ).toVar('accessibility')
       const contrastedAo = pow(accessibility, this.contrast)
-      return float(1).sub(float(1).sub(contrastedAo).mul(this.strength))
+      const vbaoAo = float(1)
+        .sub(float(1).sub(contrastedAo).mul(this.strength))
+        .toVar('vbaoAo')
+      // Receiver confidence folded into the G channel (R = AO).
+      const vbaoReceiverSupport = vbaoAcceptedCount
+        .div(max(vbaoCandidateCount, float(1e-6)))
+        .clamp(0, 1)
+        .toVar('vbaoReceiverSupport')
+      const vbaoSliceVariance = vbaoSliceM2
+        .div(max(vbaoSliceCounter, float(1)))
+        .toVar('vbaoSliceVariance')
+      const vbaoSliceStdDev = sqrt(max(vbaoSliceVariance, float(0))).toVar('vbaoSliceStdDev')
+      const vbaoSliceAgreement = clamp(
+        float(1).sub(vbaoSliceStdDev.div(float(0.5))),
+        float(0),
+        float(1),
+      ).toVar('vbaoSliceAgreement')
+      const vbaoConfidence = sqrt(vbaoReceiverSupport.mul(vbaoSliceAgreement))
+        .clamp(0, 1)
+        .toVar('vbaoConfidence')
+      return vec4(vbaoAo, vbaoConfidence, float(0), float(1))
     })
 
     this.material.fragmentNode = vbaoKernel().context(builder.getSharedContext())
     this.material.needsUpdate = true
 
-    return this.textureNode
+    return this.rawEstimateTextureNode
   }
 
   dispose(): void {
     this.resolveNode?.dispose()
     this.halfCleanupNode?.dispose()
     this.fullPolishNode?.dispose()
-    this.renderTarget.dispose()
+    this.rawEstimateTarget.dispose()
     this.material.dispose()
   }
 }

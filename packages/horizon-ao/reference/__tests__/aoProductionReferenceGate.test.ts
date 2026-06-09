@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { RAYCAST_AO_FIXTURES, evaluateRaycastAoReference } from '../aoRaycastReference'
 import {
+  AO_PRODUCTION_REFERENCE_REQUIRED_FIXTURE_IDS,
   createAoProductionReferenceGateReport,
   formatAoProductionReferenceGateMarkdown,
   type AoProductionReferenceGateInputRow,
@@ -8,37 +9,43 @@ import {
 
 const flatPlaneReference = evaluateRaycastAoReference(RAYCAST_AO_FIXTURES[0]!, 1024)
 const sphereReference = evaluateRaycastAoReference(RAYCAST_AO_FIXTURES[1]!, 1024)
+const fixtureById = Object.fromEntries(
+  RAYCAST_AO_FIXTURES.map((fixture) => [fixture.id, fixture]),
+) as Record<(typeof RAYCAST_AO_FIXTURES)[number]['id'], (typeof RAYCAST_AO_FIXTURES)[number]>
+
+function requiredFixtureObservations() {
+  return AO_PRODUCTION_REFERENCE_REQUIRED_FIXTURE_IDS.map((fixtureId) => ({
+    fixtureId,
+    accessibility: evaluateRaycastAoReference(fixtureById[fixtureId], 1024).accessibility,
+    source: 'gpu-readback' as const,
+  }))
+}
 
 describe('AO production reference gate', () => {
-  it('selects product AO rows for VBAO/GTAO/SSAO/N8AO and rejects non-product rows', () => {
+  it('selects comparable AO rows and rejects non-product non-VBAO rows', () => {
     const rows: AoProductionReferenceGateInputRow[] = [
       { label: 'vbao raw beauty', mode: 'vbao', view: 'beauty', denoise: false },
+      {
+        label: 'vbao raw ao',
+        mode: 'vbao',
+        view: 'ao',
+        denoise: false,
+        referenceObservations: requiredFixtureObservations(),
+      },
       { label: 'ssao raw ao', mode: 'ssao', view: 'ao', denoise: false },
       {
         label: 'vbao product ao',
         mode: 'vbao',
         view: 'ao',
         denoise: true,
-        referenceObservations: [
-          {
-            fixtureId: 'flat-plane-open',
-            accessibility: flatPlaneReference.accessibility,
-            source: 'gpu-readback',
-          },
-        ],
+        referenceObservations: requiredFixtureObservations(),
       },
       {
         label: 'gtao denoised ao',
         mode: 'gtao',
         view: 'ao',
         denoise: true,
-        referenceObservations: [
-          {
-            fixtureId: 'flat-plane-open',
-            accessibility: flatPlaneReference.accessibility,
-            source: 'gpu-readback',
-          },
-        ],
+        referenceObservations: requiredFixtureObservations(),
       },
       {
         label: 'n8ao filtered ao',
@@ -54,11 +61,13 @@ describe('AO production reference gate', () => {
     })
 
     expect(report.productRows.map((row) => row.label)).toEqual([
+      'vbao raw ao',
       'vbao product ao',
       'gtao denoised ao',
       'n8ao filtered ao',
     ])
     expect(report.productRows.map((row) => row.status)).toEqual([
+      'compared',
       'compared',
       'compared',
       'missing-reference-observation',
@@ -69,6 +78,32 @@ describe('AO production reference gate', () => {
     expect(report.raycastReport.summary.find((item) => item.algorithm === 'n8ao')?.verdict).toBe(
       'missing',
     )
+  })
+
+  it('keeps candidate-shaped product rows blocked by missing reference observations', () => {
+    const report = createAoProductionReferenceGateReport(
+      [
+        {
+          label: 'vbao confidence-guided candidate',
+          mode: 'vbao',
+          view: 'ao',
+          denoise: true,
+        },
+      ],
+      {
+        generatedAt: '2026-06-01T00:00:00.000Z',
+        sampleCount: 1024,
+      },
+    )
+
+    expect(report.productRows[0]).toMatchObject({
+      label: 'vbao confidence-guided candidate',
+      algorithm: 'vbao',
+      output: 'product',
+      observedFixtureCount: 0,
+      missingRequiredFixtureIds: AO_PRODUCTION_REFERENCE_REQUIRED_FIXTURE_IDS,
+      status: 'missing-reference-observation',
+    })
   })
 
   it('compares product observations against the ray-cast report', () => {
@@ -96,13 +131,123 @@ describe('AO production reference gate', () => {
     )
 
     const sphereRow = report.raycastReport.rows.find((row) => row.fixtureId === 'sphere-contact')
-    const vbaoCandidate = sphereRow?.candidates.find((candidate) => candidate.algorithm === 'vbao')
+    const vbaoCandidate = sphereRow?.candidates.find(
+      (candidate) => candidate.algorithm === 'vbao-product',
+    )
 
     expect(vbaoCandidate?.absError).toBeCloseTo(0.25, 12)
     expect(vbaoCandidate?.verdict).toBe('fail')
-    expect(report.raycastReport.summary.find((item) => item.algorithm === 'vbao')?.verdict).toBe(
-      'fail',
+    expect(
+      report.raycastReport.summary.find((item) => item.algorithm === 'vbao-product')?.verdict,
+    ).toBe('fail')
+    expect(report.productRows[0]?.status).toBe('missing-required-observation')
+    expect(report.productRows[0]?.missingRequiredFixtureIds).toContain('thin-gap-separated-slabs')
+  })
+
+  it('keeps raw and product VBAO fixture observations separate', () => {
+    const report = createAoProductionReferenceGateReport(
+      [
+        {
+          label: 'vbao raw ao',
+          mode: 'vbao',
+          view: 'ao',
+          denoise: false,
+          referenceObservations: [
+            {
+              fixtureId: 'sphere-contact',
+              accessibility: sphereReference.accessibility - 0.02,
+              source: 'gpu-readback',
+            },
+          ],
+        },
+        {
+          label: 'vbao product ao',
+          mode: 'vbao',
+          view: 'ao',
+          denoise: true,
+          referenceObservations: [
+            {
+              fixtureId: 'sphere-contact',
+              accessibility: sphereReference.accessibility - 0.2,
+              source: 'gpu-readback',
+            },
+          ],
+        },
+      ],
+      {
+        generatedAt: '2026-06-01T00:00:00.000Z',
+        sampleCount: 1024,
+        raycastThresholds: { warnAbsError: 0.05, failAbsError: 0.15 },
+      },
     )
+    const sphereRow = report.raycastReport.rows.find((row) => row.fixtureId === 'sphere-contact')
+
+    expect(sphereRow?.candidates.map((candidate) => candidate.algorithm)).toEqual([
+      'vbao-raw',
+      'vbao-product',
+    ])
+    expect(report.raycastReport.summary.find((item) => item.algorithm === 'vbao-raw')?.verdict)
+      .toBe('warn')
+    expect(
+      report.raycastReport.summary.find((item) => item.algorithm === 'vbao-product')?.verdict,
+    ).toBe('fail')
+  })
+
+  it('keeps absent required product observations visible as missing coverage', () => {
+    const report = createAoProductionReferenceGateReport(
+      [
+        {
+          label: 'vbao product ao',
+          mode: 'vbao',
+          view: 'ao',
+          denoise: true,
+          referenceObservations: [
+            {
+              fixtureId: 'flat-plane-open',
+              accessibility: flatPlaneReference.accessibility,
+              source: 'gpu-readback',
+            },
+          ],
+        },
+      ],
+      {
+        generatedAt: '2026-06-01T00:00:00.000Z',
+        sampleCount: 1024,
+      },
+    )
+
+    const vbaoSummary = report.raycastReport.summary.find(
+      (item) => item.algorithm === 'vbao-product',
+    )
+
+    expect(report.productRows[0]?.status).toBe('missing-required-observation')
+    expect(report.productRows[0]?.missingRequiredFixtureIds).toContain('box-contact')
+    expect(vbaoSummary?.missingFixtureIds).toContain('thin-gap-separated-slabs')
+    expect(vbaoSummary?.verdict).toBe('warn')
+  })
+
+  it('compares product rows only when every required release fixture is observed', () => {
+    const report = createAoProductionReferenceGateReport(
+      [
+        {
+          label: 'vbao product ao',
+          mode: 'vbao',
+          view: 'ao',
+          denoise: true,
+          referenceObservations: requiredFixtureObservations(),
+        },
+      ],
+      {
+        generatedAt: '2026-06-01T00:00:00.000Z',
+        sampleCount: 1024,
+      },
+    )
+
+    expect(report.productRows[0]?.status).toBe('compared')
+    expect(report.productRows[0]?.observedFixtureCount).toBe(
+      AO_PRODUCTION_REFERENCE_REQUIRED_FIXTURE_IDS.length,
+    )
+    expect(report.productRows[0]?.missingRequiredFixtureIds).toEqual([])
   })
 
   it('includes the canonical/product VBAO drift report beside the ray-cast gate', () => {
@@ -115,6 +260,7 @@ describe('AO production reference gate', () => {
       'thin-separated',
       'thick-contact',
       'perspective-thickness',
+      'grazing-normal',
     ])
     expect(report.canonicalVbaoDriftReport.summary.verdict).toBe('fail')
   })
@@ -143,7 +289,10 @@ describe('AO production reference gate', () => {
     const markdown = formatAoProductionReferenceGateMarkdown(report)
 
     expect(markdown).toContain('# AO Production Reference Gate')
-    expect(markdown).toContain('| vbao product ao | vbao | product | 1 | compared |')
+    expect(markdown).toContain(
+      '| vbao product ao | vbao | product | 1 | box-contact, two-wall-corner',
+    )
+    expect(markdown).toContain('| vbao-product | warn | 1 |')
     expect(markdown).toContain('# AO Reference Fixture Report')
     expect(markdown).toContain('# VBAO Canonical Drift Report')
     expect(markdown).toContain(

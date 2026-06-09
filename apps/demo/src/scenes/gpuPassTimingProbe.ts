@@ -48,6 +48,15 @@ function readFrame(uid: string): number {
   return frameMatch === null ? -1 : Number(frameMatch[1])
 }
 
+function shouldCaptureTimingLabel(label: string): boolean {
+  return (
+    label.startsWith('AO.PassTiming.') ||
+    label.startsWith('VBAO.') ||
+    label.startsWith('N8AO.') ||
+    label === 'GTAONode.AO'
+  )
+}
+
 export function createGpuPassTimingProbe(renderer: WebGPURenderer): {
   readonly resolveLatestVbaoPassTimings: () => Promise<readonly GpuPassTiming[]>
   readonly dispose: () => void
@@ -71,7 +80,7 @@ export function createGpuPassTimingProbe(renderer: WebGPURenderer): {
   backend.beginRender = function patchedBeginRender(this: unknown, renderContext: unknown) {
     const uid = backend.getTimestampUID?.(renderContext)
     const label = readTextureName(renderContext)
-    if (uid !== undefined && label.startsWith('VBAO.')) {
+    if (uid !== undefined && shouldCaptureTimingLabel(label)) {
       const contextRecord = asRecord(renderContext)
       contextByUid.set(uid, {
         frame: readFrame(uid),

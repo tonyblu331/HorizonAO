@@ -4,6 +4,369 @@ Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
 This file is the gate for later adaptive thickness, sampling, denoise, or depth
 hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
+## 2026-06-09 — VBAO vs independent ground-truth delta verifier (P1)
+
+Status: **first quantitative truth-vs-VBAO baseline committed; deterministic regression anchor**.
+
+Wired a delta verifier comparing the algorithm-independent ray-cast AO truth
+(`reference/aoRaycastReference.ts`, cosine-hemisphere rays vs analytic occluders) against a
+faithful VBAO *representation* estimate on the SAME geometry (slice × 32-sector visibility
+bitmask, cosine-weighted popcount) in `reference/vbaoGroundTruthDelta.ts`. View-independent;
+deterministic (no RNG) so it serves as a committed regression anchor. NOTE: this measures
+REPRESENTATION error (finite slices + 32-sector quantization), not the screen-space-achievable
+delta (a camera/heightfield reference, roadmap P1-B, still to build).
+
+Reproduce: `pnpm --filter @horizonao/core test -- reference/__tests__/vbaoGroundTruthDelta.test.ts`
+or `createVbaoGroundTruthDeltaReport()` (4 slices, 4096 truth rays).
+
+Baseline (RMSE 0.09938 · MAE 0.07045 · Max |Δ| 0.21678):
+
+| Fixture | Truth | VBAO repr | Δ (truth − vbao) |
+| --- | ---: | ---: | ---: |
+| flat-plane-open | 1.0000 | 1.0000 | 0.0000 |
+| sphere-contact | 0.8066 | 0.8469 | -0.0402 |
+| box-contact | 0.8120 | 0.8457 | -0.0337 |
+| two-wall-corner | 0.5710 | 0.7357 | **-0.1647** |
+| broad-wall-contact | 0.6768 | 0.7312 | -0.0544 |
+| thin-gap-separated-slabs | 0.8096 | 0.8457 | -0.0361 |
+| grazing-surface-wall | 0.6003 | 0.5122 | 0.0882 |
+| normal-sensitive-side-contact | 0.6736 | 0.4568 | **0.2168** |
+| far-object-outside-radius | 1.0000 | 1.0000 | 0.0000 |
+
+Findings (turn quality from vibes into numbers):
+
+- Contact cases (sphere/box/thin-gap): VBAO repr is slightly UNDER-occluded (~+0.03–0.04),
+  consistent with sector-center sampling missing thin occlusion — a P2/P3 quantization signal.
+- `two-wall-corner`: VBAO is materially too accessible (Δ −0.165) — under-occludes corners.
+- `normal-sensitive-side-contact` + `grazing-surface-wall`: VBAO OVER-occludes (Δ +0.22 / +0.09) —
+  the grazing / `normal^8` behavior, a concrete P3 target.
+- Future quality phases must hold or beat this RMSE; the test locks it deterministically.
+
+## 2026-06-08 — VBAO pass unification + half-res confidence reconciliation (P0)
+
+Status: **EffectPass unification WebGPU-validated; half-res benchmark green again**.
+
+`VBAOResolveNode` + `VBAOHalfResCleanupNode` now extend `VBAOEffectPass` (shared render
+target / material / renderer-state save+restore), removing per-node module-global renderer
+state and ~160 LOC of boilerplate. The demo's half-res reconstruction (MuseumScene) now feeds
+cleanup/polish the folded confidence from `vbaoNode.getRawTextureNode().g` instead of a
+standalone confidence node; the standalone `VBAOReceiverConfidenceNode` remains only as the
+diagnostic confidence-view oracle. Benchmark pass-timing model expects a separate confidence
+pass only for the diagnostic view.
+
+Command:
+
+```sh
+AO_BENCHMARK_SCENES=museum AO_BENCHMARK_MODES=vbao AO_BENCHMARK_VIEWS=ao AO_BENCHMARK_DENOISE_STATES=true AO_BENCHMARK_VBAO_RESOLUTION_STATES=half AO_BENCHMARK_PASS_TIMING_SAMPLES=3 AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_PORT=5322 AO_BENCHMARK_OUTPUT_JSON=artifacts/benchmarks/vbao-effectpass-unify-halfres.json AO_BENCHMARK_OUTPUT_MD=artifacts/benchmarks/vbao-effectpass-unify-halfres.md pnpm --filter @horizonao/demo benchmark:ao
+```
+
+| Resolution | View | Output | raw | confidence | cleanup | resolve | polish | total-product GPU ms |
+| --- | --- | --- | ---: | --- | ---: | ---: | --- | ---: |
+| 1920x1080 | ao | product (half-res) | 0.766 | skipped (folded) | 0.048 | 0.100 | skipped | 0.914 |
+
+Outcome:
+
+- EffectPass-unified `cleanup` and `resolve` passes render under WebGPU (measured timings, no
+  errors), confirming the pure-plumbing refactor is behavior-preserving on the half-res path.
+- `confidence` pass is `skipped` in the half-res product pipeline (folded into `raw`).
+- Boundary: per-pixel numeric equivalence of folded-G vs the diagnostic node is still a future check.
+
+## 2026-06-08 — VBAO receiver-confidence folded into raw RG pass (P0)
+
+Status: **product-path second march eliminated; WebGPU-validated; quality neutral**.
+
+The product reconstruction used to run `VBAOReceiverConfidenceNode` — a full second
+slice/sample march — whenever softness>0 or half-res. Confidence is now folded into the
+raw pass: target `RedFormat → RGFormat`, raw kernel emits `vec4(ao, confidence, 0, 1)`
+with `confidence = sqrt(receiverSupport · sliceAgreement)` computed from the SAME march
+(candidate/accepted counts + Welford variance over per-slice accessibility, no extra
+texture taps). Cleanup/polish read confidence from raw `.g`. The standalone node is kept
+only as the demo diagnostic confidence view (an independent oracle for the folded G).
+
+Commands:
+
+```sh
+AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_PORT=5311 pnpm --filter @horizonao/demo exec node scripts/collect-vbao-generated-shader-inspection.mjs
+AO_BENCHMARK_SCENES=museum AO_BENCHMARK_MODES=vbao AO_BENCHMARK_VIEWS=ao,beauty AO_BENCHMARK_DENOISE_STATES=true AO_BENCHMARK_VBAO_RESOLUTION_STATES=full AO_BENCHMARK_PASS_TIMING_SAMPLES=3 AO_BENCHMARK_REQUIRE_WEBGPU=1 AO_BENCHMARK_PORT=5314 AO_BENCHMARK_OUTPUT_JSON=artifacts/benchmarks/vbao-confidence-fold-validation.json AO_BENCHMARK_OUTPUT_MD=artifacts/benchmarks/vbao-confidence-fold-validation.md pnpm --filter @horizonao/demo benchmark:ao
+```
+
+Generated-shader inspection: **pass** — product-preset + spatial-ultra, 2 shader programs
+(no separate confidence program), fixed loop bounds, `vbaoDuplicateDeclarationWarnings: 0`,
+0 console diagnostics. Confirms the folded kernel is valid WGSL with no pass-shape regression.
+
+| Resolution | View | Output | raw GPU ms | confidence pass | polish GPU ms | total-product GPU ms | Pattern/noise ↓ | Stripe ↓ |
+| --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: |
+| 1920x1080 | ao | product | 2.917 | skipped (folded) | 0.184 | 3.102 | 0.01278 | 0.14090 |
+| 1920x1080 | beauty | product | 3.931 | skipped (folded) | 0.240 | 4.171 | 0.02289 | 0.08859 |
+| 1280x720 | ao | product | 2.178 | skipped (folded) | — | — | 0.02453 | 0.18166 |
+
+Outcome:
+
+- The `confidence` pass is now `skipped` in the product pipeline (folded into `raw`); the
+  benchmark pass-timing model was updated to expect a separate confidence pass only for the
+  diagnostic confidence view.
+- Quality proxies stay in the historical full-res product band (no regression signal).
+- Boundary: this is timing + screenshot-proxy evidence. Numeric equivalence of the folded
+  G channel vs the standalone diagnostic node (per-pixel) is not yet captured; the retained
+  diagnostic node is the oracle for that future check.
+
+## 2026-06-04 — VBAO release gap closure Phase 3 capture
+
+Status: **pinned render evidence captured; release promotion remains blocked**.
+
+Artifacts:
+
+- JSON: `artifacts/benchmarks/ao-release-gap-closure-latest.json`
+- Markdown summary: `artifacts/benchmarks/ao-release-gap-closure-summary.md`
+- Screenshots: `artifacts/benchmarks/screenshots-ao-release-gap-closure/`
+- Generated shader inspection JSON:
+  `artifacts/benchmarks/vbao-generated-shader-inspection-latest.json`
+- Generated shader inspection summary:
+  `artifacts/benchmarks/vbao-generated-shader-inspection-summary.md`
+
+Command:
+
+```powershell
+$env:AO_BENCHMARK_SCENES='lab,museum'; $env:AO_BENCHMARK_MODES='gtao,vbao,n8ao'; $env:AO_BENCHMARK_VIEWS='beauty,ao'; $env:AO_BENCHMARK_DENOISE_STATES='false,true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='half,full'; $env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5208'; $env:PLAYWRIGHT_TEST_PORT='5208'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/ao-release-gap-closure-latest.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/ao-release-gap-closure-summary.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-ao-release-gap-closure'; pnpm --filter @horizonao/demo exec node scripts/collect-ao-benchmark.mjs
+$env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5209'; $env:PLAYWRIGHT_TEST_PORT='5209'; pnpm --filter @horizonao/demo exec node scripts/collect-vbao-generated-shader-inspection.mjs
+```
+
+Coverage:
+
+- Scenes: `/lab`, `/museum`.
+- Resolutions: `1920x1080`, `1280x720`.
+- Views: `beauty`, `ao`.
+- Outputs: VBAO `raw-debug` and `product`; GTAO `raw` and `denoised`;
+  N8AO `internally-filtered`.
+- Rows captured: 38 report rows and 36 screenshots.
+- `/lab` emitted VBAO rows only through the current benchmark API; `/museum`
+  emitted GTAO, VBAO, and N8AO rows.
+
+Primary VBAO AO/product rows:
+
+| Scene | Resolution | VBAO res | View | Output | Median ms | p95 ms | Product GPU ms | Pattern/noise | Stripe | Edge bleed proxy | Thin-gap proxy | Failure labels | Screenshot |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
+| lab | 1280x720 | full-res | ao | product | 0.800 | 1.000 | 2.021376 | 0.01381 | 0.22399 | 0.00880 | 0.00482 | noise,edge-bleed | `artifacts/benchmarks/screenshots-ao-release-gap-closure/1280x720-lab-vbao-product-preset-off-full-res-product-ao.png` |
+| lab | 1920x1080 | full-res | ao | product | 0.600 | 0.900 | 2.617344 | 0.00861 | 0.05696 | 0.00602 | 0.00456 | noise,edge-bleed | `artifacts/benchmarks/screenshots-ao-release-gap-closure/1920x1080-lab-vbao-product-preset-off-full-res-product-ao.png` |
+| museum | 1280x720 | full-res | ao | product | 0.700 | 1.000 | 2.238464 | 0.03699 | 0.12702 | 0.02553 | 0.01145 | noise,edge-bleed | `artifacts/benchmarks/screenshots-ao-release-gap-closure/1280x720-museum-vbao-product-preset-off-full-res-product-ao.png` |
+| museum | 1280x720 | half-res | ao | product | 0.700 | 0.900 | 0.982016 | 0.02402 | 0.18573 | 0.01168 | 0.00371 | noise | `artifacts/benchmarks/screenshots-ao-release-gap-closure/1280x720-museum-vbao-product-preset-off-half-res-final-product-ao.png` |
+| museum | 1920x1080 | full-res | ao | product | 0.800 | 1.000 | 4.368384 | 0.01251 | 0.14387 | 0.00548 | 0.00363 | noise,edge-bleed | `artifacts/benchmarks/screenshots-ao-release-gap-closure/1920x1080-museum-vbao-product-preset-off-full-res-product-ao.png` |
+| museum | 1920x1080 | half-res | ao | product | 0.700 | 0.900 | 1.244160 | 0.01166 | 0.15391 | 0.00514 | 0.00214 | noise | `artifacts/benchmarks/screenshots-ao-release-gap-closure/1920x1080-museum-vbao-product-preset-off-half-res-final-product-ao.png` |
+
+Gate result:
+
+- Product promotion verdict rows: 26 `fail`, 8 `incomplete`, 0 `pass`.
+- Reference gate rows: 34 `missing-reference-observation`, so screenshot
+  proxies are not allowed to promote thin/contact correctness claims.
+- Threshold gate rows: 34 `incomplete`; no material threshold policy was tuned
+  after seeing this capture.
+- Evidence artifact rows: 36 `complete`, 2 `incomplete`; the incomplete rows
+  are synthetic half-resolution reconstruction summary rows missing stage
+  observations, not screenshot captures.
+- Generated shader inspection: `pass` for product-preset and `spatial-ultra`;
+  fixed slice/sample loop bounds, no dynamic slice/sample uniform loops, no
+  duplicate VBAO declaration warnings, and no non-ignored console diagnostics.
+- Rendered proxy vs reference observation gate: 26 rows checked, 26 `blocked`;
+  screenshot proxies were complete, but every row still has
+  `missing-reference-observation` with all required fixture IDs missing.
+- These artifacts are local capture outputs. Until explicitly added to version
+  control, the final release verdict remains not clean-checkout reproducible.
+
+Decision:
+
+- Phase 3 render capture exists and is useful for comparison.
+- The current contact/thickness policy is **not accepted for release
+  promotion** from this capture: reference observations and threshold verdicts
+  are still missing, and VBAO product rows retain `noise` / `edge-bleed`
+  labels.
+- Production build was not run.
+
+## 2026-06-04 — VBAO signal-quality studio gate
+
+Status: **candidate bakeoff complete; no quality candidate promoted**.
+
+This SDD aligned the pasted VBAO noise/thinness diagnosis with current source
+truth, named the hardcoded contact policy constants, ran contact/sampling
+candidates, and added a private TSL compute smoke path. The evidence supports
+better instrumentation and decision records, not a product quality promotion.
+
+Artifacts:
+
+- `openspec/changes/vbao-signal-quality-studio-gate/`
+- `artifacts/benchmarks/ao-gpu-readback-latest.json`
+- `artifacts/benchmarks/ao-gpu-readback-summary.md`
+- `artifacts/benchmarks/vbao-noise-source-comparison-latest.json`
+- `artifacts/benchmarks/vbao-noise-source-comparison-summary.md`
+- `artifacts/benchmarks/screenshots-vbao-noise-sources/`
+- `artifacts/benchmarks/vbao-compute-smoke-latest.json`
+- `artifacts/benchmarks/vbao-compute-smoke-summary.md`
+- `artifacts/benchmarks/screenshots-vbao-compute-smoke/`
+
+Commands:
+
+```sh
+pnpm --filter @horizonao/demo benchmark:ao:gpu-readback
+
+$env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; node apps/demo/scripts/collect-vbao-noise-source-comparison.mjs
+
+$env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='ao'; $env:AO_BENCHMARK_DENOISE_STATES='true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE='sector-confidence-smoke'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-compute-smoke-latest.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-compute-smoke-summary.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-compute-smoke'; pnpm --filter @horizonao/demo benchmark:ao
+```
+
+Readback baseline:
+
+- backend: `webgpu-compute`
+- output: `24x1` values, `96` bytes
+- storage targets: `output`, `readback`
+- `vbao-32-sector-gpu` MAE: `0.0060`
+- worst fixture: `two-wall-corner-gap`
+
+Rendered compute smoke row:
+
+| Resolution | View | Output | Candidate | Labels | Raw GPU ms | Polish GPU ms | Total product GPU ms | Compute CPU ms | Pattern/noise ↓ | Edge bleed ↓ | Thin-gap ↑ |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1280x720 | ao | product | `sector-confidence-smoke` | `noise,edge-bleed` | 1.506 | 0.104 | 1.611 | 2.400 | 0.03699 | 0.02553 | 0.01145 |
+
+Decision:
+
+- Keep current named contact policy as control; reject adaptive/floor thickness
+  candidates because they add sectors to the thin-gap gate.
+- Keep `phase-atlas-stable-hash` as control; reject IGN, STBN,
+  Hilbert/R2-style LUT, 128x128 atlas, and same-budget sample-shape candidates
+  from this pass.
+- Keep `sector-confidence-smoke` private and opt-in only; it proves TSL
+  compute-to-texture-node integration and timing visibility, but it does not
+  win a quality gate.
+- Do not prototype edge metadata or depth hierarchy yet. They need cleaner
+  reference targets before adding more product-pipeline machinery.
+- README and marketing claims remain blocked until reference/product gates prove
+  quality, not merely smoother screenshots.
+- AO-view metrics in these screenshot reports are rendered presentation
+  metrics after the demo display transform; cross-algorithm rows are not scalar
+  AO truth.
+
+## 2026-06-03 — VBAO thin-geometry golden-diff rendered proxy audit
+
+Status: **rendered proxy evidence captured; ray-cast product observation still missing**.
+
+The thin-geometry golden-diff SDD now separates three proof layers:
+
+- scalar thin diff: product/canonical scalar interval behavior;
+- ray-cast thin diff: finite `thin-gap-separated-slabs` reference behavior;
+- rendered thin-gap proxy: screenshot metrics and failure labels.
+
+Phase 4 captured full-resolution VBAO product rows for Museum beauty and AO at
+both required evidence resolutions. This is rendered screenshot evidence only;
+it does not satisfy the ray-cast product observation gate.
+
+Artifacts:
+
+- `openspec/changes/vbao-thin-geometry-golden-diff-audit/`
+- `artifacts/benchmarks/vbao-thin-geometry-golden-diff-phase4.json`
+- `artifacts/benchmarks/vbao-thin-geometry-golden-diff-phase4.md`
+- `artifacts/benchmarks/screenshots-vbao-thin-geometry-golden-diff-phase4/`
+
+Command:
+
+```sh
+$env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='beauty,ao'; $env:AO_BENCHMARK_DENOISE_STATES='true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='off'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='3'; $env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5220'; $env:PLAYWRIGHT_TEST_PORT='5220'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-thin-geometry-golden-diff-phase4.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-thin-geometry-golden-diff-phase4.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-thin-geometry-golden-diff-phase4'; pnpm --filter @horizonao/demo benchmark:ao
+```
+
+| Resolution | View | Output | Labels | Thin-gap proxy ↑ | Edge bleed proxy ↓ | Stripe ↓ | Total product GPU ms |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: |
+| 1920x1080 | beauty | product | `noise,edge-bleed` | 0.00396 | 0.01683 | 0.08715 | 4.219 |
+| 1920x1080 | ao | product | `noise,edge-bleed` | 0.00156 | 0.00353 | 0.13551 | 3.925 |
+| 1280x720 | beauty | product | `noise,edge-bleed` | 0.00616 | 0.02872 | 0.15700 | 1.966 |
+| 1280x720 | ao | product | `noise,edge-bleed` | 0.00251 | 0.00850 | 0.19104 | 2.333 |
+
+Boundary:
+
+- Rendered thin-geometry proxy rows are complete for this capture batch.
+- No row carries `thin-gap` or `mud`; current full-resolution product labels
+  remain `noise,edge-bleed`.
+- AO product rows still have `0` ray-cast fixture observations and remain
+  `missing-reference-observation`.
+- Therefore this is not a "closer to ground truth" claim. A future product row
+  needs an explicit `thin-gap-separated-slabs` observation before ray-cast thin
+  diff can pass.
+
+## 2026-06-03 — VBAO projected-normal slice reduction candidate
+
+Status: **runtime candidate implemented with raw-kernel screenshots, timings, and shader inspection**.
+
+The pasted kernel review was converted into source-backed SDD gates under
+`openspec/changes/vbao-kernel-canonical-drift-triage/`. A single-slice
+grazing-normal fixture did not distinguish uniform averaging, but a multi-slice
+non-axis fixture produced a warning-level gap between uniform and
+projected-normal weighted reduction. The production kernel now weights each
+slice accessibility by the projected normal length already computed for that
+slice.
+
+Artifacts:
+
+- `openspec/changes/vbao-kernel-canonical-drift-triage/sdd-plan.md`
+- `openspec/changes/vbao-kernel-canonical-drift-triage/design.md`
+- `openspec/changes/vbao-kernel-canonical-drift-triage/peer-review.md`
+- `openspec/changes/vbao-kernel-canonical-drift-triage/research-contrast.md`
+- `openspec/changes/vbao-kernel-canonical-drift-triage/apply-progress.md`
+- `openspec/changes/vbao-kernel-canonical-drift-triage/slice-reduction-decision.md`
+
+Decisions:
+
+- Treat `computeVbaoBilateralGeometryWeight` extraction as already complete.
+- Replace uniform slice averaging with projected-normal weighted slice
+  accumulation after a multi-slice/non-axis fixture produced a material
+  warning-level gap.
+- Treat `sampleDist * 0.85` as load-bearing behavior that needs documentation or
+  measured replacement.
+- Treat x² radial spacing as defensible but requiring reference/product contrast.
+- Defer phase-atlas hoisting until correctness gates are stable.
+- Reject temporal promotion and resolve/polish fusion from this SDD.
+
+Fixture gate:
+
+- Added `grazing-normal` to the canonical/product drift report case set.
+- The first RED was the production reference gate rejecting the new case list;
+  the gate now accepts `grazing-normal`.
+- The new fixture currently reports finite canonical/product observations with
+  no drift (`absDiff === 0`). This does not prove uniform slice averaging is
+  correct across slices; it proves the first non-axis-aligned single-slice
+  fixture is not enough to justify a formula change.
+- Added a separate scalar multi-slice/non-axis fixture where uniform
+  accessibility is more than `0.03` higher than projected-weighted
+  accessibility. That is the gate that justified the runtime candidate.
+
+Runtime and evidence:
+
+```sh
+$env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5204'; $env:PLAYWRIGHT_TEST_PORT='5204'; pnpm --filter @horizonao/demo exec node scripts/collect-vbao-generated-shader-inspection.mjs
+
+$env:AO_BENCHMARK_REQUIRE_WEBGPU='1'; $env:AO_BENCHMARK_PORT='5205'; $env:PLAYWRIGHT_TEST_PORT='5205'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='beauty,ao'; $env:AO_BENCHMARK_DENOISE_STATES='false'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='half,full'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/ao-vbao-projected-normal-latest.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/ao-vbao-projected-normal-summary.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-projected-normal'; pnpm --filter @horizonao/demo exec node scripts/collect-ao-benchmark.mjs
+```
+
+Generated shader inspection passed for product-preset and spatial-ultra shapes:
+fixed slice/sample loop bounds, no dynamic uniform loops, no unexpected
+full-res JBU or wide polish, no VBAO duplicate declaration warnings, and no
+console diagnostics other than the known ignored Chromium `powerPreference`
+warning.
+
+| Resolution | View | VBAO res | Output | Raw GPU ms | Pattern/noise ↓ | Stripe ↓ | Edge bleed ↓ | Thin-gap ↑ |
+| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| 1920x1080 | beauty | half-res | raw-debug | 1.076 | 0.02510 | 0.12208 | 0.02288 | 0.00824 |
+| 1920x1080 | beauty | full-res | raw-debug | 4.646 | 0.02190 | 0.08794 | 0.01641 | 0.00340 |
+| 1920x1080 | ao | half-res | raw-debug | 1.213 | 0.01031 | 0.13636 | 0.00275 | 0.00119 |
+| 1920x1080 | ao | full-res | raw-debug | 4.208 | 0.01071 | 0.13310 | 0.00380 | 0.00195 |
+| 1280x720 | beauty | half-res | raw-debug | 0.653 | 0.03479 | 0.15659 | 0.02842 | 0.00577 |
+| 1280x720 | beauty | full-res | raw-debug | 2.332 | 0.03469 | 0.15612 | 0.02907 | 0.00684 |
+| 1280x720 | ao | half-res | raw-debug | 0.770 | 0.02442 | 0.21010 | 0.01319 | 0.00844 |
+| 1280x720 | ao | full-res | raw-debug | 2.401 | 0.02314 | 0.18948 | 0.00987 | 0.00341 |
+
+Boundary:
+
+- This is raw-kernel evidence for the formula candidate.
+- It is not a promotion claim for half-resolution final product quality; the
+  generated report correctly marks half-resolution product-stage evidence as
+  incomplete because reconstruction-stage rows were not captured in this batch.
+
 ## 2026-06-02 — VBAO pass topology audit
 
 Status: **partial refactor kept, topology deletions rejected**.
@@ -60,7 +423,7 @@ Command:
 ```sh
 $env:AO_BENCHMARK_SCENES='museum'; $env:AO_BENCHMARK_WIDTH='1280'; $env:AO_BENCHMARK_HEIGHT='720'; $env:AO_BENCHMARK_MODES='vbao'; $env:AO_BENCHMARK_VIEWS='ao'; $env:AO_BENCHMARK_DENOISE_STATES='true'; $env:AO_BENCHMARK_VBAO_RESOLUTION_STATES='full'; $env:AO_BENCHMARK_VBAO_TEMPORAL_MODE='velocity-internal'; $env:AO_BENCHMARK_PASS_TIMING_SAMPLES='1'; $env:AO_BENCHMARK_OUTPUT_JSON='artifacts/benchmarks/vbao-temporal-velocity-internal-smoke.json'; $env:AO_BENCHMARK_OUTPUT_MD='artifacts/benchmarks/vbao-temporal-velocity-internal-smoke.md'; $env:AO_BENCHMARK_SCREENSHOT_ROOT='artifacts/benchmarks/screenshots-vbao-temporal-velocity-internal-smoke'; $env:AO_BENCHMARK_PORT='5206'; pnpm --filter @horizonao/demo benchmark:ao
 
-pnpm --filter @horizonao/demo verify:vbao-temporal
+$env:VBAO_TEMPORAL_MOTION_JSON=$null; $env:VBAO_TEMPORAL_VELOCITY_JSON='artifacts/benchmarks/vbao-temporal-velocity-internal-smoke.json'; pnpm --filter @horizonao/demo verify:vbao-temporal
 ```
 
 Artifacts:
@@ -71,9 +434,18 @@ Artifacts:
 - `artifacts/benchmarks/vbao-temporal-gate-verdict.json`
 - `artifacts/benchmarks/vbao-temporal-gate-verdict.md`
 
+Reproducibility scope:
+
+- The velocity smoke command above reproduces the velocity-internal row and its
+  measured temporal pass.
+- The gate verdict is derived from local temporal matrix `*-latest.json` inputs,
+  which are generated artifacts ignored by git. Regenerate the full
+  off/host/host-TRAA/spatial matrix or pass explicit tracked input paths before
+  treating the verdict artifact as clean-checkout reproducible.
+
 | Resolution | View | Output | Raw GPU ms | Polish GPU ms | Temporal GPU ms | Total product GPU ms | Pattern/noise ↓ | Stripe ↓ | Edge bleed ↓ | Thin-gap ↑ |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1280x720 | ao | product | 1.007 | 0.090 | 0.042 | 1.139 | 0.02295 | 0.19094 | 0.00852 | 0.00256 |
+| 1280x720 | ao | product | 1.287 | 0.085 | 0.044 | 1.416 | 0.02295 | 0.19094 | 0.00852 | 0.00256 |
 
 Outcome:
 
@@ -956,7 +1328,9 @@ Current production boundary:
 - Default full-resolution polish uses the near 8-tap `POISSON8` stencil only; any wider full-resolution tap budget needs separate timing and screenshot evidence before it can become default.
 - Production sampling is single-scheme `phase-atlas-stable-hash` with live shader x² near-biased spacing.
 - Noise source changes remain gated: the 2026-06-01 matrix compared `phase-atlas-stable-hash`, IGN, static STBN, and FAST-like candidates; no candidate was promoted, so the stable hash atlas remains default.
-- Slices are uniformly averaged after cosine-measure sectorization; projected-normal length is used to frame the CDF, not to weight slices.
+- Slices are weighted by projected-normal length after cosine-measure
+  sectorization; this replaced the earlier uniform slice average after the
+  2026-06-03 multi-slice/non-axis fixture gate.
 - `normalNode` remains required.
 - Runtime Museum/E2E/benchmark paths no longer expose the old research candidate controls.
 - `denoiseRadius`/generic denoiser controls are intentionally not public; `softness` is the single artist-facing polish control.
@@ -2056,7 +2430,7 @@ or the locked public quality tiers.
 | `mode` | `off`, `gtao`, `ssao`, `vbao`, or `n8ao` |
 | `view` / `viewMode` | `beauty` or `ao` |
 | `denoise` / `denoiseEnabled` | Demo output toggle state; for VBAO this means raw debug AO vs final product AO |
-| `productOutputContract` | For VBAO, either `VBAONode.getRawTextureNode() raw debug AO` or `VBAONode.getTextureNode() final product AO with internal reconstruction/polish` |
+| `productOutputContract` | For VBAO, either `VBAONode.getRawTextureNode() raw debug AO`, a named final product AO source, or `Private VBAOVelocityTemporalNode wrapped ...` plus the underlying product source for private velocity evidence rows. |
 | `sampling` / `vbaoSamplingSchedule` | `phase-atlas-stable-hash` for VBAO, otherwise `n/a` |
 | `backend` / `rendererBackend` | Must be `webgpu` for production rows |
 | `latest` | Full `window.__aoBenchmark.latest` stats snapshot matched to the requested mode/view/denoise row |

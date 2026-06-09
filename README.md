@@ -4,7 +4,7 @@ Visibility Bitmask Ambient Occlusion for Three.js TSL/WebGPU.
 
 > **Note on the repository name:** The git repository is named `horizon-ao` for historical reasons — it began as a signed-horizon GTAO-class node. The active implementation is now `VBAONode`, a 2023-algorithm replacement based on Therrien, Levesque & Gilet (*Screen Space Indirect Lighting with Visibility Bitmask*, arXiv:2301.11376). A repository rename is deferred to a future infra PR; it does not affect the npm package or the source.
 
-`VBAONode` replaces the dual-scalar horizon approach of `GTAONode` with a 32-bit per-slice visibility mask. Thin geometry (railings, leaves, curtain edges) no longer over-occludes. There is no falloff heuristic — the bitmask model eliminates it by construction. The integration shape is compatible with `GTAONode`.
+`VBAONode` replaces the dual-scalar horizon approach of `GTAONode` with a 32-bit per-slice visibility mask. The representation is designed to preserve thin geometry better than a single horizon envelope, but release-quality thin/contact behavior is still gated by reference observations and captured evidence. There is no falloff heuristic — the bitmask model eliminates it by construction. The integration shape is compatible with `GTAONode`.
 
 ![VBAO demo placeholder](https://dummyimage.com/1200x520/0a0f11/f5f1e8&text=VBAONode)
 
@@ -15,9 +15,27 @@ Each pixel marches `slices` slice directions. Per slice:
 1. March `samples` steps outward on both sides of the slice axis.
 2. Each sample contributes a bit range `[k₀, k₁)` to a 32-sector visibility mask.
 3. Accessibility is computed with a cosine-weighted reduction: `A_i = Σ_k open(k)·max(0, cos(θ_k − γ_i)) / Σ_k max(0, cos(θ_k − γ_i))`.
-4. Final: `A = mean(A_i)`, stored as `pow(A, scale)` in the R channel.
+4. Final accessibility is accumulated with projected-normal slice weights and
+   stored as `pow(A, scale)` in the R channel.
 
 Reference: [arXiv:2301.11376](https://arxiv.org/abs/2301.11376).
+
+## Current Readiness
+
+The current release-readiness verdict is **incomplete**, not production-ready.
+
+The release gap closure SDD captured `/lab` and `/museum` render evidence at
+`1920x1080` and `1280x720`, added promotion-gate reporting, and verified
+generated shader loop shape. It did not promote VBAO as release-ready because
+rendered proxy rows still block on missing reference observations, threshold
+rows remain incomplete, and current VBAO product rows retain `noise` /
+`edge-bleed` labels.
+
+See:
+
+- `EVIDENCE.md`
+- `openspec/changes/vbao-release-gap-closure/release-readiness-report.md`
+- `openspec/adr/ADR-015-release-gap-closure-verdict.md`
 
 ## Proposal
 

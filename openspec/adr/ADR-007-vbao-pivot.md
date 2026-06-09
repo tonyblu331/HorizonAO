@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-05-22
-- **Updated:** 2026-05-27
+- **Updated:** 2026-06-03
 - **Supersedes:** the implicit ADR-002 signed-horizon kernel and the interim hybrid VBAO research-gate shape.
 - **Related:** ADR-008 (AO-only scope), ADR-009 (no legacy), ADR-010 (normal required), ADR-011 (raw first), ADR-013 (quality hardening).
 
@@ -31,7 +31,7 @@ The production shader uses:
 2. Sample-local thickness direction: `Q - thickness * normalize(-Q)`.
 3. Slice-local CDF remap before sector quantization.
 4. Point-sample sector mask construction.
-5. Normal-centered, no-atan cosine-measure sectorization with popcount accessibility reduction and a uniform slice average. The projected normal frames the sector CDF; it is not a second slice-weighting reduction.
+5. Normal-centered, no-atan cosine-measure sectorization with popcount accessibility reduction. The original pivot used a uniform slice average; the 2026-06-03 kernel triage supersedes that slice-reduction detail with projected-normal weighted slice accumulation after a multi-slice/non-axis fixture exposed the uniform-reduction gap.
 
 Sampling is intentionally single-scheme in production: no benchmark schedule injection, no runtime sampling-mode switch, and no animated temporal dependency by default. The raw shader uses a non-interpolated phase-indexed atlas so slice rotation, radial jitter, sub-sector coverage, and polish rotation do not all derive from one scalar pixel value.
 
@@ -59,7 +59,7 @@ Research gates and historical diagnostics are removed from `@horizonao/core` act
 
 **Risks:**
 
-- GT-VBAO CDF framing, no-atan point-sample sector treatment, and uniform slice averaging require visual/evidence follow-up on real scenes.
+- GT-VBAO CDF framing, no-atan point-sample sector treatment, and projected-normal slice accumulation require visual/evidence follow-up on real scenes.
 - The simplified production path intentionally drops diagnostic hooks; debugging future regressions should happen through separate debug variants, not production shader branches.
 
 ## References

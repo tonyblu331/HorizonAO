@@ -25,7 +25,10 @@ if (process.env.AO_BENCHMARK_EXTERNAL_SERVER === '1' && explicitBaseUrl === unde
   )
 }
 const baseUrl = explicitBaseUrl ?? `http://127.0.0.1:${benchmarkPort}`
-const scene = 'museum'
+const scenes = (process.env.AO_BENCHMARK_SCENES ?? 'museum')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
 const requireWebGpu = process.env.AO_BENCHMARK_REQUIRE_WEBGPU !== '0'
 const targetFrames = Number(process.env.AO_FPS_TARGET_FRAMES ?? 500)
 const warmupMs = Number(process.env.AO_FPS_WARMUP_MS ?? 1000)
@@ -37,11 +40,10 @@ const resolutions = process.env.AO_BENCHMARK_WIDTH
       { width: 1280, height: 720 },
     ]
 const rowsToCapture = [
-  { mode: 'off', denoise: false, label: 'Off' },
-  { mode: 'gtao', denoise: false, label: 'GTAO raw' },
-  { mode: 'gtao', denoise: true, label: 'GTAO denoised' },
-  { mode: 'vbao', denoise: false, label: 'VBAO raw-debug' },
-  { mode: 'vbao', denoise: true, label: 'VBAO product' },
+  { mode: 'ssao', denoise: true, label: 'SSAO' },
+  { mode: 'gtao', denoise: true, label: 'GTAO' },
+  { mode: 'vbao', denoise: true, label: 'VBAO' },
+  { mode: 'n8ao', denoise: true, label: 'N8AO' },
 ]
 
 function percentile(values, p) {
@@ -125,45 +127,47 @@ try {
   await waitForServer({ server, baseUrl })
   browser = await launchBenchmarkBrowser()
 
-  for (const viewport of resolutions) {
-    const page = await browser.newPage({ viewport, deviceScaleFactor: 1 })
-    try {
-      await page.goto(`${baseUrl}/${scene}`, { waitUntil: 'domcontentloaded' })
-      await waitForBenchmark(page)
-      await assertWebGpu(page, { requireWebGpu })
-      await setComposeDebug(page, false)
-      await setView(page, 'beauty')
+  for (const scene of scenes) {
+    for (const viewport of resolutions) {
+      const page = await browser.newPage({ viewport, deviceScaleFactor: 1 })
+      try {
+        await page.goto(`${baseUrl}/${scene}`, { waitUntil: 'domcontentloaded' })
+        await waitForBenchmark(page)
+        await assertWebGpu(page, { requireWebGpu })
+        await setComposeDebug(page, false)
+        await setView(page, 'beauty')
 
-      for (const row of rowsToCapture) {
-        await setMode(page, row.mode)
-        await setDenoise(page, row.denoise)
-        const { snapshot, matching, frames } = await collectFrameWindows(page, row)
-        const avgFrameMs = weightedAverage(matching, 'avgFrameMs')
-        const medianFrameMs = percentile(matching.map((item) => item.medianFrameMs), 0.5)
-        const p95FrameMs = percentile(matching.map((item) => item.p95FrameMs), 0.95)
-        const fps = avgFrameMs > 0 ? 1000 / avgFrameMs : 0
-        results.push({
-          scene,
-          resolution: viewport,
-          algorithm: row.mode,
-          label: row.label,
-          denoise: row.denoise,
-          viewMode: 'beauty',
-          targetFrames,
-          capturedFrames: frames,
-          windows: matching.length,
-          fps,
-          avgFrameMs,
-          medianFrameMs,
-          p95FrameMs,
-          rendererBackend: snapshot?.environment?.rendererBackend ?? 'unknown',
-          vbaoSamples: matching.at(-1)?.vbaoSamples ?? 0,
-          vbaoSlices: matching.at(-1)?.vbaoSlices ?? 0,
-          vbaoSamplingSchedule: matching.at(-1)?.vbaoSamplingSchedule ?? 'n/a',
-        })
+        for (const row of rowsToCapture) {
+          await setMode(page, row.mode)
+          await setDenoise(page, row.denoise)
+          const { snapshot, matching, frames } = await collectFrameWindows(page, row)
+          const avgFrameMs = weightedAverage(matching, 'avgFrameMs')
+          const medianFrameMs = percentile(matching.map((item) => item.medianFrameMs), 0.5)
+          const p95FrameMs = percentile(matching.map((item) => item.p95FrameMs), 0.95)
+          const fps = avgFrameMs > 0 ? 1000 / avgFrameMs : 0
+          results.push({
+            scene,
+            resolution: viewport,
+            algorithm: row.mode,
+            label: row.label,
+            denoise: row.denoise,
+            viewMode: 'beauty',
+            targetFrames,
+            capturedFrames: frames,
+            windows: matching.length,
+            fps,
+            avgFrameMs,
+            medianFrameMs,
+            p95FrameMs,
+            rendererBackend: snapshot?.environment?.rendererBackend ?? 'unknown',
+            vbaoSamples: matching.at(-1)?.vbaoSamples ?? 0,
+            vbaoSlices: matching.at(-1)?.vbaoSlices ?? 0,
+            vbaoSamplingSchedule: matching.at(-1)?.vbaoSamplingSchedule ?? 'n/a',
+          })
+        }
+      } finally {
+        await page.close()
       }
-    } finally {
-      await page.close()
     }
   }
 } finally {
@@ -171,11 +175,16 @@ try {
   server?.child.kill('SIGTERM')
 }
 
-results.sort((a, b) => a.resolution.width - b.resolution.width || a.avgFrameMs - b.avgFrameMs)
+results.sort(
+  (a, b) =>
+    a.scene.localeCompare(b.scene) ||
+    a.resolution.width - b.resolution.width ||
+    a.avgFrameMs - b.avgFrameMs,
+)
 const report = {
   generatedAt: new Date().toISOString(),
   baseUrl,
-  scene,
+  scenes,
   targetFrames,
   warmupMs,
   resolutions,
@@ -191,10 +200,10 @@ lines.push('')
 lines.push(`Generated: ${report.generatedAt}`)
 lines.push(`Target frames per row: ${targetFrames}`)
 lines.push('')
-lines.push('| Resolution | Algorithm | Denoise | Frames | Avg ms ↓ | Median ms ↓ | P95 ms ↓ | FPS ↑ |')
-lines.push('| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |')
+lines.push('| Scene | Resolution | Algorithm | Denoise | Frames | Avg ms ↓ | Median ms ↓ | P95 ms ↓ | FPS ↑ |')
+lines.push('| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |')
 for (const row of results) {
-  lines.push(`| ${row.resolution.width}x${row.resolution.height} | ${row.label} | ${row.denoise ? 'on' : 'off'} | ${row.capturedFrames} | ${row.avgFrameMs.toFixed(3)} | ${row.medianFrameMs.toFixed(3)} | ${row.p95FrameMs.toFixed(3)} | ${row.fps.toFixed(1)} |`)
+  lines.push(`| ${row.scene} | ${row.resolution.width}x${row.resolution.height} | ${row.label} | ${row.denoise ? 'on' : 'off'} | ${row.capturedFrames} | ${row.avgFrameMs.toFixed(3)} | ${row.medianFrameMs.toFixed(3)} | ${row.p95FrameMs.toFixed(3)} | ${row.fps.toFixed(1)} |`)
 }
 await writeFile(outputMd, `${lines.join('\n')}\n`)
 console.log(JSON.stringify({ outputJson, outputMd, rows: results.length }, null, 2))

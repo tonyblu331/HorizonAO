@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { PARITY_SCENES } from '../src/parityScenes'
 
 const AO_MODES = ['off', 'gtao', 'ssao', 'vbao', 'n8ao'] as const
-const SPLIT_PIXEL_MODES = ['gtao', 'vbao', 'n8ao'] as const
+const SPLIT_PIXEL_MODES = ['ssao', 'gtao', 'vbao', 'n8ao'] as const
 
 test.setTimeout(90_000)
 
@@ -82,7 +82,6 @@ async function expectSplitSegmentsVisible(
   options: { readonly viewMode: 'beauty' | 'ao'; readonly denoiseEnabled: boolean },
 ) {
   await page.locator('[data-compose-debug]').check()
-  await page.locator('[data-compose-mode="ssao"]').uncheck()
   for (const mode of SPLIT_PIXEL_MODES) {
     const input = page.locator(`[data-compose-mode="${mode}"]`)
     if (modes.includes(mode)) await input.check()
@@ -155,7 +154,7 @@ for (const fixture of Object.values(PARITY_SCENES).filter((scene) => scene.key !
 
     await page.goto(fixture.route)
 
-    const panel = page.locator('.compare-panel')
+    const panel = page.locator('.compare-panel').first()
     await expect(panel).toBeVisible({ timeout: 30_000 })
 
     const canvas = page.locator('canvas').first()
@@ -294,8 +293,10 @@ test('museum publishes machine-readable benchmark snapshots for single and split
   }
 
   const initialReportIndex = initial!.reportIndex
-  await page.evaluate(() => window.__aoBenchmark?.reset())
-  const resetSnapshot = await page.evaluate(() => window.__aoBenchmark?.snapshot())
+  const resetSnapshot = await page.evaluate(() => {
+    window.__aoBenchmark?.reset()
+    return window.__aoBenchmark?.snapshot()
+  })
   expect(resetSnapshot?.latest).toBeUndefined()
   expect(resetSnapshot?.history).toEqual([])
 

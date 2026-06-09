@@ -1,14 +1,6 @@
 import {
-  HalfFloatType,
-  NearestFilter,
-  NodeMaterial,
   NodeUpdateType,
-  NoColorSpace,
   QuadMesh,
-  RedFormat,
-  RenderTarget,
-  RendererUtils,
-  TempNode,
   Vector2,
   type Camera,
   type Node,
@@ -24,7 +16,6 @@ import {
   getViewPosition,
   logarithmicDepthToViewZ,
   max,
-  passTexture,
   reference,
   textureSize,
   uniform,
@@ -34,11 +25,13 @@ import {
 } from 'three/tsl'
 
 import { computeVbaoBilateralGeometryWeight } from './vbaoBilateralWeight'
+import { VBAOEffectPass } from './VBAOEffectPass'
 
 export interface VBAOHalfResCleanupNodeOptions {
   readonly enabled?: boolean
   readonly strength?: number
   readonly resolutionScale?: number
+  readonly confidenceNode?: TextureNode | undefined
 }
 
 const HALF_RES_CLEANUP_OFFSETS = Object.freeze([
@@ -54,7 +47,6 @@ const HALF_RES_CLEANUP_OFFSETS = Object.freeze([
 
 const halfResCleanupQuadMesh = new QuadMesh()
 const halfResCleanupSize = new Vector2()
-let halfResCleanupRendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
 
 type SampleableNode = Node & {
   sample: (uvCoord: Node) => any
@@ -73,8 +65,10 @@ function clampResolutionScale(value: number): number {
  *
  * This pass is for half/low-resolution raw AO only: a 3x3 edge-aware cleanup
  * at raw-AO resolution, followed by pure JBU4 resolve in `VBAOResolveNode`.
+ * Fullscreen pass plumbing (render target, material, renderer-state save/restore)
+ * is shared via {@link VBAOEffectPass}; this node renders at `resolutionScale`.
  */
-export class VBAOHalfResCleanupNode extends TempNode<'float'> {
+export class VBAOHalfResCleanupNode extends VBAOEffectPass {
   static get type(): string {
     return 'VBAOHalfResCleanupNode'
   }
@@ -84,6 +78,7 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
   readonly normalNode: SampleableNode
   readonly camera: Camera
   readonly radiusNode: Node
+  readonly confidenceNode: TextureNode | undefined
   readonly strengthUniform = uniform(1)
   updateBeforeType = NodeUpdateType.FRAME
 
@@ -91,13 +86,6 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
   strength: number
   resolutionScale: number
 
-  private readonly renderTarget = new RenderTarget(1, 1, {
-    depthBuffer: false,
-    format: RedFormat,
-    type: HalfFloatType,
-  })
-  private readonly material = new NodeMaterial()
-  private readonly textureNode: TextureNode
   private readonly cameraProjectionMatrixInverse
   private readonly cameraNear
   private readonly cameraFar
@@ -110,24 +98,18 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
     radiusNode: Node = uniform(1),
     options: VBAOHalfResCleanupNodeOptions = {},
   ) {
-    super('float')
+    super('VBAO.HalfResCleanup', 'VBAOHalfResCleanup')
 
     this.rawAoNode = rawAoNode
     this.depthNode = depthNode as SampleableNode
     this.normalNode = normalNode as SampleableNode
     this.camera = camera
     this.radiusNode = radiusNode
+    this.confidenceNode = options.confidenceNode
     this.enabled = options.enabled ?? true
     this.strength = clamp01(options.strength ?? 1)
     this.resolutionScale = clampResolutionScale(options.resolutionScale ?? 0.5)
     this.strengthUniform.value = this.strength
-    this.renderTarget.texture.name = 'VBAO.HalfResCleanup'
-    this.renderTarget.texture.magFilter = NearestFilter
-    this.renderTarget.texture.minFilter = NearestFilter
-    this.renderTarget.texture.generateMipmaps = false
-    this.renderTarget.texture.colorSpace = NoColorSpace
-    this.material.name = 'VBAOHalfResCleanup'
-    this.textureNode = passTexture(this as never, this.renderTarget.texture)
     this.cameraProjectionMatrixInverse = uniform(camera.projectionMatrixInverse)
     this.cameraNear = reference('near', 'float', camera)
     this.cameraFar = reference('far', 'float', camera)
@@ -141,44 +123,29 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
   }
 
   getTextureNode(): TextureNode {
-    return this.enabled ? this.textureNode : this.rawAoNode
+    return this.enabled ? this.getPassTextureNode() : this.rawAoNode
   }
 
+  /** Cleanup runs at raw-AO (scaled) resolution, not full output resolution. */
   setSize(width: number, height: number): void {
-    this.renderTarget.setSize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)))
+    super.setSize(width * this.resolutionScale, height * this.resolutionScale)
   }
 
   updateBefore(frame: NodeFrame): boolean | undefined {
     if (!this.enabled) return undefined
 
-    const renderer = frame.renderer
-    if (renderer === null || renderer === undefined) return undefined
-
-    halfResCleanupRendererState = RendererUtils.resetRendererState(
-      renderer,
-      halfResCleanupRendererState as never,
+    return this.renderFullscreenPass(
+      frame,
+      halfResCleanupSize,
+      halfResCleanupQuadMesh,
+      'VBAOHalfResCleanup',
     )
-
-    const drawingBufferSize = renderer.getDrawingBufferSize(halfResCleanupSize)
-    this.setSize(
-      drawingBufferSize.width * this.resolutionScale,
-      drawingBufferSize.height * this.resolutionScale,
-    )
-
-    halfResCleanupQuadMesh.material = this.material
-    halfResCleanupQuadMesh.name = 'VBAOHalfResCleanup'
-
-    renderer.setClearColor(0xffffff, 1)
-    renderer.setRenderTarget(this.renderTarget)
-    halfResCleanupQuadMesh.render(renderer)
-
-    RendererUtils.restoreRendererState(renderer, halfResCleanupRendererState)
-    return true
   }
 
   setup(builder: any): TextureNode {
     const uvNode = uv()
     const rawAo = this.rawAoNode as any
+    const confidence = this.confidenceNode as any
     const depthNode = this.depthNode as any
     const normalNode = this.normalNode as any
 
@@ -197,6 +164,9 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
       const rawSize = vec2((textureSize as any)(rawAo, 0) as any).toVar('vbaoHalfResCleanupRawSize')
       const texelSize = vec2(1).div(rawSize).toVar('vbaoHalfResCleanupTexelSize')
       const centerAo = rawAo.sample(uvNode).r.toVar('vbaoHalfResCleanupCenterAo')
+      const centerConfidence = (confidence === undefined ? float(1) : confidence.sample(uvNode).g)
+        .clamp(0, 1)
+        .toVar('vbaoHalfResCleanupCenterConfidence')
       const centerDepth = sampleDepth(uvNode).toVar('vbaoHalfResCleanupCenterDepth')
       const centerNormal = sampleNormal(uvNode).toVar('vbaoHalfResCleanupCenterNormal')
       const centerPosition = getViewPosition(
@@ -263,9 +233,12 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
       const cleanedAo = weightedAo
         .div(max(totalWeight, float(1e-6)))
         .toVar('vbaoHalfResCleanupCleanedAo')
+      const confidenceGuidedStrength = this.strengthUniform
+        .mul(float(1).sub(centerConfidence))
+        .toVar('vbaoHalfResCleanupConfidenceGuidedStrength')
       const filteredAo = centerAo
-        .mul(float(1).sub(this.strengthUniform))
-        .add(cleanedAo.mul(this.strengthUniform))
+        .mul(float(1).sub(confidenceGuidedStrength))
+        .add(cleanedAo.mul(confidenceGuidedStrength))
         .toVar('vbaoHalfResCleanupFilteredAo')
       return centerValid.select(clamp(filteredAo, float(0), float(1)), centerAo)
     })
@@ -273,11 +246,6 @@ export class VBAOHalfResCleanupNode extends TempNode<'float'> {
     this.material.fragmentNode = cleanupKernel()
     this.material.needsUpdate = true
 
-    return this.textureNode
-  }
-
-  dispose(): void {
-    this.renderTarget.dispose()
-    this.material.dispose()
+    return this.getPassTextureNode()
   }
 }

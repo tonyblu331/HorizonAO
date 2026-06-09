@@ -22,7 +22,7 @@ export function createAoComparePanel(
     <div class="compare-options" role="group" aria-label="Ambient occlusion mode">
       <button type="button" data-ao="off">Off</button>
       <button type="button" data-ao="gtao">GTAO</button>
-      <button type="button" data-ao="ssao" title="Inline TSL screen-space ambient occlusion">SSAO</button>
+      <button type="button" data-ao="ssao" title="TSL/WebGPU SSAO baseline">SSAO</button>
       <button type="button" data-ao="vbao">VBAO</button>
       <button type="button" data-ao="n8ao">N8AO</button>
     </div>

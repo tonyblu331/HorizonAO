@@ -53,6 +53,9 @@ importers:
       three:
         specifier: 0.184.0
         version: 0.184.0
+      threejs-debug-compose:
+        specifier: ^0.1.1
+        version: 0.1.1(@react-three/drei@10.7.7(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@types/react@19.2.14)(@types/three@0.184.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0)
     devDependencies:
       '@babel/core':
         specifier: 7.29.0
@@ -1205,6 +1208,27 @@ packages:
 
   three@0.184.0:
     resolution: {integrity: sha512-wtTRjG92pM5eUg/KuUnHsqSAlPM296brTOcLgMRqEeylYTh/CdtvKUvCyyCQTzFuStieWxvZb8mVTMvdPyUpxg==}
+
+  threejs-debug-compose@0.1.1:
+    resolution: {integrity: sha512-bZoJSx325EEoxTAhShamdF2cZFF8aG38GOrkwGcw94WGzR/pDqwBplnuXY+uK/iyPGg0dpK4S2GKJTnafJAUjg==}
+    peerDependencies:
+      '@react-three/drei': '>=10'
+      '@react-three/fiber': '>=9'
+      leva: '>=0.10'
+      react: '>=19'
+      react-dom: '>=19'
+      three: '>=0.184'
+    peerDependenciesMeta:
+      '@react-three/drei':
+        optional: true
+      '@react-three/fiber':
+        optional: true
+      leva:
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -2382,6 +2406,15 @@ snapshots:
       three: 0.184.0
 
   three@0.184.0: {}
+
+  threejs-debug-compose@0.1.1(@react-three/drei@10.7.7(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@types/react@19.2.14)(@types/three@0.184.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0):
+    dependencies:
+      three: 0.184.0
+    optionalDependencies:
+      '@react-three/drei': 10.7.7(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@types/react@19.2.14)(@types/three@0.184.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0)
+      '@react-three/fiber': 9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0)
+      react: 19.2.6
+      react-dom: 19.2.6(react@19.2.6)
 
   tinybench@2.9.0: {}
 

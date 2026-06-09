@@ -1,14 +1,6 @@
 import {
-  HalfFloatType,
-  NearestFilter,
   NodeUpdateType,
-  NodeMaterial,
-  NoColorSpace,
   QuadMesh,
-  RedFormat,
-  RenderTarget,
-  RendererUtils,
-  TempNode,
   Vector2,
   type Camera,
   type Node,
@@ -28,7 +20,6 @@ import {
   int,
   logarithmicDepthToViewZ,
   max,
-  passTexture,
   reference,
   textureSize,
   uniform,
@@ -38,10 +29,10 @@ import {
 } from 'three/tsl'
 
 import { computeVbaoBilateralGeometryWeight } from './vbaoBilateralWeight'
+import { VBAOEffectPass } from './VBAOEffectPass'
 
 const resolveQuadMesh = new QuadMesh()
 const resolveSize = new Vector2()
-let resolveRendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
 
 type SampleableNode = Node & {
   sample: (uvCoord: Node) => any
@@ -52,9 +43,11 @@ type SampleableNode = Node & {
  *
  * This is the internal product boundary used when low-resolution raw AO needs
  * final AO: it owns bilinear reconstruction manually and rejects cross-edge taps
- * with depth/normal weights instead of relying on texture filtering.
+ * with depth/normal weights instead of relying on texture filtering. Fullscreen
+ * pass plumbing (render target, material, renderer-state save/restore) is shared
+ * via {@link VBAOEffectPass}; this node always resolves to full output resolution.
  */
-export class VBAOResolveNode extends TempNode<'float'> {
+export class VBAOResolveNode extends VBAOEffectPass {
   static get type(): string {
     return 'VBAOResolveNode'
   }
@@ -66,13 +59,6 @@ export class VBAOResolveNode extends TempNode<'float'> {
   readonly radiusNode: Node
   updateBeforeType = NodeUpdateType.FRAME
 
-  private readonly renderTarget = new RenderTarget(1, 1, {
-    depthBuffer: false,
-    format: RedFormat,
-    type: HalfFloatType,
-  })
-  private readonly material = new NodeMaterial()
-  private readonly textureNode: TextureNode
   private readonly cameraProjectionMatrixInverse
   private readonly cameraNear
   private readonly cameraFar
@@ -84,50 +70,23 @@ export class VBAOResolveNode extends TempNode<'float'> {
     camera: Camera,
     radiusNode: Node = uniform(1),
   ) {
-    super('float')
+    super('VBAO.Resolve', 'VBAOResolve')
     this.rawAoNode = rawAoNode
     this.depthNode = depthNode as SampleableNode
     this.normalNode = normalNode as SampleableNode
     this.camera = camera
     this.radiusNode = radiusNode
-    this.renderTarget.texture.name = 'VBAO.Resolve'
-    this.renderTarget.texture.magFilter = NearestFilter
-    this.renderTarget.texture.minFilter = NearestFilter
-    this.renderTarget.texture.generateMipmaps = false
-    this.renderTarget.texture.colorSpace = NoColorSpace
-    this.material.name = 'VBAOResolve'
-    this.textureNode = passTexture(this as never, this.renderTarget.texture)
     this.cameraProjectionMatrixInverse = uniform(camera.projectionMatrixInverse)
     this.cameraNear = reference('near', 'float', camera)
     this.cameraFar = reference('far', 'float', camera)
   }
 
   getTextureNode(): TextureNode {
-    return this.textureNode
-  }
-
-  setSize(width: number, height: number): void {
-    this.renderTarget.setSize(Math.max(1, Math.round(width)), Math.max(1, Math.round(height)))
+    return this.getPassTextureNode()
   }
 
   updateBefore(frame: NodeFrame): boolean | undefined {
-    const renderer = frame.renderer
-    if (renderer === null || renderer === undefined) return undefined
-
-    resolveRendererState = RendererUtils.resetRendererState(renderer, resolveRendererState as never)
-
-    const drawingBufferSize = renderer.getDrawingBufferSize(resolveSize)
-    this.setSize(drawingBufferSize.width, drawingBufferSize.height)
-
-    resolveQuadMesh.material = this.material
-    resolveQuadMesh.name = 'VBAOResolve'
-
-    renderer.setClearColor(0xffffff, 1)
-    renderer.setRenderTarget(this.renderTarget)
-    resolveQuadMesh.render(renderer)
-
-    RendererUtils.restoreRendererState(renderer, resolveRendererState)
-    return true
+    return this.renderFullscreenPass(frame, resolveSize, resolveQuadMesh, 'VBAOResolve')
   }
 
   setup(builder: any): TextureNode {
@@ -228,11 +187,6 @@ export class VBAOResolveNode extends TempNode<'float'> {
     this.material.fragmentNode = resolveKernel()
     this.material.needsUpdate = true
 
-    return this.textureNode
-  }
-
-  dispose(): void {
-    this.renderTarget.dispose()
-    this.material.dispose()
+    return this.getPassTextureNode()
   }
 }

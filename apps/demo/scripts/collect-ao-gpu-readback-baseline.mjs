@@ -99,6 +99,10 @@ function ssaoUniformSampleAccessibility(intervals) {
   return 1 - occluded / sectorCount
 }
 
+function escapeMarkdownTableCell(value) {
+  return String(value).replaceAll('|', '\\|')
+}
+
 function serveBlankPage() {
   const server = http.createServer((_request, response) => {
     response.writeHead(200, {
@@ -264,6 +268,7 @@ async function collectGpuReadback(page) {
     if (adapter === null) throw new Error('WebGPU adapter is unavailable')
     const device = await adapter.requestDevice()
     const outputByteLength = fixtureCount * 4 * Float32Array.BYTES_PER_ELEMENT
+    const outputValueCount = fixtureCount * 4
     const outputBuffer = device.createBuffer({
       size: outputByteLength,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
@@ -272,11 +277,13 @@ async function collectGpuReadback(page) {
       size: outputByteLength,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     })
+    const pipelineStart = performance.now()
     const module = device.createShaderModule({ code: shader })
     const pipeline = await device.createComputePipelineAsync({
       layout: 'auto',
       compute: { module, entryPoint: 'main' },
     })
+    const pipelineMs = performance.now() - pipelineStart
     const bindGroup = device.createBindGroup({
       layout: pipeline.getBindGroupLayout(0),
       entries: [{ binding: 0, resource: { buffer: outputBuffer } }],
@@ -288,14 +295,60 @@ async function collectGpuReadback(page) {
     pass.dispatchWorkgroups(fixtureCount)
     pass.end()
     encoder.copyBufferToBuffer(outputBuffer, 0, readbackBuffer, 0, outputByteLength)
+    const dispatchStart = performance.now()
     device.queue.submit([encoder.finish()])
+    await device.queue.onSubmittedWorkDone()
+    const dispatchMs = performance.now() - dispatchStart
+    const readbackStart = performance.now()
     await readbackBuffer.mapAsync(GPUMapMode.READ)
     const values = Array.from(new Float32Array(readbackBuffer.getMappedRange()).slice())
+    const readbackMs = performance.now() - readbackStart
     readbackBuffer.unmap()
     outputBuffer.destroy()
     readbackBuffer.destroy()
     return {
       adapterInfo: typeof adapter.info === 'object' ? adapter.info : null,
+      webgpuBackendStatus: {
+        navigatorGpu: true,
+        adapter: 'available',
+        device: 'available',
+        backend: 'webgpu-compute',
+      },
+      outputResolution: {
+        width: outputValueCount,
+        height: 1,
+        valueCount: outputValueCount,
+        byteLength: outputByteLength,
+      },
+      computeDispatchTimings: [
+        {
+          pass: 'ao-fixture-readback',
+          workgroups: fixtureCount,
+          pipelineCreateCpuMs: pipelineMs,
+          submitAndCompleteCpuMs: dispatchMs,
+          mapReadCpuMs: readbackMs,
+        },
+      ],
+      storageTargetInventory: [
+        {
+          name: 'output',
+          role: 'storage-copy-source',
+          backend: 'webgpu-compute',
+          targetFormat: 'float32x4-fixture-values',
+          targetLifetime: 'single-benchmark-run',
+          byteLength: outputByteLength,
+          usage: 'STORAGE | COPY_SRC',
+        },
+        {
+          name: 'readback',
+          role: 'map-read-copy-destination',
+          backend: 'webgpu-compute',
+          targetFormat: 'float32x4-fixture-values',
+          targetLifetime: 'single-benchmark-run',
+          byteLength: outputByteLength,
+          usage: 'COPY_DST | MAP_READ',
+        },
+      ],
       values,
     }
   }, { shader: shaderSource, fixtureCount: fixtures.length })
@@ -389,6 +442,10 @@ try {
     headless,
     sectorCount,
     adapterInfo: gpu.adapterInfo,
+    webgpuBackendStatus: gpu.webgpuBackendStatus,
+    outputResolution: gpu.outputResolution,
+    computeDispatchTimings: gpu.computeDispatchTimings,
+    storageTargetInventory: gpu.storageTargetInventory,
     rows,
     summary,
   }
@@ -402,6 +459,21 @@ try {
   lines.push(`Generated: ${report.generatedAt}`)
   lines.push('')
   lines.push('Basis: WebGPU compute readback against cosine-weighted hemislice fixture reference. Lower error is closer to the reference.')
+  lines.push('')
+  lines.push(`Backend status: ${report.webgpuBackendStatus.backend}; adapter ${report.webgpuBackendStatus.adapter}; device ${report.webgpuBackendStatus.device}.`)
+  lines.push(`Output resolution: ${report.outputResolution.width}x${report.outputResolution.height} values (${report.outputResolution.byteLength} bytes).`)
+  lines.push('')
+  lines.push('| Compute pass | Workgroups | Pipeline CPU ms ↓ | Submit+complete CPU ms ↓ | Map-read CPU ms ↓ |')
+  lines.push('| --- | ---: | ---: | ---: | ---: |')
+  for (const item of report.computeDispatchTimings) {
+    lines.push(`| ${item.pass} | ${item.workgroups} | ${item.pipelineCreateCpuMs.toFixed(3)} | ${item.submitAndCompleteCpuMs.toFixed(3)} | ${item.mapReadCpuMs.toFixed(3)} |`)
+  }
+  lines.push('')
+  lines.push('| Storage target | Role | Bytes | Usage |')
+  lines.push('| --- | --- | ---: | --- |')
+  for (const item of report.storageTargetInventory) {
+    lines.push(`| ${item.name} | ${item.role} | ${item.byteLength} | ${escapeMarkdownTableCell(item.usage)} |`)
+  }
   lines.push('')
   lines.push('| Algorithm | MAE ↓ | RMSE ↓ | Max GPU/CPU drift ↓ | Worst fixture | Worst abs error ↓ |')
   lines.push('| --- | ---: | ---: | ---: | --- | ---: |')

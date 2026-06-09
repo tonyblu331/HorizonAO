@@ -1,18 +1,18 @@
 import { RenderPipeline, type Object3D, type PerspectiveCamera, type WebGPURenderer } from 'three/webgpu'
 import {
-  float,
   Fn,
-  getScreenPosition,
-  getViewPosition,
   If,
-  int,
   Loop,
   PI,
+  float,
+  getScreenPosition,
+  getViewPosition,
+  int,
   sqrt,
   uniform,
-  uv,
   vec3,
   vec4,
+  uv,
 } from 'three/tsl'
 import { ao as gtao } from 'three/addons/tsl/display/GTAONode.js'
 import { createN8AOScenePass, N8AONode } from 'n8ao-webgpu'
@@ -21,12 +21,6 @@ import type { AoMode, AoViewMode } from './aoComparePanel'
 
 type TslScalar = ReturnType<typeof float>
 type TslVec3 = ReturnType<typeof vec3>
-type TslIntLoop = (
-  params: { readonly start: unknown; readonly end: unknown; readonly type: 'int'; readonly condition: '<' },
-  body: (vars: { readonly i: never }) => void,
-) => void
-
-const loopInt = Loop as unknown as TslIntLoop
 
 interface N8AOTextureNode {
   readonly a: TslScalar
@@ -50,37 +44,34 @@ export interface AoPipelines {
 export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
   const radius = options.radius ?? 1.25
   const thickness = options.thickness ?? 0.25
-  const scale = options.scale ?? 1.0
+  const contrast = options.contrast ?? options.scale ?? 1.0
   const softness = options.softness ?? 0.65
   const samples = options.samples ?? 8
   const slices = options.slices ?? 3
   const resolutionScale = options.resolutionScale ?? 1.0
   const sceneColor = options.sceneColor as { readonly rgb: TslVec3 }
-  const depthNode = options.depthNode as { sample: (sampleUv: unknown) => { readonly r: TslScalar } }
-  const normalNode = options.normalNode as { sample: (sampleUv: unknown) => { readonly rgb: TslVec3 } }
-
   const gtaoNode = gtao(options.depthNode as never, options.normalNode as never, options.camera)
   gtaoNode.radius.value = radius
   gtaoNode.thickness.value = thickness
-  gtaoNode.scale.value = scale
+  gtaoNode.scale.value = contrast
   gtaoNode.samples.value = samples
   gtaoNode.resolutionScale = resolutionScale
   gtaoNode.useTemporalFiltering = false
 
   const ssaoTex = createSsaoScalar({
-    depthNode,
-    normalNode,
+    depthNode: options.depthNode as never,
+    normalNode: options.normalNode as never,
     camera: options.camera,
     radius,
     bias: Math.max(0.01, thickness * 0.1),
-    intensity: Math.max(0.5, scale * 1.25),
+    intensity: Math.max(0.5, contrast * 1.25),
     sampleCount: Math.max(8, samples + slices),
   })
 
   const vbaoNode = new VBAONode(options.depthNode as never, options.normalNode as never, options.camera, {
     radius,
     thickness,
-    scale,
+    contrast,
     softness,
     samples,
     slices,
@@ -99,12 +90,13 @@ export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
     camera: options.camera,
   })
   n8aoNode.setQualityMode(samples <= 8 ? 'Medium' : samples <= 12 ? 'High' : 'Ultra')
-  n8aoNode.configuration.screenSpaceRadius = true
-  n8aoNode.configuration.aoRadius = Math.max(18, Math.min(48, radius * 58))
+  n8aoNode.configuration.aoSamples = samples
+  n8aoNode.configuration.screenSpaceRadius = false
+  n8aoNode.configuration.aoRadius = radius
   n8aoNode.configuration.distanceFalloff = 1
-  n8aoNode.configuration.intensity = Math.max(3.5, Math.min(6, scale * 5))
+  n8aoNode.configuration.intensity = contrast
   n8aoNode.configuration.denoiseIterations = 2
-  n8aoNode.configuration.denoiseRadius = 12
+  n8aoNode.configuration.denoiseRadius = 4
   n8aoNode.configuration.aoTones = 0
   n8aoNode.configuration.colorMultiply = true
   n8aoNode.configuration.gammaCorrection = false
@@ -232,7 +224,7 @@ function createSsaoScalar(options: {
   const readScreenPosition = getScreenPosition as unknown as (
     viewPosition: unknown,
     projectionMatrix: unknown,
-  ) => TslVec3
+  ) => { readonly x: TslScalar; readonly y: TslScalar }
 
   return Fn(() => {
     const centerUv = uv()
@@ -243,7 +235,7 @@ function createSsaoScalar(options: {
     const centerNormal = options.normalNode.sample(centerUv).rgb.normalize().toVar()
     const occlusion = float(0).toVar()
 
-    loopInt({ start: int(0), end: ssaoSampleCount, type: 'int', condition: '<' }, ({ i }) => {
+    Loop({ start: int(0), end: ssaoSampleCount, type: 'int', condition: '<' }, ({ i }) => {
       const sampleIndex = float(i).add(0.5)
       const angle = sampleIndex.div(float(ssaoSampleCount)).mul(PI.mul(2))
       const sampleRadius = ssaoRadius

@@ -31,7 +31,17 @@ if (process.env.AO_BENCHMARK_EXTERNAL_SERVER === '1' && explicitBaseUrl === unde
 }
 const baseUrl = explicitBaseUrl ?? `http://127.0.0.1:${benchmarkPort}`
 const requireWebGpu = process.env.AO_BENCHMARK_REQUIRE_WEBGPU !== '0'
-const noiseSources = ['phase-atlas-stable-hash', 'ign', 'static-stbn', 'fast-like']
+const benchmarkCandidates = [
+  { noiseSource: 'phase-atlas-stable-hash', sampleMode: 'product-preset' },
+  { noiseSource: 'phase-atlas-stable-hash-128', sampleMode: 'product-preset' },
+  { noiseSource: 'ign', sampleMode: 'product-preset' },
+  { noiseSource: 'ign-128', sampleMode: 'product-preset' },
+  { noiseSource: 'static-stbn', sampleMode: 'product-preset' },
+  { noiseSource: 'static-stbn-128', sampleMode: 'product-preset' },
+  { noiseSource: 'hilbert-r2-lut', sampleMode: 'product-preset' },
+  { noiseSource: 'phase-atlas-stable-hash', sampleMode: 'same-cost-3x10' },
+  { noiseSource: 'phase-atlas-stable-hash', sampleMode: 'same-cost-2x16' },
+]
 const resolutions = process.env.AO_BENCHMARK_WIDTH
   ? [
       {
@@ -89,8 +99,9 @@ async function readSnapshot(page) {
 
 async function waitForLatest(page, expected) {
   await page.waitForFunction(
-    ({ view, productOutput, noiseSource }) => {
+    ({ view, productOutput, noiseSource, sampleMode }) => {
       const latest = window.__aoBenchmark?.latest
+      const expectedSamplePreset = sampleMode === 'product-preset' ? 'quality' : sampleMode
       return (
         latest?.renderMode === 'single' &&
         latest.mode === 'vbao' &&
@@ -98,6 +109,7 @@ async function waitForLatest(page, expected) {
         latest.denoiseEnabled === productOutput &&
         latest.fullResolutionVbao === true &&
         latest.vbaoNoiseSource === noiseSource &&
+        latest.vbaoSamplePreset === expectedSamplePreset &&
         latest.reportIndex > 0
       )
     },
@@ -121,7 +133,10 @@ function relativeLess(value, baseline, tolerance) {
 function assignFailureLabels(rows) {
   const baselineByKey = new Map(
     rows
-      .filter((row) => row.noiseSource === 'phase-atlas-stable-hash')
+      .filter(
+        (row) =>
+          row.noiseSource === 'phase-atlas-stable-hash' && row.sampleMode === 'product-preset',
+      )
       .map((row) => [comparisonKey(row), row]),
   )
 
@@ -129,7 +144,10 @@ function assignFailureLabels(rows) {
     const baseline = baselineByKey.get(comparisonKey(row))
     const labels = new Set()
 
-    if (row.noiseSource === 'phase-atlas-stable-hash' || baseline === undefined) {
+    if (
+      (row.noiseSource === 'phase-atlas-stable-hash' && row.sampleMode === 'product-preset') ||
+      baseline === undefined
+    ) {
       labels.add('noise')
       labels.add('edge-bleed')
     } else {
@@ -186,13 +204,13 @@ async function writeReport(report) {
   )
   lines.push('')
   lines.push(
-    '| Resolution | View | Output | Noise source | Median ms ↓ | p95 ms ↓ | Pattern/noise ↓ | Stripe ↓ | Edge bleed proxy ↓ | Thin-gap proxy ↑ | Failure labels | Screenshot |',
+    '| Resolution | View | Output | Noise source | Sample mode | Median ms ↓ | p95 ms ↓ | Pattern/noise ↓ | Stripe ↓ | Edge bleed proxy ↓ | Thin-gap proxy ↑ | Failure labels | Screenshot |',
   )
-  lines.push('| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |')
+  lines.push('| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |')
   for (const row of report.rows) {
     const metrics = row.qualityMetrics
     lines.push(
-      `| ${row.resolution.width}x${row.resolution.height} | ${row.view} | ${row.output} | ${row.noiseSource} | ${row.latest.medianFrameMs.toFixed(3)} | ${row.latest.p95FrameMs.toFixed(3)} | ${metrics.patternNoiseScore.toFixed(5)} | ${metrics.stripeScore.toFixed(5)} | ${metrics.edgeBleedProxy.toFixed(5)} | ${metrics.thinGapPreservationProxy.toFixed(5)} | ${row.failureLabels.join(',')} | ${path.relative(repoRoot, row.screenshotPath).replaceAll(path.sep, '/')} |`,
+      `| ${row.resolution.width}x${row.resolution.height} | ${row.view} | ${row.output} | ${row.noiseSource} | ${row.sampleMode} | ${row.latest.medianFrameMs.toFixed(3)} | ${row.latest.p95FrameMs.toFixed(3)} | ${metrics.patternNoiseScore.toFixed(5)} | ${metrics.stripeScore.toFixed(5)} | ${metrics.edgeBleedProxy.toFixed(5)} | ${metrics.thinGapPreservationProxy.toFixed(5)} | ${row.failureLabels.join(',')} | ${path.relative(repoRoot, row.screenshotPath).replaceAll(path.sep, '/')} |`,
     )
   }
   lines.push('')
@@ -207,7 +225,7 @@ async function writeReport(report) {
     '- `edgeBleedProxy` and `thinGapPreservationProxy` are screenshot proxies; they are useful for same-scene ranking, not proof of physical correctness.',
   )
   lines.push(
-    '- Candidate labels are relative to `phase-atlas-stable-hash` for the same resolution/view/output.',
+    '- Candidate labels are relative to `phase-atlas-stable-hash` plus `product-preset` for the same resolution/view/output.',
   )
   await writeFile(outputMd, `${lines.join('\n')}\n`)
 }
@@ -221,12 +239,14 @@ try {
   browser = await launchBenchmarkBrowser()
 
   for (const viewport of resolutions) {
-    for (const noiseSource of noiseSources) {
+    for (const candidate of benchmarkCandidates) {
+      const { noiseSource, sampleMode } = candidate
       const page = await browser.newPage({ viewport, deviceScaleFactor: 1 })
       try {
-        await page.goto(`${baseUrl}/museum?vbaoNoiseSource=${encodeURIComponent(noiseSource)}`, {
-          waitUntil: 'domcontentloaded',
-        })
+        const url = new URL('/museum', baseUrl)
+        url.searchParams.set('vbaoNoiseSource', noiseSource)
+        url.searchParams.set('vbaoSampleMode', sampleMode)
+        await page.goto(url.toString(), { waitUntil: 'domcontentloaded' })
         await waitForBenchmark(page)
         await assertWebGpu(page, { requireWebGpu })
         await setComposeDebug(page, false)
@@ -240,12 +260,12 @@ try {
             await resetBenchmark(page)
             await page.waitForTimeout(650)
             await resetBenchmark(page)
-            await waitForLatest(page, { view, productOutput, noiseSource })
+            await waitForLatest(page, { view, productOutput, noiseSource, sampleMode })
             const snapshot = await readSnapshot(page)
             const latest = snapshot?.latest
             if (latest === undefined) throw new Error('Missing AO benchmark latest snapshot')
             const output = productOutput ? 'product' : 'raw-debug'
-            const label = `${viewport.width}x${viewport.height}-museum-vbao-${view}-${output}-${noiseSource}`
+            const label = `${viewport.width}x${viewport.height}-museum-vbao-${view}-${output}-${noiseSource}-${sampleMode}`
             const screenshotPath = path.join(screenshotRoot, `${label}.png`)
             await page.screenshot({ path: screenshotPath })
             const qualityMetrics = await analyzeScreenshotQuality(page, screenshotPath)
@@ -262,6 +282,9 @@ try {
               denoise: productOutput,
               fullResolutionVbao: true,
               noiseSource,
+              sampleMode,
+              samples: latest.vbaoSamples,
+              slices: latest.vbaoSlices,
               sampling: latest.vbaoSamplingSchedule,
               qualityMetrics,
               screenshotPath,

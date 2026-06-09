@@ -99,21 +99,26 @@ for (const mode of modes) {
 for (const view of views) {
   if (!validViews.has(view)) throw new Error(`AO_BENCHMARK_VIEWS contains "${view}".`)
 }
+const vbaoDemoSoftnessDefault = 0.2
 const vbaoDemoSoftness = (() => {
-  const requested = Number(process.env.AO_BENCHMARK_VBAO_SOFTNESS ?? 0.45)
-  return Number.isFinite(requested) ? Math.max(0, Math.min(1, requested)) : 0.45
+  const requested = Number(process.env.AO_BENCHMARK_VBAO_SOFTNESS ?? vbaoDemoSoftnessDefault)
+  return Number.isFinite(requested)
+    ? Math.max(0, Math.min(1, requested))
+    : vbaoDemoSoftnessDefault
 })()
 const vbaoSampleMode = (() => {
   const requested = process.env.AO_BENCHMARK_VBAO_SAMPLE_MODE ?? 'product-preset'
   if (
     requested === 'product-preset' ||
     requested === 'debug-override' ||
-    requested === 'spatial-ultra'
+    requested === 'spatial-ultra' ||
+    requested === 'same-cost-3x10' ||
+    requested === 'same-cost-2x16'
   ) {
     return requested
   }
   throw new Error(
-    `AO_BENCHMARK_VBAO_SAMPLE_MODE must be "product-preset", "debug-override", or "spatial-ultra", received "${requested}".`,
+    `AO_BENCHMARK_VBAO_SAMPLE_MODE must be "product-preset", "debug-override", "spatial-ultra", "same-cost-3x10", or "same-cost-2x16", received "${requested}".`,
   )
 })()
 const vbaoTemporalMode = (() => {
@@ -125,6 +130,21 @@ const vbaoTemporalMode = (() => {
     `AO_BENCHMARK_VBAO_TEMPORAL_MODE must be "off", "host", or "velocity-internal"; the rejected camera-only internal temporal prototype remains removed, received "${requested}".`,
   )
 })()
+const vbaoMotionEvidenceKind = (() => {
+  const requested = process.env.AO_BENCHMARK_VBAO_MOTION_EVIDENCE_KIND
+  if (
+    requested === undefined ||
+    requested === 'camera-motion' ||
+    requested === 'object-motion' ||
+    requested === 'disocclusion'
+  ) {
+    return requested
+  }
+  throw new Error(
+    `AO_BENCHMARK_VBAO_MOTION_EVIDENCE_KIND must be "camera-motion", "object-motion", or "disocclusion", received "${requested}".`,
+  )
+})()
+const vbaoTemporalResetEvidenceReason = process.env.AO_BENCHMARK_VBAO_TEMPORAL_RESET_REASON
 const vbaoHostTaaMode = (() => {
   const requested = process.env.AO_BENCHMARK_VBAO_HOST_TAA ?? 'off'
   if (requested === 'off' || requested === 'traa') return requested
@@ -139,21 +159,32 @@ const vbaoCleanupMode = (() => {
     `AO_BENCHMARK_VBAO_CLEANUP_MODE must be "on" or "skip", received "${requested}".`,
   )
 })()
-const vbaoResolvePolishMode = (() => {
-  const requested = process.env.AO_BENCHMARK_VBAO_RESOLVE_POLISH_MODE ?? 'separate'
-  if (requested === 'separate' || requested === 'fused') return requested
+const vbaoComputeCandidateMode = (() => {
+  const requested = process.env.AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE ?? 'off'
+  if (requested === 'off' || requested === 'sector-confidence-smoke') return requested
   throw new Error(
-    `AO_BENCHMARK_VBAO_RESOLVE_POLISH_MODE must be "separate" or "fused", received "${requested}".`,
+    `AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE must be "off" or "sector-confidence-smoke", received "${requested}".`,
   )
 })()
+const vbaoReceiverConfidenceMode = (() => {
+  const requested = process.env.AO_BENCHMARK_VBAO_RECEIVER_CONFIDENCE ?? 'confidence-guided'
+  if (requested === 'confidence-guided' || requested === 'scalar-control') return requested
+  throw new Error(
+    `AO_BENCHMARK_VBAO_RECEIVER_CONFIDENCE must be "confidence-guided" or "scalar-control", received "${requested}".`,
+  )
+})()
+const vbaoProductReconstructionStages = ['raw', 'cleanup', 'resolve', 'polish', 'final']
 const vbaoReconstructionStages =
   process.env.AO_BENCHMARK_VBAO_RECONSTRUCTION_STAGES === '1'
-    ? ['raw', 'cleanup', 'resolve', 'polish', 'final']
+    ? vbaoProductReconstructionStages
     : (process.env.AO_BENCHMARK_VBAO_RECONSTRUCTION_STAGES ?? 'final')
         .split(',')
         .map((value) => value.trim())
         .filter(Boolean)
-const validVbaoReconstructionStages = new Set(['raw', 'cleanup', 'resolve', 'polish', 'final'])
+const validVbaoReconstructionStages = new Set([
+  ...vbaoProductReconstructionStages,
+  'confidence',
+])
 for (const stage of vbaoReconstructionStages) {
   if (!validVbaoReconstructionStages.has(stage)) {
     throw new Error(
@@ -164,6 +195,9 @@ for (const stage of vbaoReconstructionStages) {
 
 function createSceneUrl(scene) {
   const url = new URL(`/${scene}`, baseUrl)
+  if (passTimingSampleCount > 0) {
+    url.searchParams.set('gpuPassTiming', '1')
+  }
   if (vbaoSampleMode !== 'product-preset') {
     url.searchParams.set('vbaoSampleMode', vbaoSampleMode)
   }
@@ -176,10 +210,13 @@ function createSceneUrl(scene) {
   if (vbaoCleanupMode === 'skip') {
     url.searchParams.set('vbaoCleanup', 'skip')
   }
-  if (vbaoResolvePolishMode === 'fused') {
-    url.searchParams.set('vbaoResolvePolish', 'fused')
+  if (vbaoComputeCandidateMode !== 'off') {
+    url.searchParams.set('vbaoComputeCandidate', vbaoComputeCandidateMode)
   }
-  if (vbaoDemoSoftness !== 0.45) {
+  if (vbaoReceiverConfidenceMode !== 'confidence-guided') {
+    url.searchParams.set('vbaoReceiverConfidence', vbaoReceiverConfidenceMode)
+  }
+  if (vbaoDemoSoftness !== vbaoDemoSoftnessDefault) {
     url.searchParams.set('vbaoSoftness', String(vbaoDemoSoftness))
   }
   return url.toString()
@@ -241,6 +278,13 @@ async function resetBenchmark(page) {
   await page.evaluate(() => window.__aoBenchmark?.reset())
 }
 
+async function resetVbaoTemporalEvidence(page, reason) {
+  if (reason === undefined || reason.length === 0) return
+  await page.evaluate((resetReason) => {
+    window.__aoBenchmark?.resetVbaoTemporalEvidence?.(resetReason)
+  }, reason)
+}
+
 async function waitForLatest(page, expected) {
   await page.waitForFunction(
     ({
@@ -252,7 +296,7 @@ async function waitForLatest(page, expected) {
       temporalMode,
       hostTaaMode,
       cleanupMode,
-      resolvePolishMode,
+      receiverConfidenceMode,
     }) => {
       const latest = window.__aoBenchmark?.latest
       return (
@@ -271,8 +315,8 @@ async function waitForLatest(page, expected) {
           latest.vbaoCleanupMode === undefined ||
           latest.vbaoCleanupMode === cleanupMode) &&
         (mode !== 'vbao' ||
-          latest.vbaoResolvePolishMode === undefined ||
-          latest.vbaoResolvePolishMode === resolvePolishMode) &&
+          latest.vbaoReceiverConfidenceMode === undefined ||
+          latest.vbaoReceiverConfidenceMode === receiverConfidenceMode) &&
         (mode !== 'vbao' ||
           latest.vbaoReconstructionStage === undefined ||
           latest.vbaoReconstructionStage === vbaoReconstructionStage) &&
@@ -304,19 +348,21 @@ function median(values) {
   return sorted[Math.floor(sorted.length / 2)]
 }
 
-function mapVbaoPassLabel(label) {
+function mapAoPassLabel(label, mode) {
+  if (label === `AO.PassTiming.${mode.toUpperCase()}`) return 'final'
+  if (label === 'GTAONode.AO') return 'ao'
+  if (label.startsWith('N8AO.')) return label.slice('N8AO.'.length).toLowerCase()
   if (label === 'VBAO.Raw') return 'raw'
   if (label === 'VBAO.HalfResCleanup') return 'cleanup'
   if (label === 'VBAO.Resolve') return 'resolve'
   if (label === 'VBAO.FullResPolish') return 'polish'
-  if (label === 'VBAO.ResolvePolish') return 'resolve-polish'
   if (label === 'VBAO.VelocityTemporal') return 'temporal'
+  if (label === 'VBAO.VelocityTemporalDiagnostics') return 'diagnostics'
+  if (label === 'VBAO.ReceiverConfidence') return 'confidence'
   return undefined
 }
 
-async function collectVbaoGpuPassTimings(page, mode) {
-  if (mode !== 'vbao') return []
-
+async function collectAoGpuPassTimings(page, mode) {
   const samplesByPass = new Map()
   const labelsByPass = new Map()
   const sizesByPass = new Map()
@@ -328,7 +374,7 @@ async function collectVbaoGpuPassTimings(page, mode) {
       (await page.evaluate(() => window.__aoBenchmark?.resolveGpuPassTimings?.())) ?? []
 
     for (const row of rows) {
-      const pass = mapVbaoPassLabel(row.label)
+      const pass = mapAoPassLabel(row.label, mode)
       if (pass === undefined) continue
       const samples = samplesByPass.get(pass) ?? []
       samples.push(row.gpuMs)
@@ -350,35 +396,58 @@ async function collectVbaoGpuPassTimings(page, mode) {
   }))
 }
 
+function createAoPassTimingRows({ mode, measuredPassTimings }) {
+  if (mode === 'vbao') return []
+
+  return measuredPassTimings.map((row) => ({
+    pass: row.pass,
+    status: 'measured',
+    gpuMs: row.gpuMs,
+    reason: `Median WebGPU timestamp from ${row.sampleCount} steady-state samples; render target ${row.label} (${row.renderTargetSize}).`,
+  }))
+}
+
 function createVbaoPassTimingRows({
   mode,
   denoise,
   fullResolutionVbao,
   cleanupMode,
-  resolvePolishMode,
   temporalMode,
+  receiverConfidenceMode,
+  vbaoReconstructionStage,
   measuredPassTimings,
 }) {
   if (mode !== 'vbao') return []
 
+  const diagnosticOutput = vbaoReconstructionStage === 'confidence'
   const productOutput = denoise === true
   const lowResolution = fullResolutionVbao === false
   const cleanupEnabled =
-    productOutput && lowResolution && cleanupMode !== 'skip' && vbaoDemoSoftness > 0
-  const resolveEnabled = productOutput && lowResolution
-  const temporalEnabled = productOutput && temporalMode === 'velocity-internal'
+    productOutput &&
+    !diagnosticOutput &&
+    lowResolution &&
+    cleanupMode !== 'skip' &&
+    vbaoDemoSoftness > 0
+  const resolveEnabled = productOutput && !diagnosticOutput && lowResolution
+  const temporalEnabled = productOutput && !diagnosticOutput && temporalMode === 'velocity-internal'
+  const diagnosticsEnabled = temporalEnabled
   const polishEnabled =
     productOutput &&
+    !diagnosticOutput &&
     (lowResolution ? Math.max(0, vbaoDemoSoftness - 0.5) * 2 > 0 : vbaoDemoSoftness > 0)
-  const fusedResolvePolishEnabled = lowResolution && polishEnabled && resolvePolishMode === 'fused'
+  // Receiver confidence is folded into the raw RG pass (R=AO, G=confidence), so the
+  // product reconstruction no longer renders a separate confidence pass — its cost is
+  // inside `raw`. The only standalone confidence pass is the diagnostic confidence view.
+  const confidenceEnabled = receiverConfidenceMode === 'confidence-guided' && diagnosticOutput
   const measuredByPass = new Map(measuredPassTimings.map((row) => [row.pass, row]))
   const enabledByPass = new Map([
-    ['raw', true],
+    ['raw', !diagnosticOutput],
+    ['confidence', confidenceEnabled],
     ['cleanup', cleanupEnabled],
-    ['resolve', resolveEnabled && !fusedResolvePolishEnabled],
-    ['polish', polishEnabled && !fusedResolvePolishEnabled],
-    ['resolve-polish', fusedResolvePolishEnabled],
+    ['resolve', resolveEnabled],
+    ['polish', polishEnabled],
     ['temporal', temporalEnabled],
+    ['diagnostics', diagnosticsEnabled],
   ])
   const status = (pass, enabled) => {
     if (!enabled) return measuredByPass.has(pass) ? 'unexpected' : 'skipped'
@@ -400,11 +469,12 @@ function createVbaoPassTimingRows({
   }
   const totalProductGpuMs = [
     'raw',
+    'confidence',
     'cleanup',
     'resolve',
     'polish',
-    'resolve-polish',
     'temporal',
+    'diagnostics',
   ]
     .filter((pass) => enabledByPass.get(pass) === true)
     .map((pass) => measuredByPass.get(pass)?.gpuMs)
@@ -414,9 +484,27 @@ function createVbaoPassTimingRows({
   return [
     {
       pass: 'raw',
-      status: status('raw', true),
-      gpuMs: gpuMs('raw', true),
-      reason: reason('raw', true, ''),
+      status: status('raw', enabledByPass.get('raw')),
+      gpuMs: gpuMs('raw', enabledByPass.get('raw')),
+      reason: reason(
+        'raw',
+        enabledByPass.get('raw'),
+        diagnosticOutput
+          ? 'Skipped because the private confidence diagnostic does not sample raw AO.'
+          : '',
+      ),
+    },
+    {
+      pass: 'confidence',
+      status: status('confidence', confidenceEnabled),
+      gpuMs: gpuMs('confidence', confidenceEnabled),
+      reason: reason(
+        'confidence',
+        confidenceEnabled,
+        diagnosticOutput
+          ? 'Expected private receiver-confidence diagnostic did not run.'
+          : 'Skipped because this scalar control row does not sample the private receiver-confidence sidecar.',
+      ),
     },
     {
       pass: 'cleanup',
@@ -439,9 +527,7 @@ function createVbaoPassTimingRows({
       reason: reason(
         'resolve',
         enabledByPass.get('resolve'),
-        fusedResolvePolishEnabled
-          ? 'Skipped because the evidence-only fused resolve-polish candidate owns final reconstruction.'
-          : productOutput ? 'Skipped for full-resolution output.' : 'Skipped for raw debug output.',
+        productOutput ? 'Skipped for full-resolution output.' : 'Skipped for raw debug output.',
       ),
     },
     {
@@ -451,22 +537,8 @@ function createVbaoPassTimingRows({
       reason: reason(
         'polish',
         enabledByPass.get('polish'),
-        fusedResolvePolishEnabled
-          ? 'Skipped because the evidence-only fused resolve-polish candidate owns final polish.'
-          : productOutput
-          ? 'Skipped because the configured softness budget does not fund full-resolution polish in this graph.'
-          : 'Skipped for raw debug output.',
-      ),
-    },
-    {
-      pass: 'resolve-polish',
-      status: status('resolve-polish', enabledByPass.get('resolve-polish')),
-      gpuMs: gpuMs('resolve-polish', enabledByPass.get('resolve-polish')),
-      reason: reason(
-        'resolve-polish',
-        enabledByPass.get('resolve-polish'),
         productOutput
-          ? 'Skipped because the default product graph keeps resolve and polish as separate passes.'
+          ? 'Skipped because the configured softness budget does not fund full-resolution polish in this graph.'
           : 'Skipped for raw debug output.',
       ),
     },
@@ -480,15 +552,38 @@ function createVbaoPassTimingRows({
         productOutput
           ? 'Skipped because velocity-backed internal temporal is disabled.'
           : 'Skipped for raw debug output.',
+        ),
+    },
+    {
+      pass: 'diagnostics',
+      status: status('diagnostics', diagnosticsEnabled),
+      gpuMs: gpuMs('diagnostics', diagnosticsEnabled),
+      reason: reason(
+        'diagnostics',
+        diagnosticsEnabled,
+        productOutput
+          ? 'Skipped because velocity-backed internal temporal diagnostics are disabled.'
+          : 'Skipped for raw debug output.',
       ),
     },
     {
       pass: 'total-product',
-      status: productOutput ? 'derived' : 'skipped',
-      gpuMs: productOutput ? totalProductGpuMs : null,
+      status: productOutput && !diagnosticOutput ? 'derived' : 'skipped',
+      gpuMs: productOutput && !diagnosticOutput ? totalProductGpuMs : null,
       reason: productOutput
-        ? 'Derived sum of measured raw/cleanup/resolve/polish/resolve-polish/temporal pass timestamps emitted for this graph.'
+        ? diagnosticOutput
+          ? 'Skipped because this row is a private confidence diagnostic, not product AO.'
+          : 'Derived sum of measured raw/confidence/cleanup/resolve/polish/temporal/diagnostics pass timestamps emitted for this graph.'
         : 'Skipped for raw debug output.',
+    },
+    {
+      pass: 'total-diagnostic',
+      status: productOutput && diagnosticOutput ? 'derived' : 'skipped',
+      gpuMs: productOutput && diagnosticOutput ? totalProductGpuMs : null,
+      reason:
+        productOutput && diagnosticOutput
+          ? 'Derived sum of private confidence diagnostic pass timestamps emitted for this graph.'
+          : 'Skipped because this row is not the private confidence diagnostic.',
     },
   ]
 }
@@ -520,13 +615,16 @@ try {
               const fullResolutionModes = mode === 'vbao' ? sceneVbaoResolutionStates : [true]
               for (const fullResolutionVbao of fullResolutionModes) {
                 const gateCleanupLabel = vbaoCleanupMode === 'skip' ? '-skip-cleanup' : ''
-                const gateResolvePolishLabel =
-                  vbaoResolvePolishMode === 'fused' ? '-fused-resolve-polish' : ''
+                const gateReceiverConfidenceLabel =
+                  mode === 'vbao' && vbaoReceiverConfidenceMode !== 'confidence-guided'
+                    ? `-${vbaoReceiverConfidenceMode}`
+                    : ''
                 const stageRows =
                   mode === 'vbao' && view === 'ao' && denoise && !fullResolutionVbao
                     ? vbaoReconstructionStages
                     : ['final']
                 const reconstructionStages = []
+                let reconstructionGateBaseRow
                 for (const vbaoReconstructionStage of stageRows) {
                   await setComposeDebug(page, false)
                   await setMode(page, scene, mode)
@@ -536,6 +634,12 @@ try {
                   await setVbaoReconstructionStage(page, vbaoReconstructionStage)
                   await resetBenchmark(page)
                   await page.waitForTimeout(650)
+                  if (mode === 'vbao' && vbaoTemporalMode === 'velocity-internal') {
+                    await resetVbaoTemporalEvidence(page, vbaoTemporalResetEvidenceReason)
+                    if (vbaoTemporalResetEvidenceReason !== undefined) {
+                      await page.waitForTimeout(120)
+                    }
+                  }
                   await resetBenchmark(page)
                   await waitForLatest(page, {
                     mode,
@@ -546,13 +650,17 @@ try {
                     temporalMode: vbaoTemporalMode,
                     hostTaaMode: vbaoHostTaaMode,
                     cleanupMode: vbaoCleanupMode,
-                    resolvePolishMode: vbaoResolvePolishMode,
+                    receiverConfidenceMode: vbaoReceiverConfidenceMode,
                   })
-                  const measuredPassTimings = await collectVbaoGpuPassTimings(page, mode)
+                  const measuredPassTimings = await collectAoGpuPassTimings(page, mode)
                   const snapshot = await readSnapshot(page)
                   const latest = snapshot?.latest
+                  const isVbaoConfidenceDiagnostic =
+                    mode === 'vbao' && vbaoReconstructionStage === 'confidence'
                   const outputLabel =
-                    mode === 'vbao'
+                    isVbaoConfidenceDiagnostic
+                      ? 'confidence-diagnostic'
+                      : mode === 'vbao'
                       ? denoise
                         ? 'product'
                         : 'raw-debug'
@@ -570,21 +678,31 @@ try {
                     mode === 'vbao' && vbaoHostTaaMode !== 'off' ? `-${vbaoHostTaaMode}` : ''
                   const cleanupLabel =
                     mode === 'vbao' && vbaoCleanupMode === 'skip' ? '-skip-cleanup' : ''
-                  const resolvePolishLabel =
-                    mode === 'vbao' && vbaoResolvePolishMode === 'fused'
-                      ? '-fused-resolve-polish'
-                      : ''
                   const softnessLabel =
-                    mode === 'vbao' && vbaoDemoSoftness !== 0.45
+                    mode === 'vbao' && vbaoDemoSoftness !== vbaoDemoSoftnessDefault
                       ? `-soft${String(Math.round(vbaoDemoSoftness * 100)).padStart(3, '0')}`
                       : ''
                   const label =
                     mode === 'vbao'
-                      ? `${viewport.width}x${viewport.height}-${scene}-${mode}-${vbaoSampleMode}${temporalLabel}${hostTaaLabel}${cleanupLabel}${resolvePolishLabel}${softnessLabel}-${vbaoResolutionLabel}${stageLabel}-${outputLabel}-${view}`
+                      ? `${viewport.width}x${viewport.height}-${scene}-${mode}-${vbaoSampleMode}${temporalLabel}${hostTaaLabel}${cleanupLabel}${gateReceiverConfidenceLabel}${softnessLabel}-${vbaoResolutionLabel}${stageLabel}-${outputLabel}-${view}`
                       : `${viewport.width}x${viewport.height}-${scene}-${mode}-${outputLabel}-${view}`
                   const screenshotPath = path.join(screenshotRoot, `${label}.png`)
                   await page.screenshot({ path: screenshotPath })
                   const qualityMetrics = await analyzeScreenshotQuality(page, screenshotPath)
+                  const vbaoBaseProductOutputContract =
+                    isVbaoConfidenceDiagnostic
+                      ? 'Private VBAOReceiverConfidenceNode diagnostic scalar; not product AO or public API'
+                      : vbaoReceiverConfidenceMode === 'scalar-control'
+                      ? 'Private scalar-control benchmark AO with receiver-confidence-guided reconstruction disabled'
+                      : vbaoCleanupMode === 'skip' && !fullResolutionVbao
+                      ? 'Evidence-only final product AO with half-resolution cleanup skipped before resolve'
+                      : 'VBAONode.getTextureNode() final product AO with internal reconstruction/polish'
+                  const vbaoProductOutputContract =
+                    isVbaoConfidenceDiagnostic
+                      ? vbaoBaseProductOutputContract
+                      : vbaoTemporalMode === 'velocity-internal'
+                      ? `Private VBAOVelocityTemporalNode wrapped ${vbaoBaseProductOutputContract}`
+                      : vbaoBaseProductOutputContract
                   const row = {
                     label,
                     backend: latest?.rendererBackend ?? 'unknown',
@@ -600,11 +718,7 @@ try {
                     productOutputContract:
                       mode === 'vbao'
                         ? denoise
-                          ? vbaoResolvePolishMode === 'fused' && !fullResolutionVbao
-                            ? 'Evidence-only final product AO with fused half-resolution resolve-polish candidate'
-                            : vbaoCleanupMode === 'skip' && !fullResolutionVbao
-                            ? 'Evidence-only final product AO with half-resolution cleanup skipped before resolve'
-                            : 'VBAONode.getTextureNode() final product AO with internal reconstruction/polish'
+                          ? vbaoProductOutputContract
                           : 'VBAONode.getRawTextureNode() raw debug AO'
                         : 'n/a',
                     sampling:
@@ -615,19 +729,66 @@ try {
                     temporalMode: mode === 'vbao' ? vbaoTemporalMode : 'n/a',
                     hostTaaMode: mode === 'vbao' ? vbaoHostTaaMode : 'n/a',
                     cleanupMode: mode === 'vbao' ? vbaoCleanupMode : 'n/a',
-                    resolvePolishMode: mode === 'vbao' ? vbaoResolvePolishMode : 'n/a',
+                    receiverConfidenceMode:
+                      mode === 'vbao' ? vbaoReceiverConfidenceMode : 'n/a',
                     vbaoSoftness: mode === 'vbao' ? vbaoDemoSoftness : 0,
                     temporalDiagnostics:
                       mode === 'vbao' ? (latest?.vbaoTemporalDiagnostics ?? null) : null,
-                    passTimings: createVbaoPassTimingRows({
-                      mode,
-                      denoise,
-                      fullResolutionVbao,
-                      cleanupMode: vbaoCleanupMode,
-                      resolvePolishMode: vbaoResolvePolishMode,
-                      temporalMode: vbaoTemporalMode,
-                      measuredPassTimings,
-                    }),
+                    temporalTargetInventory:
+                      mode === 'vbao' ? (latest?.vbaoTemporalTargetInventory ?? null) : null,
+                    computeCandidateLabel:
+                      mode === 'vbao' ? (latest?.vbaoComputeCandidateLabel ?? 'n/a') : 'n/a',
+                    computeCandidateInventory:
+                      mode === 'vbao' ? (latest?.vbaoComputeCandidateInventory ?? null) : null,
+                    computeCandidateTiming:
+                      mode === 'vbao' ? (latest?.vbaoComputeCandidateTiming ?? null) : null,
+                    temporalResetEvidenceReason:
+                      mode === 'vbao' &&
+                      vbaoTemporalMode === 'velocity-internal' &&
+                      vbaoTemporalResetEvidenceReason !== undefined
+                        ? vbaoTemporalResetEvidenceReason
+                        : 'n/a',
+                    motionEvidenceKind:
+                      mode === 'vbao' &&
+                      vbaoTemporalMode === 'velocity-internal' &&
+                      denoise &&
+                      vbaoMotionEvidenceKind !== undefined
+                        ? vbaoMotionEvidenceKind
+                        : 'n/a',
+                    motionEvidenceSource:
+                      mode === 'vbao' &&
+                      vbaoTemporalMode === 'velocity-internal' &&
+                      denoise &&
+                      vbaoMotionEvidenceKind !== undefined
+                        ? 'ao-benchmark-motion'
+                        : 'n/a',
+                    passTimings:
+                      mode === 'vbao'
+                        ? [
+                            ...createVbaoPassTimingRows({
+                              mode,
+                              denoise,
+                              fullResolutionVbao,
+                              cleanupMode: vbaoCleanupMode,
+                              temporalMode: vbaoTemporalMode,
+                              receiverConfidenceMode: vbaoReceiverConfidenceMode,
+                              vbaoReconstructionStage,
+                              measuredPassTimings,
+                            }),
+                            ...(latest?.vbaoComputeCandidateTiming === null ||
+                            latest?.vbaoComputeCandidateTiming === undefined
+                              ? []
+                              : [
+                                  {
+                                    pass: latest.vbaoComputeCandidateTiming.pass,
+                                    status: latest.vbaoComputeCandidateTiming.status,
+                                    gpuMs: null,
+                                    cpuMs: latest.vbaoComputeCandidateTiming.cpuMs,
+                                    reason: latest.vbaoComputeCandidateTiming.reason,
+                                  },
+                                ]),
+                          ]
+                        : createAoPassTimingRows({ mode, measuredPassTimings }),
                     qualityMetrics,
                     screenshotPath,
                     latest,
@@ -645,6 +806,14 @@ try {
                         .join(', ')}`,
                     )
                   }
+                  const missingFinalTiming =
+                    mode !== 'vbao' &&
+                    mode !== 'off' &&
+                    vbaoReconstructionStage === 'final' &&
+                    !row.passTimings.some((passTiming) => passTiming.pass === 'final')
+                  if (missingFinalTiming) {
+                    throw new Error(`Missing final WebGPU pass timestamp for ${label}`)
+                  }
                   const failureLabels = classifyFailureLabels(row)
                   if (isHalfResolutionStageRow(row)) {
                     reconstructionStages.push({
@@ -658,11 +827,20 @@ try {
                     ...row,
                     failureLabels,
                   })
+                  if (vbaoReconstructionStage === 'final') {
+                    reconstructionGateBaseRow = {
+                      ...row,
+                      failureLabels,
+                    }
+                  }
                 }
-                if (reconstructionStages.length > 0) {
+                const hasProductReconstructionStage = reconstructionStages.some((stage) =>
+                  vbaoProductReconstructionStages.includes(stage.stage),
+                )
+                if (hasProductReconstructionStage) {
                   rows.push({
-                    ...rows[rows.length - 1],
-                    label: `${viewport.width}x${viewport.height}-${scene}-${mode}-${vbaoSampleMode}-${vbaoTemporalMode}${gateCleanupLabel}${gateResolvePolishLabel}${vbaoDemoSoftness === 0.45 ? '' : `-soft${String(Math.round(vbaoDemoSoftness * 100)).padStart(3, '0')}`}-half-res-reconstruction-gate-product-ao`,
+                    ...(reconstructionGateBaseRow ?? rows[rows.length - 1]),
+                    label: `${viewport.width}x${viewport.height}-${scene}-${mode}-${vbaoSampleMode}-${vbaoTemporalMode}${gateCleanupLabel}${gateReceiverConfidenceLabel}${vbaoDemoSoftness === vbaoDemoSoftnessDefault ? '' : `-soft${String(Math.round(vbaoDemoSoftness * 100)).padStart(3, '0')}`}-half-res-reconstruction-gate-product-ao`,
                     reconstructionStages,
                   })
                 }

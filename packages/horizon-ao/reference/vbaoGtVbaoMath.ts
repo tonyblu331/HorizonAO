@@ -1,7 +1,5 @@
-import {
-  SECTOR_COUNT,
-  VBAO_THETA_MIN,
-} from '../src/vbaoConstants'
+import { SECTOR_COUNT } from '../src/vbaoConstants'
+import { VBAO_THETA_MIN } from './vbaoThetaConstants'
 
 export type Vec3 = readonly [number, number, number]
 

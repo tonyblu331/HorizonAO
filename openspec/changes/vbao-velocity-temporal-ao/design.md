@@ -118,14 +118,112 @@ Benchmark/verifier owns:
 - Keep previous guide inputs sampled as textures, not copied private pass
   targets.
 - Do not sample from a texture that is also the active render target.
-- Recreate history targets on size, format, or device changes.
-- Reset history on resize, camera cut, invalid previous guide, first frame, or
-  host reset.
+- Recreate history targets on size changes in the private smoke path.
+- Reset history on first frame and resize now.
+- Treat device/format changes, camera cuts, invalid previous guides, and host
+  resets as promotion-blocking evidence gaps until wired and captured.
 - Count every extra pass in product timing.
 - Keep log-depth conversion cost visible; pre-linearized guide depth is a later
   measured optimization, not a hidden requirement.
 - Keep dynamic branches out of raw hot loops. Product presets should still
   resolve fixed loop shapes at construction.
+
+## Research Notes Driving The Next Phases
+
+The next work is guided by temporal reprojection practice, not by a desire to
+make the current smoke row look better.
+
+What the external and local references say:
+
+- Three r184 `TRAANode` treats temporal reprojection as a separate node with a
+  history target, resolve target, velocity input, previous depth, resize
+  restart, and per-frame update. That supports keeping
+  `VBAOVelocityTemporalNode` as a private wrapper instead of making
+  `VBAONode` temporal-aware.
+- Three docs define TRAA around `beautyNode`, `depthNode`, `velocityNode`, and
+  `camera`, and document depth/velocity invalidation thresholds. That supports
+  the current host-guide contract and explains why temporal AO evidence must
+  include velocity and depth validity, not just screenshots.
+- The Three TSL docs document MRT capture for velocity and normals, plus a
+  node-based render-pass model. That supports using the demo host pass for
+  velocity/previous guides and keeping the WebGPU/TSL code path native.
+- Karis, "High Quality Temporal Supersampling" (SIGGRAPH 2014), and later TAA
+  practice treat neighborhood clamping and motion/disocclusion failure modes as
+  core temporal issues. That supports our clamp diagnostics, same-cost matrix,
+  and motion/disocclusion gate before promotion.
+
+Sources:
+
+- Three.js `TRAANode` docs:
+  <https://threejs.org/docs/pages/TRAANode.html>
+- Three.js TSL docs:
+  <https://threejs.org/docs/TSL.html>
+- Brian Karis, "High Quality Temporal Supersampling":
+  <https://de45xmedrsdbp.cloudfront.net/Resources/files/TemporalAA_small-59732822.pdf>
+
+What this means for HorizonAO:
+
+- Reuse only the principles, not the full TAA feature set.
+- Keep the current separate AO history target.
+- Keep host-owned previous depth/normal guides.
+- Keep diagnostics as evidence, not user-facing controls.
+- Do not add jitter, subpixel correction, adaptive weights, confidence history,
+  object IDs, or public integration types until a failing gate proves they are
+  necessary.
+- Treat reset/camera-cut/resize evidence as the next hard blocker because
+  temporal history correctness is a lifetime problem before it is a threshold
+  problem.
+
+## Canonical Horizon AO Temporal Shape
+
+Research shapes Horizon AO into a narrow AO-specific temporal layer:
+
+```txt
+VBAONode product AO
+  + host velocity
+  + host previous depth
+  + host previous normal
+  + private AO history
+  + private diagnostics
+  -> private candidate output
+```
+
+This is not general TAA, not public temporal integration, and not a replacement
+for the temporal-free product graph.
+
+Canonical ownership:
+
+| Asset | Owner | Why |
+| --- | --- | --- |
+| Current AO | VBAO | Core product output being temporally reused. |
+| AO history | `VBAOVelocityTemporalNode` | AO-specific history; separate target avoids read/write aliasing. |
+| Diagnostics target | `VBAOVelocityTemporalNode` | Evidence-only rejection visibility. |
+| Velocity | Host pass | Renderer convention and motion-vector generation are host concerns. |
+| Previous depth | Host pass | Guide history already exists in the scene/prepass layer. |
+| Previous normal | Host pass | Same ownership as depth; no private VBAO guide copies. |
+| Reset/camera cut | Host signal, private node action | The host knows discontinuities; the node owns AO-history reset. |
+
+Canonical gate order:
+
+```txt
+target/lifetime inventory
+-> reset evidence
+-> static same-cost matrix
+-> motion/disocclusion matrix
+-> private candidate or reject
+-> separate public promotion SDD only if candidate
+```
+
+Canonical exclusions until a failing gate proves need:
+
+- public `temporal` option;
+- threshold knobs;
+- jitter/subpixel correction;
+- adaptive blend weight;
+- confidence history;
+- object/material ID;
+- private previous depth/normal copies;
+- generalized temporal framework files.
 
 ## Temporal Pass Contract
 
@@ -176,9 +274,10 @@ Before any tuning, diagnostics must answer whether rejected history was caused
 by velocity, viewport, depth, normal, reset, or clamp. Otherwise tuning is just
 moving numbers until a still image looks acceptable. That is not engineering.
 
-## Feasibility Gate Before Code
+## Feasibility Gate Before Candidate Review
 
-Do not start `VBAOVelocityTemporalNode` until the demo proves all of this:
+Do not promote or tune `VBAOVelocityTemporalNode` until the demo proves all of
+this:
 
 - current velocity is available in the WebGPU/TSL pipeline;
 - previous depth and previous normal guides are available without VBAO copying
@@ -188,7 +287,8 @@ Do not start `VBAOVelocityTemporalNode` until the demo proves all of this:
   changes;
 - pass timing can distinguish host guide cost from VBAO temporal cost.
 
-If any item fails, the correct outcome is to keep host temporal sampling only.
+If any item fails, the correct outcome is to keep the node private and the gate
+at `incomplete` or `reject-promotion`.
 
 For Three r184, the velocity convention is inherited from `TRAANode`:
 

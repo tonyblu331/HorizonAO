@@ -1,9 +1,14 @@
 import {
   HalfFloatType,
+  NearestFilter,
+  NodeMaterial,
   NodeUpdateType,
+  NoColorSpace,
   QuadMesh,
+  RGBAFormat,
   RedFormat,
   RenderTarget,
+  RendererUtils,
   Vector2,
   type Camera,
   type Node,
@@ -26,6 +31,7 @@ import {
   uniform,
   uv,
   vec2,
+  vec4,
   viewZToPerspectiveDepth,
 } from 'three/tsl'
 
@@ -36,6 +42,70 @@ export interface VBAOVelocityTemporalNodeOptions {
   readonly depthThreshold?: number
   readonly normalThreshold?: number
   readonly maxVelocityUv?: number
+}
+
+export interface VBAOVelocityTemporalDiagnostics {
+  readonly frame: number
+  readonly resetCount: number
+  readonly lastResetFrame: number
+  readonly lastResetReason: string
+  readonly renderTargetName: string
+  readonly resolution: {
+    readonly width: number
+    readonly height: number
+  }
+  readonly encodedReasonBits: {
+    readonly reset: number
+    readonly viewport: number
+    readonly depth: number
+    readonly normal: number
+    readonly velocity: number
+    readonly clampHistoryRange: number
+  }
+  readonly channels: {
+    readonly r: 'reasonBitsNormalizedBy63'
+    readonly g: 'depthDelta'
+    readonly b: 'normalDot'
+    readonly a: 'velocityLengthSquared'
+  }
+}
+
+export interface VBAOVelocityTemporalTargetInventory {
+  readonly currentAo: {
+    readonly owner: 'VBAONode'
+    readonly source: 'product-or-reconstruction-output'
+    readonly lifetime: 'active-vbao-pipeline'
+  }
+  readonly aoHistory: {
+    readonly owner: 'VBAOVelocityTemporalNode'
+    readonly name: 'VBAO.VelocityTemporalHistory'
+    readonly format: 'RedFormat'
+    readonly type: 'HalfFloatType'
+    readonly lifetime: 'reset-on-first-frame-resize-explicit-reset'
+  }
+  readonly diagnostics: {
+    readonly owner: 'VBAOVelocityTemporalNode'
+    readonly name: 'VBAO.VelocityTemporalDiagnostics'
+    readonly format: 'RGBAFormat'
+    readonly type: 'HalfFloatType'
+    readonly lifetime: 'active-vbao-pipeline'
+  }
+  readonly velocity: {
+    readonly owner: 'host-pass'
+    readonly source: 'mrt-velocity'
+    readonly convention: 'historyUv = uv - velocity.xy * vec2(0.5, -0.5)'
+    readonly lifetime: 'host-pass-current-frame'
+  }
+  readonly previousDepth: {
+    readonly owner: 'host-pass'
+    readonly source: "PassNode.getPreviousTextureNode('depth')"
+    readonly lifetime: 'host-pass-previous-frame'
+  }
+  readonly previousNormal: {
+    readonly owner: 'host-pass'
+    readonly source: "PassNode.getPreviousTextureNode('output')"
+    readonly lifetime: 'host-pass-previous-frame'
+  }
 }
 
 const velocityTemporalQuadMesh = new QuadMesh()
@@ -54,6 +124,14 @@ function clampFinite(value: number, fallback: number, minValue: number, maxValue
  *
  * This consumes host-owned previous depth/normal guide nodes and owns only AO
  * history. It is intentionally not exported from the public package entrypoint.
+ *
+ * RETENTION (P0 decision, 2026-06-08): this node is INTENTIONALLY KEPT, not dead
+ * code. It is wired into the demo `velocity-internal` temporal mode and the
+ * `verify-vbao-temporal-gate` evidence harness, and is the base for the committed
+ * P6 mask-reservoir temporal work. The temporal verifier currently returns
+ * `reject-promotion`, so it stays private/internal — but it must NOT be archived or
+ * deleted by future fat-trim passes. See
+ * `openspec/changes/vbao-foundation-reconciliation/branch-reconciliation.md`.
  */
 export class VBAOVelocityTemporalNode extends VBAOEffectPass {
   static get type(): string {
@@ -79,8 +157,19 @@ export class VBAOVelocityTemporalNode extends VBAOEffectPass {
     format: RedFormat,
     type: HalfFloatType,
   })
+  private readonly diagnosticsRenderTarget = new RenderTarget(1, 1, {
+    depthBuffer: false,
+    format: RGBAFormat,
+    type: HalfFloatType,
+  })
+  private readonly diagnosticsMaterial = new NodeMaterial()
   private readonly cameraNear
   private readonly cameraFar
+  private diagnosticsRendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
+  private diagnosticsFrame = 0
+  private resetCount = 1
+  private lastResetFrame = 0
+  private lastResetReason = 'first-frame'
 
   constructor(
     currentAoNode: TextureNode,
@@ -108,6 +197,12 @@ export class VBAOVelocityTemporalNode extends VBAOEffectPass {
     this.historyRenderTarget.texture.minFilter = this.renderTarget.texture.minFilter
     this.historyRenderTarget.texture.generateMipmaps = false
     this.historyRenderTarget.texture.colorSpace = this.renderTarget.texture.colorSpace
+    this.diagnosticsRenderTarget.texture.name = 'VBAO.VelocityTemporalDiagnostics'
+    this.diagnosticsRenderTarget.texture.magFilter = NearestFilter
+    this.diagnosticsRenderTarget.texture.minFilter = NearestFilter
+    this.diagnosticsRenderTarget.texture.generateMipmaps = false
+    this.diagnosticsRenderTarget.texture.colorSpace = NoColorSpace
+    this.diagnosticsMaterial.name = 'VBAOVelocityTemporalDiagnostics'
     this.configure(options)
   }
 
@@ -118,8 +213,11 @@ export class VBAOVelocityTemporalNode extends VBAOEffectPass {
     this.maxVelocityUv.value = clampFinite(options.maxVelocityUv ?? this.maxVelocityUv.value, 0.25, 0.001, 2)
   }
 
-  reset(): void {
+  reset(reason = 'explicit'): void {
     this.resetHistory.value = 1
+    this.resetCount += 1
+    this.lastResetFrame = this.diagnosticsFrame
+    this.lastResetReason = reason
   }
 
   getTextureNode(): TextureNode {
@@ -137,7 +235,76 @@ export class VBAOVelocityTemporalNode extends VBAOEffectPass {
 
     super.setSize(nextWidth, nextHeight)
     this.historyRenderTarget.setSize(nextWidth, nextHeight)
-    if (resized) this.reset()
+    this.diagnosticsRenderTarget.setSize(nextWidth, nextHeight)
+    if (resized) this.reset('resize')
+  }
+
+  getDiagnostics(): VBAOVelocityTemporalDiagnostics {
+    return {
+      frame: this.diagnosticsFrame,
+      resetCount: this.resetCount,
+      lastResetFrame: this.lastResetFrame,
+      lastResetReason: this.lastResetReason,
+      renderTargetName: this.diagnosticsRenderTarget.texture.name,
+      resolution: {
+        width: this.diagnosticsRenderTarget.width,
+        height: this.diagnosticsRenderTarget.height,
+      },
+      encodedReasonBits: {
+        reset: 1,
+        viewport: 2,
+        depth: 4,
+        normal: 8,
+        velocity: 16,
+        clampHistoryRange: 32,
+      },
+      channels: {
+        r: 'reasonBitsNormalizedBy63',
+        g: 'depthDelta',
+        b: 'normalDot',
+        a: 'velocityLengthSquared',
+      },
+    }
+  }
+
+  getTargetInventory(): VBAOVelocityTemporalTargetInventory {
+    return {
+      currentAo: {
+        owner: 'VBAONode',
+        source: 'product-or-reconstruction-output',
+        lifetime: 'active-vbao-pipeline',
+      },
+      aoHistory: {
+        owner: 'VBAOVelocityTemporalNode',
+        name: 'VBAO.VelocityTemporalHistory',
+        format: 'RedFormat',
+        type: 'HalfFloatType',
+        lifetime: 'reset-on-first-frame-resize-explicit-reset',
+      },
+      diagnostics: {
+        owner: 'VBAOVelocityTemporalNode',
+        name: 'VBAO.VelocityTemporalDiagnostics',
+        format: 'RGBAFormat',
+        type: 'HalfFloatType',
+        lifetime: 'active-vbao-pipeline',
+      },
+      velocity: {
+        owner: 'host-pass',
+        source: 'mrt-velocity',
+        convention: 'historyUv = uv - velocity.xy * vec2(0.5, -0.5)',
+        lifetime: 'host-pass-current-frame',
+      },
+      previousDepth: {
+        owner: 'host-pass',
+        source: "PassNode.getPreviousTextureNode('depth')",
+        lifetime: 'host-pass-previous-frame',
+      },
+      previousNormal: {
+        owner: 'host-pass',
+        source: "PassNode.getPreviousTextureNode('output')",
+        lifetime: 'host-pass-previous-frame',
+      },
+    }
   }
 
   updateBefore(frame: NodeFrame): boolean | undefined {
@@ -152,8 +319,38 @@ export class VBAOVelocityTemporalNode extends VBAOEffectPass {
     )
     if (rendered !== true) return rendered
 
+    this.renderDiagnosticsPass(frame, velocityTemporalSize, velocityTemporalQuadMesh)
+
     renderer.copyTextureToTexture(this.renderTarget.texture, this.historyRenderTarget.texture)
     this.resetHistory.value = 0
+    this.diagnosticsFrame += 1
+    return true
+  }
+
+  private renderDiagnosticsPass(
+    frame: NodeFrame,
+    size: Vector2,
+    quadMesh: QuadMesh,
+  ): boolean | undefined {
+    const renderer = frame.renderer
+    if (renderer === null || renderer === undefined) return undefined
+
+    this.diagnosticsRendererState = RendererUtils.resetRendererState(
+      renderer,
+      this.diagnosticsRendererState as never,
+    )
+
+    const drawingBufferSize = renderer.getDrawingBufferSize(size)
+    this.setSize(drawingBufferSize.width, drawingBufferSize.height)
+
+    quadMesh.material = this.diagnosticsMaterial
+    quadMesh.name = 'VBAOVelocityTemporalDiagnostics'
+
+    renderer.setClearColor(0x000000, 1)
+    renderer.setRenderTarget(this.diagnosticsRenderTarget)
+    quadMesh.render(renderer)
+
+    RendererUtils.restoreRendererState(renderer, this.diagnosticsRendererState)
     return true
   }
 
@@ -254,14 +451,107 @@ export class VBAOVelocityTemporalNode extends VBAOEffectPass {
       return currentAo.mul(float(1).sub(weight)).add(clampedHistoryAo.mul(weight))
     })
 
+    const diagnosticsKernel = (Fn as any)(() => {
+      const currentDepth = sampleDepth(currentDepthNode, uvNode).toVar('vbaoVelocityTemporalDiagCurrentDepth')
+      const currentNormal = sampleNormal(currentNormalNode, uvNode).toVar('vbaoVelocityTemporalDiagCurrentNormal')
+      const velocityUv = velocityNode
+        .sample(uvNode)
+        .xy
+        .mul(vec2(0.5, -0.5))
+        .toVar('vbaoVelocityTemporalDiagOffsetUv')
+      const historyUv = uvNode.sub(velocityUv).toVar('vbaoVelocityTemporalDiagHistoryUv')
+      const previousDepth = sampleDepth(previousDepthNode, historyUv).toVar('vbaoVelocityTemporalDiagPreviousDepth')
+      const previousNormal = sampleNormal(previousNormalNode, historyUv).toVar('vbaoVelocityTemporalDiagPreviousNormal')
+      const historyAo = historyAoNode.sample(historyUv).r.toVar('vbaoVelocityTemporalDiagHistoryAo')
+      const validUv = historyUv.x
+        .greaterThanEqual(float(0))
+        .and(historyUv.x.lessThanEqual(float(1)))
+        .and(historyUv.y.greaterThanEqual(float(0)))
+        .and(historyUv.y.lessThanEqual(float(1)))
+        .toVar('vbaoVelocityTemporalDiagValidUv')
+      const depthDelta = abs(currentDepth.sub(previousDepth)).toVar('vbaoVelocityTemporalDiagDepthDelta')
+      const normalDot = dot(currentNormal, previousNormal).toVar('vbaoVelocityTemporalDiagNormalDot')
+      const velocityLengthSquared = dot(velocityUv, velocityUv).toVar('vbaoVelocityTemporalDiagVelocityLengthSquared')
+      const validDepth = depthDelta.lessThanEqual(this.depthThreshold).toVar('vbaoVelocityTemporalDiagValidDepth')
+      const validNormal = normalDot.greaterThanEqual(this.normalThreshold).toVar('vbaoVelocityTemporalDiagValidNormal')
+      const validVelocity = velocityLengthSquared
+        .lessThanEqual(this.maxVelocityUv.mul(this.maxVelocityUv))
+        .toVar('vbaoVelocityTemporalDiagValidVelocity')
+      const validHistory = validUv
+        .and(validDepth)
+        .and(validNormal)
+        .and(validVelocity)
+        .and(this.resetHistory.lessThan(float(0.5)))
+        .toVar('vbaoVelocityTemporalDiagValidHistory')
+      const minAo = currentAoNode.sample(uvNode).r.toVar('vbaoVelocityTemporalDiagMinAo')
+      const maxAo = currentAoNode.sample(uvNode).r.toVar('vbaoVelocityTemporalDiagMaxAo')
+
+      const visitNeighbor = (x: number, y: number, tapIndex: number) => {
+        const tapUv = uvNode
+          .add(vec2(float(x), float(y)).mul(vec2(1).div(vec2((textureSize as any)(currentAoNode, 0) as any))))
+          .toVar(`vbaoVelocityTemporalDiagTapUv${tapIndex}`)
+
+        If(
+          tapUv.x
+            .greaterThanEqual(float(0))
+            .and(tapUv.x.lessThanEqual(float(1)))
+            .and(tapUv.y.greaterThanEqual(float(0)))
+            .and(tapUv.y.lessThanEqual(float(1))),
+          () => {
+            const tapAo = currentAoNode.sample(tapUv).r.toVar(`vbaoVelocityTemporalDiagTapAo${tapIndex}`)
+            minAo.assign(min(minAo, tapAo))
+            maxAo.assign(max(maxAo, tapAo))
+          },
+        )
+      }
+
+      let tapIndex = 0
+      for (let x = -1; x <= 1; x += 1) {
+        for (let y = -1; y <= 1; y += 1) {
+          if (x !== 0 || y !== 0) {
+            visitNeighbor(x, y, tapIndex)
+            tapIndex += 1
+          }
+        }
+      }
+
+      const clampedHistoryAo = clamp(historyAo, minAo, maxAo).toVar('vbaoVelocityTemporalDiagClampedHistoryAo')
+      const reasonBits = float(0).toVar('vbaoVelocityTemporalDiagReasonBits')
+
+      If(this.resetHistory.greaterThanEqual(float(0.5)), () => {
+        reasonBits.addAssign(float(1))
+      })
+      If(validUv.not(), () => {
+        reasonBits.addAssign(float(2))
+      })
+      If(validDepth.not(), () => {
+        reasonBits.addAssign(float(4))
+      })
+      If(validNormal.not(), () => {
+        reasonBits.addAssign(float(8))
+      })
+      If(validVelocity.not(), () => {
+        reasonBits.addAssign(float(16))
+      })
+      If(validHistory.and(abs(historyAo.sub(clampedHistoryAo)).greaterThan(float(0.00001))), () => {
+        reasonBits.addAssign(float(32))
+      })
+
+      return vec4(reasonBits.div(float(63)), depthDelta, normalDot, velocityLengthSquared)
+    })
+
     this.material.fragmentNode = temporalKernel()
+    this.diagnosticsMaterial.fragmentNode = diagnosticsKernel()
     this.material.needsUpdate = true
+    this.diagnosticsMaterial.needsUpdate = true
 
     return this.getPassTextureNode()
   }
 
   dispose(): void {
     this.historyRenderTarget.dispose()
+    this.diagnosticsRenderTarget.dispose()
+    this.diagnosticsMaterial.dispose()
     super.dispose()
   }
 }

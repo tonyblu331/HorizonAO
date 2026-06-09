@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "benchmark:ao": "node scripts/collect-ao-benchmark.mjs",
+    "benchmark:ao-fps": "node scripts/collect-ao-fps-benchmark.mjs",
     "benchmark:ao:gpu-readback": "node scripts/collect-ao-gpu-readback-baseline.mjs",
     "benchmark:vbao-noise": "node scripts/collect-vbao-noise-source-comparison.mjs",
     "verify:vbao-temporal": "node scripts/verify-vbao-temporal-gate.mjs",
@@ -22,7 +23,8 @@
     "n8ao-webgpu": "0.1.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "three": "0.184.0"
+    "three": "0.184.0",
+    "threejs-debug-compose": "^0.1.1"
   },
   "devDependencies": {
     "@babel/core": "7.29.0",

@@ -1,4 +1,5 @@
-import { SECTOR_COUNT, VBAO_THETA_MIN, VBAO_THETA_STEP } from '../src/vbaoConstants'
+import { SECTOR_COUNT } from '../src/vbaoConstants'
+import { VBAO_THETA_MIN, VBAO_THETA_STEP } from './vbaoThetaConstants'
 
 /**
  * Reference/debug sector center angles in radians, indexed by sector `k ∈ [0, SECTOR_COUNT)`.

@@ -119,13 +119,15 @@ async function runVbaoLabScene(container: HTMLDivElement, signal: AbortSignal): 
   const canvas = document.createElement('canvas')
   canvas.className = 'scene-canvas'
   container.appendChild(canvas)
+  const trackGpuPassTiming =
+    new URLSearchParams(window.location.search).get('gpuPassTiming') === '1'
 
   const renderer = new WebGPURenderer({
     canvas,
     antialias: true,
     forceWebGL: false,
     powerPreference: 'high-performance',
-    trackTimestamp: true,
+    trackTimestamp: trackGpuPassTiming,
   })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75))
   await renderer.init()

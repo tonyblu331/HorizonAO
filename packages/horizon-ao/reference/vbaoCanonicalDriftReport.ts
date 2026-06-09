@@ -13,6 +13,7 @@ export type VbaoCanonicalDriftCaseId =
   | 'thin-separated'
   | 'thick-contact'
   | 'perspective-thickness'
+  | 'grazing-normal'
 
 export type VbaoCanonicalDriftVerdict = 'pass' | 'warn' | 'fail'
 
@@ -63,6 +64,8 @@ export interface VbaoCanonicalDriftReport {
 const PIXEL: Vec3 = [0, 0, -2]
 const VIEW: Vec3 = [0, 0, 1]
 const NORMAL: Vec3 = [0, 0, 1]
+const GRAZING_NORMAL_ANGLE = 0.75
+const GRAZING_NORMAL: Vec3 = [0, Math.sin(GRAZING_NORMAL_ANGLE), Math.cos(GRAZING_NORMAL_ANGLE)]
 const SLICE_TANGENT: Vec3 = [0, 1, 0]
 
 const DEFAULT_THRESHOLDS: VbaoCanonicalDriftThresholds = {
@@ -143,6 +146,22 @@ export const VBAO_CANONICAL_DRIFT_CASES = Object.freeze([
     samples: [
       { sideSign: 1, position: [0, 0.7, -1.2] },
       { sideSign: -1, position: [0, -0.7, -1.2] },
+    ],
+  },
+  {
+    id: 'grazing-normal',
+    description: 'Non-axis-aligned normal fixture that stresses projected-normal slice contribution before any slice-weighting change.',
+    pixelPosition: PIXEL,
+    viewDir: VIEW,
+    normal: GRAZING_NORMAL,
+    normalAngle: GRAZING_NORMAL_ANGLE,
+    radius: 1,
+    thickness: 0.1,
+    samples: [
+      sampleAt(1, 0.35, 0.8),
+      sampleAt(1, 0.75, 0.8),
+      sampleAt(-1, 0.35, 0.8),
+      sampleAt(-1, 0.75, 0.8),
     ],
   },
 ] as const satisfies readonly VbaoCanonicalDriftCase[])
