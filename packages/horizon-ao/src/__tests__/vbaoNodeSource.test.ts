@@ -1225,4 +1225,53 @@ describe('modernized VBAO production source contract', () => {
     expect(temporalAccumulateSource).not.toContain('private readonly pongTarget:')
     expect(temporalAccumulateSource).not.toContain('private readonly pingTarget:')
   })
+
+  // ---------------------------------------------------------------------------
+  // vbao-temporal PR2: GPU reprojection + validity gating + adaptive-α + counter
+  // ---------------------------------------------------------------------------
+
+  it('VBAOTemporalAccumulateNode accepts depth, normal, rawAo and camera inputs for GPU reprojection (WARNING-1 fix)', () => {
+    // PR2 carried obligation: the node must accept depth/normal/rawAo/camera for per-pixel reprojection.
+    expect(temporalAccumulateSource).toContain('readonly depthNode:')
+    expect(temporalAccumulateSource).toContain('readonly normalNode:')
+    expect(temporalAccumulateSource).toContain('readonly rawAoNode:')
+    // Reprojection matrix is built on CPU each frame and uploaded as a uniform.
+    expect(temporalAccumulateSource).toContain('reprojMatrix')
+  })
+
+  it('VBAOTemporalAccumulateNode TSL shader performs per-pixel validity gating and forces alpha=1 on invalid', () => {
+    // Three sub-tests from spec §Depth-Reprojection Validity:
+    // 1. prevUV in [0,1]² bounds
+    // 2. relative depth < 0.05
+    // 3. normal dot > 0.906
+    // On failure: alpha forced to 1.0
+    expect(temporalAccumulateSource).toContain('validUv')
+    expect(temporalAccumulateSource).toContain('validDepth')
+    expect(temporalAccumulateSource).toContain('validNormal')
+    // Force alpha=1 on any validity failure (spec: α MUST be forced to 1.0)
+    expect(temporalAccumulateSource).toContain('validHistory')
+    expect(temporalAccumulateSource).toContain('float(1)')
+  })
+
+  it('VBAOTemporalAccumulateNode TSL shader applies 3x3 AABB variance clamping on history', () => {
+    // Spec §AABB Variance Clamping: history clamped to [min-0.05, max+0.05] of 3x3 neighborhood.
+    expect(temporalAccumulateSource).toContain('minAo')
+    expect(temporalAccumulateSource).toContain('maxAo')
+    expect(temporalAccumulateSource).toContain('clampedHistoryAo')
+  })
+
+  it('VBAOTemporalAccumulateNode samples confidence from raw.g channel (bilinear, half-res) for adaptive alpha', () => {
+    // Spec §Confidence-Adaptive α: confidence from G channel of half-res raw VBAONode output.
+    expect(temporalAccumulateSource).toContain('rawAoNode')
+    // Confidence is the .g channel
+    expect(temporalAccumulateSource).toMatch(/rawAo[^.]*\.g|\.g\b.*confidence|confidence.*\.g/)
+  })
+
+  it('VBAOTemporalAccumulateNode writes 4-bit reliability counter into G channel of RG16F history', () => {
+    // Spec §TSVGF Reliability Counter: G channel stores counter (0-15), updated each frame.
+    // Counter increments on valid, resets to 0 on invalid.
+    expect(temporalAccumulateSource).toContain('counter')
+    // Output is (accum, counter) packed into R and G
+    expect(temporalAccumulateSource).toContain('vec4(')
+  })
 })
