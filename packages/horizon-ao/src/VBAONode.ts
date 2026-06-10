@@ -64,6 +64,7 @@ import {
 import { VBAOFullResPolishNode } from './VBAOFullResPolishNode'
 import { VBAOHalfResCleanupNode } from './VBAOHalfResCleanupNode'
 import { VBAOResolveNode } from './VBAOResolveNode'
+import { VBAOTemporalAccumulateNode } from './VBAOTemporalAccumulateNode'
 import {
   createVbaoNoisePhaseSampler,
   vbaoCosineMeasureNoAtan,
@@ -128,6 +129,7 @@ export class VBAONode extends TempNode<'float'> {
   private halfCleanupNode?: VBAOHalfResCleanupNode | undefined
   private fullPolishNode?: VBAOFullResPolishNode | undefined
   private productAoTextureNode?: TextureNode
+  private temporalAccumulateNode?: VBAOTemporalAccumulateNode | undefined
   private receiverProductGraphKey = ''
   private receiverProductGraphCreated = false
   private rawLoopShape: VbaoRawLoopShape = {
@@ -145,10 +147,23 @@ export class VBAONode extends TempNode<'float'> {
   // Per-instance renderer state: a module-level slot would let two live
   // VBAONode instances corrupt each other's save/restore every frame.
   private rendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
+  private readonly temporalOptions: VBAONodeOptions['temporal']
 
   constructor(depthNode: Node, normalNode: Node, camera: Camera, options: VBAONodeOptions = {}) {
     if (normalNode === null || normalNode === undefined) {
       throw new TypeError('VBAONode: normalNode is required')
+    }
+
+    // Validate temporal options at construction time (spec §Opt-In Temporal Option).
+    if (options.temporal !== undefined) {
+      if (options.temporal.mode === undefined || options.temporal.mode === null) {
+        throw new TypeError('VBAONode: temporal.mode is required when temporal is provided')
+      }
+      if (options.temporal.mode === 'velocity' && options.temporal.velocityNode === undefined) {
+        throw new TypeError(
+          'VBAONode: temporal.velocityNode is required when temporal.mode is "velocity"',
+        )
+      }
     }
 
     super('float')
@@ -171,6 +186,7 @@ export class VBAONode extends TempNode<'float'> {
     this.noiseTexture = internalOptions.benchmark?.noiseTexture ?? getSharedVbaoNoiseTexture()
     this.noiseNode = texture(this.noiseTexture)
     this.temporalMode = resolveInternalTemporalMode(internalOptions.temporalMode)
+    this.temporalOptions = options.temporal
 
     this.configure(options)
   }
@@ -362,6 +378,7 @@ export class VBAONode extends TempNode<'float'> {
       this.resolutionScale.toFixed(4),
       this.softness.value.toFixed(4),
       this.temporalMode,
+      this.temporalOptions !== undefined ? `temporal:${this.temporalOptions.mode}` : 'no-temporal',
     ].join(':')
   }
 
@@ -416,6 +433,24 @@ export class VBAONode extends TempNode<'float'> {
       ).getTextureNode()
     } else {
       this.disposeFullPolishGraph()
+    }
+
+    // Temporal accumulate is the TERMINAL stage of the product graph.
+    // Pass ordering decision (task 1.1.1): temporal runs AFTER polish
+    // because polish currently terminates the graph and temporal wraps
+    // the fully-resolved, polished full-res AO output.
+    if (this.temporalOptions !== undefined) {
+      if (
+        this.temporalAccumulateNode === undefined ||
+        this.temporalAccumulateNode.productAoNode !== output
+      ) {
+        this.temporalAccumulateNode?.dispose()
+        this.temporalAccumulateNode = new VBAOTemporalAccumulateNode(output, this.temporalOptions)
+      }
+      output = this.temporalAccumulateNode.getTextureNode()
+    } else {
+      this.temporalAccumulateNode?.dispose()
+      this.temporalAccumulateNode = undefined
     }
 
     this.productAoTextureNode = output
@@ -707,6 +742,7 @@ export class VBAONode extends TempNode<'float'> {
     this.resolveNode?.dispose()
     this.halfCleanupNode?.dispose()
     this.fullPolishNode?.dispose()
+    this.temporalAccumulateNode?.dispose()
     this.rawEstimateTarget.dispose()
     this.material.dispose()
   }
