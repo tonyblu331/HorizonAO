@@ -266,29 +266,35 @@ describe('counterToAlphaScale', () => {
 // ---------------------------------------------------------------------------
 
 describe('VBAOTemporalOptions — construction guards (via VBAOTemporalAccumulateNode)', () => {
+  // PR2 updated signature: (productAoNode, rawAoNode, depthNode, normalNode, camera, options)
+  // Mode guards fire before super() so placeholders are fine for the node args.
+
   it('throws TypeError when mode is missing (task 1.4.2)', async () => {
     const { VBAOTemporalAccumulateNode } = await import('../VBAOTemporalAccumulateNode')
-    const fakeTexNode = {} as any
+    const fakeNode = {} as any
+    const fakeCamera = {} as any
 
-    // JS callers can pass {} — should throw TypeError at construction time
-    expect(() => new VBAOTemporalAccumulateNode(fakeTexNode, {} as any)).toThrow(TypeError)
+    // JS callers can pass {} as options — should throw TypeError at construction time
+    expect(() => new VBAOTemporalAccumulateNode(fakeNode, fakeNode, fakeNode, fakeNode, fakeCamera, {} as any)).toThrow(TypeError)
   })
 
   it('throws TypeError when mode is "velocity" without velocityNode (task 1.4.3)', async () => {
     const { VBAOTemporalAccumulateNode } = await import('../VBAOTemporalAccumulateNode')
-    const fakeTexNode = {} as any
+    const fakeNode = {} as any
+    const fakeCamera = {} as any
 
     expect(() =>
-      new VBAOTemporalAccumulateNode(fakeTexNode, { mode: 'velocity' }),
+      new VBAOTemporalAccumulateNode(fakeNode, fakeNode, fakeNode, fakeNode, fakeCamera, { mode: 'velocity' }),
     ).toThrow(TypeError)
   })
 
   it('throws TypeError with message mentioning "PR3" for velocity mode — guard-without-impl documented', async () => {
     const { VBAOTemporalAccumulateNode } = await import('../VBAOTemporalAccumulateNode')
-    const fakeTexNode = {} as any
+    const fakeNode = {} as any
+    const fakeCamera = {} as any
 
     expect(() =>
-      new VBAOTemporalAccumulateNode(fakeTexNode, { mode: 'velocity' }),
+      new VBAOTemporalAccumulateNode(fakeNode, fakeNode, fakeNode, fakeNode, fakeCamera, { mode: 'velocity' }),
     ).toThrow(/PR3/)
   })
 })
