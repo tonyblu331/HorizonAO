@@ -25,6 +25,7 @@ import profilingProductionReportSource from '../../../../apps/demo/scripts/profi
 import profilingScreenshotMetricsSource from '../../../../apps/demo/scripts/profiling/screenshotMetrics.mjs?raw'
 import benchmarkNoiseSource from '../../../../apps/demo/src/scenes/vbaoBenchmarkNoise.ts?raw'
 import computeCandidateSource from '../../../../apps/demo/src/scenes/vbaoComputeCandidate.ts?raw'
+import temporalAccumulateSource from '../VBAOTemporalAccumulateNode.ts?raw'
 import readmeSource from '../../../../README.md?raw'
 
 const runtimeSources = [museumSource, aoCompareSource, benchmarkSource].join('\n')
@@ -1208,5 +1209,20 @@ describe('modernized VBAO production source contract', () => {
     expect(optionsSource).toContain('readonly alpha?: { readonly min: number; readonly max: number }')
     expect(optionsSource).toContain('readonly reliabilityCounter?: boolean')
     expect(optionsSource).toContain('readonly temporal?: VBAOTemporalOptions')
+  })
+
+  it('VBAOTemporalAccumulateNode exposes the rendered output via getPassTextureNode, not an orphaned base renderTarget', () => {
+    // getTextureNode() MUST delegate to getPassTextureNode() — which wraps this.renderTarget.texture.
+    // The node MUST render into this.renderTarget (the base-class output target) so the exposed
+    // texture contains actual accumulation output, not an empty never-written texture.
+    expect(temporalAccumulateSource).toContain('return this.getPassTextureNode()')
+    // The base-class renderTarget MUST be the render destination (patched to RGFormat at construction).
+    expect(temporalAccumulateSource).toContain('this.renderTarget.texture.format = RGFormat')
+    // Rendering MUST target this.renderTarget, not a private pong target.
+    expect(temporalAccumulateSource).toContain('renderer.setRenderTarget(this.renderTarget)')
+    // A single history target is sufficient; no separate output ping/pong pair is needed.
+    expect(temporalAccumulateSource).toContain('private readonly historyTarget:')
+    expect(temporalAccumulateSource).not.toContain('private readonly pongTarget:')
+    expect(temporalAccumulateSource).not.toContain('private readonly pingTarget:')
   })
 })
