@@ -708,6 +708,16 @@ describe('modernized VBAO production source contract', () => {
     expect(fullResPolishSource).not.toContain('new RenderTarget(1, 1')
     expect(fullResPolishSource).not.toContain('RendererUtils.resetRendererState')
     expect(indexSource).not.toContain('VBAOEffectPass')
+    // Renderer state is per-instance everywhere: a module-level slot lets two
+    // simultaneous instances corrupt each other's save/restore every frame.
+    expect(source).toContain(
+      'private rendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined',
+    )
+    expect(source).not.toContain('let rendererState')
+    expect(receiverConfidenceSource).toContain(
+      'private rendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined',
+    )
+    expect(receiverConfidenceSource).not.toContain('let receiverConfidenceRendererState')
   })
 
   it('keeps default full-resolution polish to the near 8-tap kernel', () => {

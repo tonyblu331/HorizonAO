@@ -65,9 +65,6 @@ import { getSharedVbaoNoiseTexture } from './vbaoNoise'
 
 const receiverConfidenceQuadMesh = new QuadMesh()
 const receiverConfidenceSize = new Vector2()
-let receiverConfidenceRendererState:
-  | ReturnType<typeof RendererUtils.resetRendererState>
-  | undefined
 
 type SampleableNode = Node & {
   sample: (uvCoord: Node) => any
@@ -127,6 +124,9 @@ export class VBAOReceiverConfidenceNode extends TempNode<'float'> {
   private readonly cameraFar
   private readonly noiseTexture: DataTexture
   private readonly noiseNode
+  // Per-instance renderer state: a module-level slot would let two live
+  // instances corrupt each other's save/restore every frame.
+  private rendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
 
   constructor(
     depthNode: Node,
@@ -187,10 +187,7 @@ export class VBAOReceiverConfidenceNode extends TempNode<'float'> {
     const renderer = frame.renderer
     if (renderer === null || renderer === undefined) return undefined
 
-    receiverConfidenceRendererState = RendererUtils.resetRendererState(
-      renderer,
-      receiverConfidenceRendererState as never,
-    )
+    this.rendererState = RendererUtils.resetRendererState(renderer, this.rendererState as never)
 
     const drawingBufferSize = renderer.getDrawingBufferSize(receiverConfidenceSize)
     this.setSize(drawingBufferSize.width, drawingBufferSize.height)
@@ -202,7 +199,7 @@ export class VBAOReceiverConfidenceNode extends TempNode<'float'> {
     renderer.setRenderTarget(this.receiverConfidenceTarget)
     receiverConfidenceQuadMesh.render(renderer)
 
-    RendererUtils.restoreRendererState(renderer, receiverConfidenceRendererState)
+    RendererUtils.restoreRendererState(renderer, this.rendererState)
     return true
   }
 

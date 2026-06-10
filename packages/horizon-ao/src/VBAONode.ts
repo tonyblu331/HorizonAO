@@ -74,7 +74,6 @@ import { VBAO_PHASE_ATLAS_PHASES } from './vbaoSampling'
 
 const quadMesh = new QuadMesh()
 const size = new Vector2()
-let rendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
 
 type SampleableNode = Node & {
   sample: (uvCoord: Node) => any
@@ -146,6 +145,9 @@ export class VBAONode extends TempNode<'float'> {
   private readonly noiseNode
   private readonly temporalPhaseOffset = uniform(0)
   private readonly temporalMode: VbaoInternalTemporalMode
+  // Per-instance renderer state: a module-level slot would let two live
+  // VBAONode instances corrupt each other's save/restore every frame.
+  private rendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
 
   constructor(depthNode: Node, normalNode: Node, camera: Camera, options: VBAONodeOptions = {}) {
     if (normalNode === null || normalNode === undefined) {
@@ -447,7 +449,7 @@ export class VBAONode extends TempNode<'float'> {
     const renderer = frame.renderer
     if (renderer === null || renderer === undefined) return undefined
 
-    rendererState = RendererUtils.resetRendererState(renderer, rendererState as never)
+    this.rendererState = RendererUtils.resetRendererState(renderer, this.rendererState as never)
 
     const drawingBufferSize = renderer.getDrawingBufferSize(size)
     this.setSize(drawingBufferSize.width, drawingBufferSize.height)
@@ -464,7 +466,7 @@ export class VBAONode extends TempNode<'float'> {
         (this.temporalPhaseOffset.value + 1) % VBAO_PHASE_ATLAS_PHASES
     }
 
-    RendererUtils.restoreRendererState(renderer, rendererState)
+    RendererUtils.restoreRendererState(renderer, this.rendererState)
     return true
   }
 
