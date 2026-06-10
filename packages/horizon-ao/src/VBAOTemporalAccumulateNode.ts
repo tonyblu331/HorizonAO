@@ -52,7 +52,12 @@ const size = new Vector2()
 /**
  * Public, opt-in temporal AO accumulation node.
  *
- * Owns an RG16F ping-pong pair (R=AO, G=counter stub).
+ * Renders accumulated AO into the base-class renderTarget (format patched to
+ * RG16F at construction). A single historyTarget holds the previous frame's
+ * result; after each render the output is copied into historyTarget so the
+ * history is always up-to-date. getPassTextureNode() / getTextureNode() both
+ * return the base-class output, which is always the most recently written frame.
+ *
  * Reset on resize and first frame. EMA blend with depth-reprojection validity.
  */
 export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
@@ -64,9 +69,7 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
   readonly productAoNode: TextureNode
 
   private readonly options: Readonly<Required<Pick<VBAOTemporalOptions, 'alpha'>>>
-  private readonly pingTarget: RenderTarget
-  private readonly pongTarget: RenderTarget
-  private pingIsHistory = true
+  private readonly historyTarget: RenderTarget
   private isFirstFrame = true
   private lastWidth = 0
   private lastHeight = 0
@@ -92,10 +95,14 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
       alpha: options.alpha ?? { min: 0.05, max: 0.25 },
     }
 
-    // Override the base-class render target format to RG16F (R=AO, G=counter stub).
-    // The base-class RedFormat target is unused; we render into ping/pong targets.
-    this.pingTarget = this.createHistoryTarget('VBAO.TemporalHistory.Ping')
-    this.pongTarget = this.createHistoryTarget('VBAO.TemporalHistory.Pong')
+    // Patch the base-class render target to RG16F (R=AO, G=counter stub).
+    // VBAOEffectPass allocates a RedFormat target; we need RGFormat for the G channel.
+    // Mutating .format before the GPU allocates the texture is safe at construction time.
+    this.renderTarget.texture.format = RGFormat
+    this.renderTarget.texture.name = 'VBAO.TemporalAccumulate'
+
+    // Single history target: holds the previous frame's accumulated result.
+    this.historyTarget = this.createHistoryTarget('VBAO.TemporalHistory')
   }
 
   private createHistoryTarget(name: string): RenderTarget {
@@ -113,17 +120,11 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
   }
 
   /**
-   * Returns the current history (ping) texture as a TSL node.
+   * Returns the history texture node (previous frame's accumulated AO).
    * Called by the accumulate shader to sample the previous frame.
    */
   private getHistoryTextureNode(): TextureNode {
-    const historyTarget = this.pingIsHistory ? this.pingTarget : this.pongTarget
-    return texture(historyTarget.texture)
-  }
-
-  /** Returns the accumulate output target (pong while history is ping, vice versa). */
-  private getOutputTarget(): RenderTarget {
-    return this.pingIsHistory ? this.pongTarget : this.pingTarget
+    return texture(this.historyTarget.texture)
   }
 
   override setSize(width: number, height: number): void {
@@ -131,8 +132,7 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
     const h = Math.max(1, Math.round(height))
 
     if (w !== this.lastWidth || h !== this.lastHeight) {
-      this.pingTarget.setSize(w, h)
-      this.pongTarget.setSize(w, h)
+      this.historyTarget.setSize(w, h)
       this.lastWidth = w
       this.lastHeight = h
       // Reset history on resize — next frame will be a cold start (α forced to 1)
@@ -163,11 +163,13 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
     this.alphaUniform.value = alphaValue
 
     renderer.setClearColor(0xffffff, 1)
-    renderer.setRenderTarget(this.getOutputTarget())
+    renderer.setRenderTarget(this.renderTarget)
     quadMesh.render(renderer)
 
-    // Swap ping/pong after render.
-    this.pingIsHistory = !this.pingIsHistory
+    // Copy the freshly-rendered output into the history target so the next
+    // frame's history sample reads the current frame's result.
+    renderer.copyTextureToTexture(this.renderTarget.texture, this.historyTarget.texture)
+
     this.isFirstFrame = false
 
     RendererUtils.restoreRendererState(renderer, rendererState)
@@ -182,7 +184,7 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
     // Sample current raw/product AO.
     const currentAo = this.productAoNode.sample(uvNode).r
 
-    // Sample history (R channel of ping-pong history buffer).
+    // Sample history (R channel of the history buffer — previous frame's result).
     const historyAo = this.getHistoryTextureNode().sample(uvNode).r
 
     // PR1: depth-reprojection validity is done on CPU (simplified stub).
@@ -197,8 +199,9 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
     )
     this.material.needsUpdate = true
 
-    // Return the output texture node (whichever target is the "output" right now).
-    // We expose the output of the current output target through getPassTextureNode.
+    // Return the base-class output texture node.
+    // getPassTextureNode() wraps this.renderTarget.texture — the target we render into —
+    // so consumers always see the most recently accumulated frame.
     return this.getPassTextureNode()
   }
 
@@ -207,8 +210,7 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
   }
 
   override dispose(): void {
-    this.pingTarget.dispose()
-    this.pongTarget.dispose()
+    this.historyTarget.dispose()
     super.dispose()
   }
 }
