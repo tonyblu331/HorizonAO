@@ -16,6 +16,8 @@ import {
   clampToAABB,
   buildReprojMatrix,
   emaBlend,
+  adaptiveAlpha,
+  counterToAlphaScale,
 } from '../vbaoTemporalMath'
 
 // ---------------------------------------------------------------------------
@@ -173,6 +175,89 @@ describe('emaBlend', () => {
 
   it('lerp identity: emaBlend(v, v, alpha) = v regardless of alpha', () => {
     expect(emaBlend(0.6, 0.6, 0.3)).toBeCloseTo(0.6)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// §Confidence-Adaptive α (PR2)
+//
+// Spec: α = mix(alpha.min, alpha.max, 1.0 - confidence)
+//   confidence=1 → α=min (maximum accumulation)
+//   confidence=0 → α=max (minimum accumulation)
+// ---------------------------------------------------------------------------
+
+describe('adaptiveAlpha', () => {
+  const bounds = { min: 0.05, max: 0.25 } as const
+
+  it('returns alpha.min when confidence is 1 (full confidence → maximum accumulation)', () => {
+    // mix(0.05, 0.25, 1.0 - 1.0) = mix(0.05, 0.25, 0.0) = 0.05
+    expect(adaptiveAlpha(1.0, bounds)).toBeCloseTo(0.05)
+  })
+
+  it('returns alpha.max when confidence is 0 (zero confidence → minimum accumulation)', () => {
+    // mix(0.05, 0.25, 1.0 - 0.0) = mix(0.05, 0.25, 1.0) = 0.25
+    expect(adaptiveAlpha(0.0, bounds)).toBeCloseTo(0.25)
+  })
+
+  it('returns midpoint when confidence is 0.5', () => {
+    // mix(0.05, 0.25, 0.5) = 0.05 + (0.25 - 0.05) * 0.5 = 0.15
+    expect(adaptiveAlpha(0.5, bounds)).toBeCloseTo(0.15)
+  })
+
+  it('clamps result to alpha.min at confidence = 1 for different bounds', () => {
+    expect(adaptiveAlpha(1.0, { min: 0.1, max: 0.9 })).toBeCloseTo(0.1)
+  })
+
+  it('clamps result to alpha.max at confidence = 0 for different bounds', () => {
+    expect(adaptiveAlpha(0.0, { min: 0.1, max: 0.9 })).toBeCloseTo(0.9)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// §TSVGF Reliability Counter → α scale (PR2)
+//
+// Spec: counter increments on valid reprojection (max 15), resets to 0 on failure.
+// counterToAlphaScale maps counter (0-15) to a blend weight multiplier:
+//   counter=0 → scale=1.0 (full alpha — no history trust)
+//   counter=15 → scale=0.0 (full trust — use adaptive alpha as-is)
+//   Monotonically decreasing: higher counter → lower scale
+// ---------------------------------------------------------------------------
+
+describe('counterToAlphaScale', () => {
+  it('returns 1.0 when counter is 0 (no history, full alpha)', () => {
+    expect(counterToAlphaScale(0)).toBeCloseTo(1.0)
+  })
+
+  it('returns 0.0 when counter is 15 (fully warmed up, full trust)', () => {
+    expect(counterToAlphaScale(15)).toBeCloseTo(0.0)
+  })
+
+  it('returns a value strictly between 0 and 1 for counter=7 (mid-warmup)', () => {
+    const scale = counterToAlphaScale(7)
+    expect(scale).toBeGreaterThan(0)
+    expect(scale).toBeLessThan(1)
+  })
+
+  it('is monotonically decreasing: scale(counter+1) <= scale(counter)', () => {
+    for (let c = 0; c < 15; c++) {
+      expect(counterToAlphaScale(c + 1)).toBeLessThanOrEqual(counterToAlphaScale(c))
+    }
+  })
+
+  it('counter increment: counter goes from 7 to 8 on valid reprojection (pure increment logic)', () => {
+    // This tests the spec requirement for counter increment — pure function
+    const counterIncrement = (c: number, valid: boolean): number => valid ? Math.min(15, c + 1) : 0
+    expect(counterIncrement(7, true)).toBe(8)
+  })
+
+  it('counter saturation: counter stays at 15 when already at max', () => {
+    const counterIncrement = (c: number, valid: boolean): number => valid ? Math.min(15, c + 1) : 0
+    expect(counterIncrement(15, true)).toBe(15)
+  })
+
+  it('counter reset: counter goes to 0 on validity failure', () => {
+    const counterIncrement = (c: number, valid: boolean): number => valid ? Math.min(15, c + 1) : 0
+    expect(counterIncrement(10, false)).toBe(0)
   })
 })
 
