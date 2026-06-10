@@ -394,9 +394,12 @@ describe('modernized VBAO production source contract', () => {
     expect(source).not.toContain('getOrCreateTemporalAccumulationNode')
     expect(source).not.toContain('VBAOTemporalAccumulationNode')
     expect(source).not.toContain('previousViewProjection')
-    expect(optionsSource).not.toContain('temporal')
-    expect(indexSource).not.toContain('temporal')
-    expect(indexSource).not.toContain('VBAOTemporalAccumulationNode')
+    // vbao-temporal PR1: VBAOTemporalOptions is now a public opt-in field on VBAONodeOptions.
+    // optionsSource and indexSource intentionally contain 'temporal' as part of the public API.
+    expect(optionsSource).toContain('VBAOTemporalOptions')
+    expect(optionsSource).toContain('readonly temporal?: VBAOTemporalOptions')
+    expect(indexSource).toContain('VBAOTemporalOptions')
+    expect(indexSource).toContain('VBAOTemporalAccumulateNode')
     expect(museumSource).toContain("type VbaoTemporalMode = 'off' | 'host' | 'velocity-internal'")
     expect(museumSource).toContain('function getRequestedVbaoTemporalMode()')
     expect(museumSource).toContain("if (requested === 'velocity-internal') return 'velocity-internal'")
@@ -517,7 +520,8 @@ describe('modernized VBAO production source contract', () => {
     expect(indexSource).not.toContain('VBAOVelocityTemporalNode')
     expect(indexSource).not.toContain('getInternalTemporalDiagnostics')
     expect(optionsSource).not.toContain('historyWeight')
-    expect(optionsSource).not.toContain('temporal')
+    // vbao-temporal PR1: 'temporal' is now the PUBLIC VBAOTemporalOptions field — intentionally present.
+    // This test guards INTERNAL / REMOVED temporal plumbing only.
   })
 
   it('keeps velocity-backed temporal private, velocity-driven, and guide-history-owned by the host', () => {
@@ -1175,5 +1179,34 @@ describe('modernized VBAO production source contract', () => {
     expect(shaderInspectionSource).toContain('ignoredConsoleDiagnostics')
     expect(shaderInspectionSource).toContain('powerPreference option is currently ignored')
     expect(shaderInspectionSource).not.toContain('vbaoPixelDuplicateWarnings')
+  })
+
+  // ---------------------------------------------------------------------------
+  // vbao-temporal PR1: spatial-only regression + public temporal API contract
+  // ---------------------------------------------------------------------------
+
+  it('wires temporal accumulate strictly inside the opt-in branch (task 1.4.1 — spatial regression)', () => {
+    // Temporal accumulate stage MUST be gated behind options.temporal — never runs in spatial-only path.
+    expect(source).toContain('if (this.temporalOptions !== undefined)')
+    expect(source).toMatch(
+      /if \(this\.temporalOptions !== undefined\)[\s\S]*?VBAOTemporalAccumulateNode[\s\S]*?} else \{[\s\S]*?this\.temporalAccumulateNode\?\.dispose\(\)/,
+    )
+    // Product graph key includes temporal discriminator
+    expect(source).toContain('no-temporal')
+  })
+
+  it('exports VBAOTemporalAccumulateNode and VBAOTemporalOptions publicly (task 1.5.1)', () => {
+    expect(indexSource).toContain('VBAOTemporalAccumulateNode')
+    expect(indexSource).toContain('VBAOTemporalOptions')
+    // Private velocity node stays unexported
+    expect(indexSource).not.toContain('VBAOVelocityTemporalNode')
+  })
+
+  it('VBAOTemporalOptions has required mode field and optional fields per spec', () => {
+    expect(optionsSource).toContain("readonly mode: 'depth-reprojection' | 'velocity'")
+    expect(optionsSource).toContain('readonly velocityNode?: unknown')
+    expect(optionsSource).toContain('readonly alpha?: { readonly min: number; readonly max: number }')
+    expect(optionsSource).toContain('readonly reliabilityCounter?: boolean')
+    expect(optionsSource).toContain('readonly temporal?: VBAOTemporalOptions')
   })
 })
