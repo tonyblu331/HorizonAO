@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import source from '../VBAONode.ts?raw'
 import noiseSource from '../vbaoNoise.ts?raw'
 import samplingSource from '../vbaoSampling.ts?raw'
+import kernelPrimitivesSource from '../vbaoKernelPrimitives.ts?raw'
 import indexSource from '../index.ts?raw'
 import optionsSource from '../vbaoConstants.ts?raw'
 import bilateralWeightSource from '../vbaoBilateralWeight.ts?raw'
@@ -122,10 +123,10 @@ describe('modernized VBAO production source contract', () => {
     expect(samplingSource).toContain('VBAO_PHASE_STRIDE = 16')
     expect(noiseSource).toContain('const atlasWidth = n * VBAO_PHASE_ATLAS_COLUMNS')
     expect(noiseSource).toContain('const atlasHeight = n * VBAO_PHASE_ATLAS_ROWS')
-    expect(source).toMatch(
+    expect(kernelPrimitivesSource).toMatch(
       /const phaseRaw = float\(slice\)[\s\S]*?\.mul\(float\(VBAO_PHASE_STRIDE\)\)[\s\S]*?\.add\(float\(sample\)\)/,
     )
-    expect(source).not.toContain('float(slice).mul(float(8)).add(float(sample))')
+    expect(kernelPrimitivesSource).not.toContain('float(slice).mul(float(8)).add(float(sample))')
     expect(noiseSource).toContain('tex.magFilter = NearestFilter')
     expect(noiseSource).toContain('tex.minFilter = NearestFilter')
     expect(noiseSource).toContain('tex.generateMipmaps = false')
@@ -152,15 +153,16 @@ describe('modernized VBAO production source contract', () => {
   })
 
   it('hoists phase atlas pixel coordinates out of the per-sample noise lookup', () => {
-    expect(source).toContain(
-      'const vbaoRawNoisePixel = floor(uvNode.mul(this.sourceResolution))',
+    expect(kernelPrimitivesSource).toContain(
+      'const vbaoRawNoisePixel = floor(uvNode.mul(sourceResolution))',
     )
-    expect(source).toContain(".toVar('vbaoLocalPixel')")
-    expect(source).not.toContain("toVar('vbaoRawNoisePixel')")
-    expect(source).toMatch(
-      /const vbaoLocalPixel = vbaoRawNoisePixel[\s\S]*?const sampleNoisePhase = \(slice: any, sample: any\) => \{/,
+    expect(kernelPrimitivesSource).toContain(".toVar('vbaoLocalPixel')")
+    expect(kernelPrimitivesSource).not.toContain("toVar('vbaoRawNoisePixel')")
+    expect(kernelPrimitivesSource).toMatch(
+      /const vbaoLocalPixel = vbaoRawNoisePixel[\s\S]*?return \(slice: any, sample: any\) => \{/,
     )
-    expect(source).toContain('const atlasPixel = vbaoLocalPixel.add')
+    expect(kernelPrimitivesSource).toContain('const atlasPixel = vbaoLocalPixel.add')
+    expect(source).toContain('const sampleNoisePhase = createVbaoNoisePhaseSampler({')
     expect(source).not.toContain("toVar('vbaoPixel')")
     expect(source).not.toContain('const pixel = floor(uvNode.mul(this.resolution))')
     expect(source).not.toContain('const localPixel = pixel.sub')
@@ -171,9 +173,7 @@ describe('modernized VBAO production source contract', () => {
     expect(source).toMatch(
       /this\.sourceResolution\.value\.set\(width, height\)[\s\S]*?this\.resolution\.value\.set\(scaledWidth, scaledHeight\)/,
     )
-    expect(source).toContain(
-      'const vbaoRawNoisePixel = floor(uvNode.mul(this.sourceResolution))',
-    )
+    expect(source).toContain('sourceResolution: this.sourceResolution')
     expect(source).toContain(
       "const safeTexel = vec2(0.5).div(this.sourceResolution).toVar('vbaoSafeTexel')",
     )
@@ -303,15 +303,15 @@ describe('modernized VBAO production source contract', () => {
 
   it('reduces cosine-measure sector masks by popcount without a second cosine loop', () => {
     expect(source).toContain('countOneBits(occludedMask)')
-    expect(source).toContain('const intervalMaskStochasticFn = (Fn as any)')
-    expect(source).toContain(
+    expect(kernelPrimitivesSource).toContain('export const vbaoIntervalMaskStochasticFn = (Fn as any)')
+    expect(kernelPrimitivesSource).toContain(
       "const intervalSectors = u1.sub(u0).mul(float(SECTOR_COUNT)).toVar('vbaoIntervalSectors')",
     )
-    expect(source).toContain('vbaoThinSectorMask')
-    expect(source).toContain(
+    expect(kernelPrimitivesSource).toContain('vbaoThinSectorMask')
+    expect(kernelPrimitivesSource).toContain(
       'const thinContribution = (xi.lessThan(intervalSectors) as any).select',
     )
-    expect(source).toContain('result.assign(thinContribution)')
+    expect(kernelPrimitivesSource).toContain('result.assign(thinContribution)')
     expect(source).toMatch(
       /const pointSampleMask = \(intervalMaskStochasticFn as any\)\([\s\S]*?u0,[\s\S]*?u1,[\s\S]*?subsectorNoise,[\s\S]*?\)/,
     )
@@ -383,8 +383,9 @@ describe('modernized VBAO production source contract', () => {
     expect(source).toContain(
       '(this.temporalPhaseOffset.value + 1) % VBAO_PHASE_ATLAS_PHASES',
     )
-    expect(source).toMatch(
-      /const phaseRaw = float\(slice\)[\s\S]*?\.add\(float\(sample\)\)[\s\S]*?\.add\(this\.temporalPhaseOffset\)/,
+    expect(source).toContain('temporalPhaseOffset: this.temporalPhaseOffset')
+    expect(kernelPrimitivesSource).toMatch(
+      /const phaseRaw = float\(slice\)[\s\S]*?\.add\(float\(sample\)\)[\s\S]*?\.add\(phaseOffset\)/,
     )
     expect(source).not.toContain("if (this.temporalMode === 'internal')")
     expect(source).not.toContain('getOrCreateTemporalAccumulationNode')
@@ -948,6 +949,22 @@ describe('modernized VBAO production source contract', () => {
     expect(museumSource).toContain('confidenceNode: vbaoNode.getRawTextureNode()')
     expect(receiverConfidenceSource).not.toContain('readonly confidence?:')
     expect(receiverConfidenceSource).not.toContain('readonly metadata?:')
+    // Both kernels share one set of TSL primitives so the compiled WGSL contains a
+    // single named copy of each function instead of renamed duplicates.
+    expect(source).toContain("from './vbaoKernelPrimitives'")
+    expect(receiverConfidenceSource).toContain("from './vbaoKernelPrimitives'")
+    expect(kernelPrimitivesSource).toContain('export const vbaoMaskRangeFn')
+    expect(kernelPrimitivesSource).toContain('export const vbaoCosineMeasureNoAtan')
+    expect(kernelPrimitivesSource).toContain('export const vbaoIntervalMaskStochasticFn')
+    expect(kernelPrimitivesSource).toContain('export function createVbaoNoisePhaseSampler')
+    expect(kernelPrimitivesSource).not.toContain('@ts-nocheck')
+    expect(source).not.toContain('const maskRangeFn = (Fn as any)')
+    expect(source).not.toContain('const vbaoCosineMeasureNoAtan = (Fn as any)')
+    expect(source).not.toContain('const intervalMaskStochasticFn = (Fn as any)')
+    expect(receiverConfidenceSource).not.toContain('vbaoReceiverConfidenceMaskRange')
+    expect(receiverConfidenceSource).not.toContain('vbaoReceiverConfidenceCosineMeasureNoAtan')
+    expect(receiverConfidenceSource).not.toContain('vbaoReceiverConfidenceIntervalMask')
+    expect(receiverConfidenceSource).toContain('const sampleNoisePhase = createVbaoNoisePhaseSampler({')
     expect(indexSource).not.toContain('VBAOReceiverConfidenceNode')
     expect(optionsSource).not.toContain('receiverConfidence')
     expect(optionsSource).not.toContain('readonly confidence?:')
