@@ -109,7 +109,9 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
   readonly normalNode: SampleableNode
 
   private readonly camera: Camera
-  private readonly options: Readonly<Required<Pick<VBAOTemporalOptions, 'alpha'>> & { reliabilityCounter: boolean }>
+  private readonly options: Readonly<Required<Pick<VBAOTemporalOptions, 'alpha'>> & { reliabilityCounter: boolean; mode: VBAOTemporalOptions['mode'] }>
+  /** Velocity texture node for mode='velocity' (Tier-2 path). UV offset: xy = uv - prevUV. */
+  private readonly velocityNode: SampleableNode | undefined
   private readonly historyTarget: RenderTarget
 
   /** CPU-side reprojection matrix: proj_prev * view_prev * view_curr_inv */
@@ -154,10 +156,10 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
       )
     }
 
-    if (options.mode === 'velocity') {
+    if (options.mode === 'velocity' && options.velocityNode === undefined) {
       throw new TypeError(
-        'VBAOTemporalAccumulateNode: mode="velocity" is not yet implemented (PR3). ' +
-          'Use mode="depth-reprojection" for PR1/PR2.',
+        'VBAOTemporalAccumulateNode: mode="velocity" requires velocityNode to be set. ' +
+          'Provide a TextureNode outputting screen-space UV offset (xy = uv - prevUV).',
       )
     }
 
@@ -170,9 +172,11 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
     this.camera = camera
 
     this.options = {
+      mode: options.mode,
       alpha: options.alpha ?? { min: 0.05, max: 0.25 },
       reliabilityCounter: options.reliabilityCounter !== false,
     }
+    this.velocityNode = options.velocityNode as SampleableNode | undefined
 
     this.projInvUniform = uniform(camera.projectionMatrixInverse)
     this.cameraNear = reference('near', 'float', camera)
@@ -338,17 +342,26 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
       }
 
       // -------------------------------------------------------------------
-      // Per-pixel GPU reprojection: reconstruct view position, apply reproj matrix
+      // prevUV computation: Tier-1 (depth-reprojection) or Tier-2 (velocity)
       // -------------------------------------------------------------------
       const currentDepth = sampleDepth(depthTex, uvNode).toVar('vbaoTemporalCurrentDepth')
-      const P_view = getViewPosition(uvNode, currentDepth, this.projInvUniform).toVar('vbaoTemporalPView')
 
-      // Compute prevUV via reproj matrix: P_prev_clip = reprojMatrix * vec4(P_view, 1)
-      const reprojNode = this.reprojMatrixUniform as any
-      const P4 = vec4(P_view.x, P_view.y, P_view.z, float(1))
-      const P_prev_clip = (reprojNode.mul(P4 as any) as any).toVar('vbaoTemporalPPrevClip')
-      const invW = float(1).div(P_prev_clip.w.add(float(1e-8))).toVar('vbaoTemporalInvW')
-      const prevUV = P_prev_clip.xy.mul(invW).mul(float(0.5)).add(float(0.5)).toVar('vbaoTemporalPrevUv')
+      let prevUV: ReturnType<typeof vec2>
+      if (this.options.mode === 'velocity' && this.velocityNode !== undefined) {
+        // Tier-2 velocity path: prevUV = uv - velocity.xy
+        // velocityNode outputs screen-space UV offset: xy = uv - prevUV (curr → prev).
+        const velocityTex = this.velocityNode as any
+        const vel = velocityTex.sample(uvNode).xy.toVar('vbaoTemporalVelocity')
+        prevUV = uvNode.sub(vel).toVar('vbaoTemporalPrevUv')
+      } else {
+        // Tier-1 depth-reprojection path: reconstruct view position, apply reproj matrix.
+        const P_view = getViewPosition(uvNode, currentDepth, this.projInvUniform).toVar('vbaoTemporalPView')
+        const reprojNode = this.reprojMatrixUniform as any
+        const P4 = vec4(P_view.x, P_view.y, P_view.z, float(1))
+        const P_prev_clip = (reprojNode.mul(P4 as any) as any).toVar('vbaoTemporalPPrevClip')
+        const invW = float(1).div(P_prev_clip.w.add(float(1e-8))).toVar('vbaoTemporalInvW')
+        prevUV = P_prev_clip.xy.mul(invW).mul(float(0.5)).add(float(0.5)).toVar('vbaoTemporalPrevUv')
+      }
 
       // -------------------------------------------------------------------
       // Validity sub-test 1: prevUV in [0,1]²

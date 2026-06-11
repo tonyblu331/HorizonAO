@@ -131,11 +131,51 @@ export type VBAOQualityPreset = keyof typeof VBAO_QUALITY_TIERS
  * Added in vbao-temporal PR1. `mode='velocity'` is guarded at construction
  * (Tier-2 implementation deferred to PR3; throws TypeError until then).
  */
+/**
+ * Temporal-specific quality presets for the opt-in temporal AO path.
+ *
+ * These are only active when `temporal` is enabled on `VBAONode`.
+ * Each preset configures the raw AO slice/sample loop shape for temporal
+ * accumulation contexts:
+ * - `temporal-fast`:     1 slice × 2 samples — minimal per-frame cost; fastest warmup.
+ * - `temporal-balanced`: 2 slices × 3 samples — balanced quality/cost.
+ * - `temporal-quality`:  2 slices × 4 samples — higher spatial quality per frame.
+ */
+export const VBAO_TEMPORAL_PRESETS = Object.freeze({
+  'temporal-fast': { slices: 1, samplesPerSlice: 2 },
+  'temporal-balanced': { slices: 2, samplesPerSlice: 3 },
+  'temporal-quality': { slices: 2, samplesPerSlice: 4 },
+} as const)
+
+export type VBAOTemporalPreset = keyof typeof VBAO_TEMPORAL_PRESETS
+
+/**
+ * Resolves a temporal preset to its slice/sample configuration.
+ *
+ * Throws a `TypeError` when `temporal` is `undefined` — temporal presets
+ * are only valid when the temporal path is active.
+ *
+ * @param preset - The preset key to look up.
+ * @param temporal - The caller's temporal options. Must be defined.
+ */
+export function resolveTemporalPreset(
+  preset: VBAOTemporalPreset,
+  temporal: VBAOTemporalOptions | undefined,
+): (typeof VBAO_TEMPORAL_PRESETS)[VBAOTemporalPreset] {
+  if (temporal === undefined) {
+    throw new TypeError(
+      `resolveTemporalPreset: preset "${preset}" requires temporal options to be active. ` +
+        'Pass a VBAOTemporalOptions object to VBAONodeOptions.temporal.',
+    )
+  }
+  return VBAO_TEMPORAL_PRESETS[preset]
+}
+
 export interface VBAOTemporalOptions {
   /**
    * Temporal reprojection mode.
    * - `'depth-reprojection'`: Tier-1 — uses depth + camera matrices.
-   * - `'velocity'`: Tier-2 — uses an external velocity texture (PR3 only; throws at construction in PR1/PR2).
+   * - `'velocity'`: Tier-2 — uses an external velocity texture (PR3 only).
    */
   readonly mode: 'depth-reprojection' | 'velocity'
   /**
