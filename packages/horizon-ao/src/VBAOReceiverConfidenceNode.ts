@@ -23,14 +23,12 @@ import {
   abs,
   bitNot,
   bitOr,
-  ceil,
   clamp,
   cos,
   countOneBits,
   cross,
   dot,
   float,
-  floor,
   getScreenPosition,
   getViewPosition,
   int,
@@ -41,8 +39,6 @@ import {
   normalize,
   passTexture,
   reference,
-  shiftLeft,
-  shiftRight,
   sin,
   sqrt,
   texture,
@@ -60,18 +56,15 @@ import {
   VBAO_DEFAULTS,
   VBAO_NEAR_SAMPLE_THICKNESS_RATIO,
 } from './vbaoConstants'
-import { VBAO_NOISE_TILE_SIZE, getSharedVbaoNoiseTexture } from './vbaoNoise'
 import {
-  VBAO_PHASE_ATLAS_COLUMNS,
-  VBAO_PHASE_ATLAS_PHASES,
-  VBAO_PHASE_STRIDE,
-} from './vbaoSampling'
+  createVbaoNoisePhaseSampler,
+  vbaoCosineMeasureNoAtan,
+  vbaoIntervalMaskStochasticFn as intervalMaskStochasticFn,
+} from './vbaoKernelPrimitives'
+import { getSharedVbaoNoiseTexture } from './vbaoNoise'
 
 const receiverConfidenceQuadMesh = new QuadMesh()
 const receiverConfidenceSize = new Vector2()
-let receiverConfidenceRendererState:
-  | ReturnType<typeof RendererUtils.resetRendererState>
-  | undefined
 
 type SampleableNode = Node & {
   sample: (uvCoord: Node) => any
@@ -131,6 +124,9 @@ export class VBAOReceiverConfidenceNode extends TempNode<'float'> {
   private readonly cameraFar
   private readonly noiseTexture: DataTexture
   private readonly noiseNode
+  // Per-instance renderer state: a module-level slot would let two live
+  // instances corrupt each other's save/restore every frame.
+  private rendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
 
   constructor(
     depthNode: Node,
@@ -191,10 +187,7 @@ export class VBAOReceiverConfidenceNode extends TempNode<'float'> {
     const renderer = frame.renderer
     if (renderer === null || renderer === undefined) return undefined
 
-    receiverConfidenceRendererState = RendererUtils.resetRendererState(
-      renderer,
-      receiverConfidenceRendererState as never,
-    )
+    this.rendererState = RendererUtils.resetRendererState(renderer, this.rendererState as never)
 
     const drawingBufferSize = renderer.getDrawingBufferSize(receiverConfidenceSize)
     this.setSize(drawingBufferSize.width, drawingBufferSize.height)
@@ -206,7 +199,7 @@ export class VBAOReceiverConfidenceNode extends TempNode<'float'> {
     renderer.setRenderTarget(this.receiverConfidenceTarget)
     receiverConfidenceQuadMesh.render(renderer)
 
-    RendererUtils.restoreRendererState(renderer, receiverConfidenceRendererState)
+    RendererUtils.restoreRendererState(renderer, this.rendererState)
     return true
   }
 
@@ -230,138 +223,10 @@ export class VBAOReceiverConfidenceNode extends TempNode<'float'> {
 
     const sampleNormal = (uvCoord: any) => this.normalNode.sample(uvCoord).rgb.normalize()
 
-    const vbaoReceiverConfidenceNoisePixel = floor(uvNode.mul(this.sourceResolution))
-    const vbaoReceiverConfidenceLocalPixel = vbaoReceiverConfidenceNoisePixel
-      .sub(
-        floor(vbaoReceiverConfidenceNoisePixel.div(float(VBAO_NOISE_TILE_SIZE))).mul(
-          float(VBAO_NOISE_TILE_SIZE),
-        ),
-      )
-      .toVar('vbaoReceiverConfidenceLocalPixel')
-
-    const sampleNoisePhase = (slice: any, sample: any) => {
-      const phaseRaw = float(slice)
-        .mul(float(VBAO_PHASE_STRIDE))
-        .add(float(sample))
-      const phase = phaseRaw.sub(
-        floor(phaseRaw.div(float(VBAO_PHASE_ATLAS_PHASES))).mul(float(VBAO_PHASE_ATLAS_PHASES)),
-      )
-      const phaseY = floor(phase.div(float(VBAO_PHASE_ATLAS_COLUMNS)))
-      const phaseX = phase.sub(phaseY.mul(float(VBAO_PHASE_ATLAS_COLUMNS)))
-      const atlasPixel = vbaoReceiverConfidenceLocalPixel.add(
-        vec2(phaseX, phaseY).mul(float(VBAO_NOISE_TILE_SIZE)),
-      )
-      const atlasUv = atlasPixel
-        .add(vec2(0.5))
-        .div(
-          vec2(
-            VBAO_NOISE_TILE_SIZE * VBAO_PHASE_ATLAS_COLUMNS,
-            VBAO_NOISE_TILE_SIZE * (VBAO_PHASE_ATLAS_PHASES / VBAO_PHASE_ATLAS_COLUMNS),
-          ),
-        )
-      return this.noiseNode.sample(atlasUv)
-    }
-
-    const maskRangeFn = (Fn as any)(([k0_in, k1_in]: any[]) => {
-      const lo = int(max(float(0), min(float(SECTOR_COUNT), float(k0_in))))
-      const hi = int(max(float(0), min(float(SECTOR_COUNT), float(k1_in))))
-      const count = hi.sub(lo)
-      const result = uint(0).toVar('vbaoReceiverConfidenceMaskRangeResult')
-
-      If(count.greaterThan(int(0)), () => {
-        If(count.greaterThanEqual(int(SECTOR_COUNT)), () => {
-          result.assign(bitNot(uint(0)))
-        }).Else(() => {
-          const ucount = uint(count)
-          const ones = shiftRight(bitNot(uint(0)), uint(SECTOR_COUNT).sub(ucount))
-          result.assign(shiftLeft(ones, uint(lo)))
-        })
-      })
-
-      return result
-    }).setLayout({
-      name: 'vbaoReceiverConfidenceMaskRange',
-      type: 'uint',
-      inputs: [
-        { name: 'k0', type: 'int' },
-        { name: 'k1', type: 'int' },
-      ],
-    })
-
-    const vbaoReceiverConfidenceCosineMeasureNoAtan = (Fn as any)(
-      ([D_in, V_in, S_in, sinGamma_in, cosGamma_in]: any[]) => {
-        const D = vec3(D_in)
-        const Vbasis = vec3(V_in)
-        const Sbasis = vec3(S_in)
-        const sinGamma = float(sinGamma_in)
-        const cosGamma = float(cosGamma_in)
-        const x = dot(D, Sbasis)
-        const y = max(dot(D, Vbasis), float(1e-5))
-        const invLen = float(1).div(sqrt(max(x.mul(x).add(y.mul(y)), float(1e-8))))
-        const sinBeta = x.mul(cosGamma).sub(y.mul(sinGamma)).mul(invLen)
-        const cosBeta = y.mul(cosGamma).add(x.mul(sinGamma)).mul(invLen)
-        const interior = sinBeta.mul(float(0.5)).add(float(0.5))
-        const clampedBoundary = sinBeta.greaterThanEqual(float(0)).select(float(1), float(0))
-        return cosBeta.lessThan(float(0)).select(clampedBoundary, interior).clamp(0, 1)
-      },
-    ).setLayout({
-      name: 'vbaoReceiverConfidenceCosineMeasureNoAtan',
-      type: 'float',
-      inputs: [
-        { name: 'D', type: 'vec3' },
-        { name: 'V', type: 'vec3' },
-        { name: 'S', type: 'vec3' },
-        { name: 'sinGamma', type: 'float' },
-        { name: 'cosGamma', type: 'float' },
-      ],
-    })
-
-    const intervalMaskStochasticFn = (Fn as any)(([u0_in, u1_in, xi_in]: any[]) => {
-      const u0 = clamp(min(float(u0_in), float(u1_in)), float(0), float(1)).toVar(
-        'vbaoReceiverConfidenceIntervalMaskU0',
-      )
-      const u1 = clamp(max(float(u0_in), float(u1_in)), float(0), float(1)).toVar(
-        'vbaoReceiverConfidenceIntervalMaskU1',
-      )
-      const xi = clamp(float(xi_in), float(0), float(1)).toVar(
-        'vbaoReceiverConfidenceIntervalMaskXi',
-      )
-      const intervalSectors = u1
-        .sub(u0)
-        .mul(float(SECTOR_COUNT))
-        .toVar('vbaoReceiverConfidenceIntervalSectors')
-      const result = uint(0).toVar('vbaoReceiverConfidenceIntervalMaskResult')
-
-      If(intervalSectors.greaterThan(float(1e-5)), () => {
-        If(intervalSectors.greaterThanEqual(float(1)), () => {
-          const k0 = int(ceil(u0.mul(float(SECTOR_COUNT)).sub(float(0.5))))
-          const k1 = int(floor(u1.mul(float(SECTOR_COUNT)).sub(float(0.5))))
-          result.assign((maskRangeFn as any)(k0, k1.add(int(1))))
-        }).Else(() => {
-          const thinSectorRaw = floor(u0.add(u1).mul(float(0.5 * SECTOR_COUNT)))
-          const thinSectorIndex = int(
-            max(float(0), min(float(SECTOR_COUNT - 1), thinSectorRaw)),
-          ).toVar('vbaoReceiverConfidenceThinSectorIndex')
-          const thinSectorMask = shiftLeft(uint(1), uint(thinSectorIndex)).toVar(
-            'vbaoReceiverConfidenceThinSectorMask',
-          )
-          const thinContribution = (xi.lessThan(intervalSectors) as any).select(
-            thinSectorMask,
-            uint(0),
-          )
-          result.assign(thinContribution)
-        })
-      })
-
-      return result
-    }).setLayout({
-      name: 'vbaoReceiverConfidenceIntervalMaskStochastic',
-      type: 'uint',
-      inputs: [
-        { name: 'u0', type: 'float' },
-        { name: 'u1', type: 'float' },
-        { name: 'xi', type: 'float' },
-      ],
+    const sampleNoisePhase = createVbaoNoisePhaseSampler({
+      noiseNode: this.noiseNode,
+      uvNode,
+      sourceResolution: this.sourceResolution,
     })
 
     const confidenceKernel = (Fn as any)(() => {
@@ -523,14 +388,14 @@ export class VBAOReceiverConfidenceNode extends TempNode<'float'> {
                         'vbaoReceiverConfidenceBackDist',
                       )
                       const D_back = backDelta.div(backDist).toVar('vbaoReceiverConfidenceDBack')
-                      const uFront = (vbaoReceiverConfidenceCosineMeasureNoAtan as any)(
+                      const uFront = (vbaoCosineMeasureNoAtan as any)(
                         D_front,
                         V,
                         S_i,
                         sinGamma,
                         cosGamma,
                       )
-                      const uBack = (vbaoReceiverConfidenceCosineMeasureNoAtan as any)(
+                      const uBack = (vbaoCosineMeasureNoAtan as any)(
                         D_back,
                         V,
                         S_i,

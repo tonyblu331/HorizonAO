@@ -964,23 +964,25 @@ function createReferencePipelines(
     const vbaoOptions: VbaoBenchmarkOptions = {
       quality: VBAO_PRODUCT_QUALITY,
       radius: baselineVbaoRadius.radius,
-      thickness: baselineVbaoRadius.thickness,
-      contrast: AO_COMPARISON_PRESET.vbaoContrast,
       softness: vbaoSoftness,
-      resolutionScale: fullResolution ? 1.0 : 0.5,
       benchmark: { noiseTexture: createVbaoBenchmarkNoiseTexture(vbaoNoiseSource) },
       temporalMode: vbaoTemporalMode,
-      ...(vbaoSampleMode === 'debug-override'
-        ? {
-            samples: VBAO_DEBUG_OVERRIDE_SHAPE.samples,
-            slices: VBAO_DEBUG_OVERRIDE_SHAPE.slices,
-          }
-        : vbaoSampleMode !== 'product-preset'
+      advanced: {
+        thickness: baselineVbaoRadius.thickness,
+        contrast: AO_COMPARISON_PRESET.vbaoContrast,
+        resolutionScale: fullResolution ? 1.0 : 0.5,
+        ...(vbaoSampleMode === 'debug-override'
           ? {
-              samples: vbaoSampleShape.samples,
-              slices: vbaoSampleShape.slices,
+              samples: VBAO_DEBUG_OVERRIDE_SHAPE.samples,
+              slices: VBAO_DEBUG_OVERRIDE_SHAPE.slices,
             }
-        : {}),
+          : vbaoSampleMode !== 'product-preset'
+            ? {
+                samples: vbaoSampleShape.samples,
+                slices: vbaoSampleShape.slices,
+              }
+          : {}),
+      },
     }
     const vbaoNode = new VBAONode(prePassDepth, prePassNormal, camera, vbaoOptions)
     const usesReceiverConfidence =
