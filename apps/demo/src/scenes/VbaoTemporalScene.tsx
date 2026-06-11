@@ -26,7 +26,7 @@ import {
 } from 'three/webgpu'
 import { float, mrt, normalView, output, pass, vec4 } from 'three/tsl'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { VBAONode } from '@horizonao/core'
+import { VBAONode, resolveTemporalPreset } from '@horizonao/core'
 
 // ─── grid constants (mirrors VbaoScene.tsx) ──────────────────────────────────
 
@@ -244,20 +244,20 @@ async function runVbaoTemporalScene(container: HTMLDivElement, signal: AbortSign
 
   // ── VBAO temporal pipeline ─────────────────────────────────────────────────
   // Opt-in temporal path: mode='depth-reprojection', Halton-2 phase selection.
+  // Uses resolveTemporalPreset to derive slice/sample budget from the canonical
+  // 'temporal-balanced' preset (2 slices × 3 samples).
+  const temporalOptions = { mode: 'depth-reprojection' as const, alpha: { min: 0.05, max: 0.2 }, reliabilityCounter: true }
+  const temporalPreset = resolveTemporalPreset('temporal-balanced', temporalOptions)
   const temporalVbaoNode = isWebGlFallback
     ? null
     : new VBAONode(depthNode, normalNode, camera, {
         radius: 1.25,
         contrast: 1.8,
         softness: 0.65,
-        samples: 4,
-        slices: 2,
+        samples: temporalPreset.samplesPerSlice,
+        slices: temporalPreset.slices,
         resolutionScale: 1.0,
-        temporal: {
-          mode: 'depth-reprojection',
-          alpha: { min: 0.05, max: 0.2 },
-          reliabilityCounter: true,
-        },
+        temporal: temporalOptions,
       })
 
   const fallbackPipeline = new RenderPipeline(renderer, vec4(sceneColor.rgb, float(1.0)))

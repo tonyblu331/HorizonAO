@@ -18,6 +18,7 @@ import {
   emaBlend,
   adaptiveAlpha,
   counterToAlphaScale,
+  updateReliabilityCounter,
   halton,
 } from '../vbaoTemporalMath'
 
@@ -247,18 +248,15 @@ describe('counterToAlphaScale', () => {
 
   it('counter increment: counter goes from 7 to 8 on valid reprojection (pure increment logic)', () => {
     // This tests the spec requirement for counter increment — pure function
-    const counterIncrement = (c: number, valid: boolean): number => valid ? Math.min(15, c + 1) : 0
-    expect(counterIncrement(7, true)).toBe(8)
+    expect(updateReliabilityCounter(7, true)).toBe(8)
   })
 
   it('counter saturation: counter stays at 15 when already at max', () => {
-    const counterIncrement = (c: number, valid: boolean): number => valid ? Math.min(15, c + 1) : 0
-    expect(counterIncrement(15, true)).toBe(15)
+    expect(updateReliabilityCounter(15, true)).toBe(15)
   })
 
   it('counter reset: counter goes to 0 on validity failure', () => {
-    const counterIncrement = (c: number, valid: boolean): number => valid ? Math.min(15, c + 1) : 0
-    expect(counterIncrement(10, false)).toBe(0)
+    expect(updateReliabilityCounter(10, false)).toBe(0)
   })
 })
 
@@ -375,6 +373,9 @@ describe('halton', () => {
     // Spec: caller does t % N; halton(0, 2) and halton(8 % 8, 2) are both index=0
     const N = 8
     expect(halton(8 % N, 2)).toBeCloseTo(halton(0, 2))
+    // Additional triangulation: periodic wrap at t=9 and t=15
+    expect(halton(9 % N, 2)).toBeCloseTo(halton(1, 2))
+    expect(halton(15 % N, 2)).toBeCloseTo(halton(7, 2))
   })
 })
 
