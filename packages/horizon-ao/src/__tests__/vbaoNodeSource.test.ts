@@ -581,9 +581,9 @@ describe('modernized VBAO production source contract', () => {
     expect(optionsSource).toContain('readonly contrast?: number')
     expect(optionsSource).toContain('readonly advanced?: {')
     expect(optionsSource).toContain('readonly contrast?: number')
-    expect(source).toContain('strength: options.strength ?? options.intensity ?? fallback.strength')
+    expect(source).toContain('strength: options.strength ?? legacy.intensity ?? fallback.strength')
     expect(source).toContain(
-      'contrast: advanced.contrast ?? options.contrast ?? options.scale ?? fallback.contrast',
+      'contrast: advanced.contrast ?? legacy.contrast ?? legacy.scale ?? fallback.contrast',
     )
     expect(source).toContain('const contrastedAo = pow(accessibility, this.contrast)')
     // AO is now the R channel of the folded RG raw output (R=AO, G=confidence).
@@ -681,14 +681,20 @@ describe('modernized VBAO production source contract', () => {
     expect(fullResPolishSource).not.toContain('const normalAgreement =')
   })
 
-  it('keeps deprecated VBAO option aliases explicit until migration policy changes', () => {
-    expect(optionsSource).toContain('readonly quality?: VBAOQualityPreset')
-    expect(optionsSource).toContain('/** @deprecated Use `quality`; kept temporarily for older HorizonAO callers. */')
-    expect(optionsSource).toContain('readonly preset?: VBAOQualityPreset')
-    expect(optionsSource).toContain('/** @deprecated Use `contrast`; kept for GTAONode-style compatibility. */')
-    expect(optionsSource).toContain('readonly scale?: number')
-    expect(optionsSource).toContain('/** @deprecated Use `strength`; kept for older HorizonAO callers. */')
-    expect(optionsSource).toContain('readonly intensity?: number')
+  it('keeps deprecated aliases out of the public options type but accepted as runtime shims', () => {
+    // Public surface is exactly quality | radius | contact | strength | softness | advanced.
+    expect(optionsSource).toMatch(
+      /export interface VBAONodeOptions \{\s*readonly quality\?: VBAOQualityPreset\s*readonly radius\?: number\s*readonly contact\?: number\s*readonly strength\?: number\s*readonly softness\?: number\s*readonly advanced\?: \{/,
+    )
+    // Legacy flat aliases live in an internal shim type that never reaches the entrypoint.
+    // The regex pins the full shim membership so an alias can't silently drop out.
+    expect(optionsSource).toMatch(
+      /export interface VbaoDeprecatedOptionAliases \{[^}]*readonly preset\?: VBAOQualityPreset[^}]*readonly thickness\?: number[^}]*readonly contrast\?: number[^}]*readonly scale\?: number[^}]*readonly intensity\?: number[^}]*readonly slices\?: number[^}]*readonly samples\?: number[^}]*readonly resolutionScale\?: number[^}]*\}/,
+    )
+    expect(indexSource).not.toContain('VbaoDeprecatedOptionAliases')
+    expect(source).toContain(
+      'const legacy = options as VBAONodeOptions & VbaoDeprecatedOptionAliases',
+    )
   })
 
   it('provides a shared internal effect pass without changing render-target contracts', () => {
@@ -985,11 +991,11 @@ describe('modernized VBAO production source contract', () => {
     expect(source).toContain('VBAO_QUALITY_TIERS')
     expect(source).toContain('contact: options.contact ?? fallback.contact')
     expect(source).toContain('advanced.thickness ??')
-    expect(source).toContain('options.thickness ??')
-    expect(source).toContain('advanced.slices ?? options.slices ?? quality?.slices ?? fallback.slices')
-    expect(source).toContain('advanced.samples ?? options.samples ?? quality?.samples ?? fallback.samples')
+    expect(source).toContain('legacy.thickness ??')
+    expect(source).toContain('advanced.slices ?? legacy.slices ?? quality?.slices ?? fallback.slices')
+    expect(source).toContain('advanced.samples ?? legacy.samples ?? quality?.samples ?? fallback.samples')
     expect(source).toMatch(
-      /advanced\.resolutionScale\s*\?\?\s*options\.resolutionScale\s*\?\?\s*quality\?\.resolutionScale\s*\?\?\s*fallback\.resolutionScale/,
+      /advanced\.resolutionScale\s*\?\?\s*legacy\.resolutionScale\s*\?\?\s*quality\?\.resolutionScale\s*\?\?\s*fallback\.resolutionScale/,
     )
     expect(source).not.toContain('slices: options.slices ?? fallback.slices')
     expect(source).not.toContain('samples: options.samples ?? fallback.samples')

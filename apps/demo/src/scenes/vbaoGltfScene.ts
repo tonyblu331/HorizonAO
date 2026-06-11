@@ -21,9 +21,8 @@ import {
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mrt, normalView, output, pass } from 'three/tsl'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { type VBAONodeOptions } from '@horizonao/core'
 import { createAoComparePanel, type AoMode, type AoViewMode } from './aoComparePanel'
-import { createAoPipelines } from './aoPipelines'
+import { createAoPipelines, type AoTuningOptions } from './aoPipelines'
 
 export interface VbaoGltfSceneConfig {
   /** Remote or local URL of the GLTF/GLB model to load. */
@@ -57,7 +56,7 @@ export interface VbaoGltfSceneConfig {
   }
 
   /** VBAONode options; falls back to balanced-tier defaults if omitted. */
-  readonly vbao?: Partial<VBAONodeOptions>
+  readonly vbao?: AoTuningOptions
 
   /** Ambient light intensity [0, ∞]. Default: 0.6 */
   readonly ambientIntensity?: number

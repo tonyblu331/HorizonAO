@@ -27,7 +27,23 @@ interface N8AOTextureNode {
   readonly rgb: TslVec3
 }
 
-export interface AoPipelineOptions extends Partial<VBAONodeOptions> {
+/**
+ * Demo-owned AO tuning knobs shared across GTAO/SSAO/VBAO/N8AO pipelines.
+ * Kept flat here for scene configs; VBAO maps them onto its public
+ * quality/radius/softness/advanced surface.
+ */
+export interface AoTuningOptions {
+  readonly radius?: number
+  readonly thickness?: number
+  readonly contrast?: number
+  readonly scale?: number
+  readonly softness?: number
+  readonly samples?: number
+  readonly slices?: number
+  readonly resolutionScale?: number
+}
+
+export interface AoPipelineOptions extends Partial<VBAONodeOptions>, AoTuningOptions {
   readonly scene: Object3D
   readonly sceneColor: unknown
   readonly depthNode: unknown
@@ -70,12 +86,14 @@ export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
 
   const vbaoNode = new VBAONode(options.depthNode as never, options.normalNode as never, options.camera, {
     radius,
-    thickness,
-    contrast,
     softness,
-    samples,
-    slices,
-    resolutionScale,
+    advanced: {
+      thickness,
+      contrast,
+      samples,
+      slices,
+      resolutionScale,
+    },
   })
   const n8aoScenePass = createN8AOScenePass(options.scene, options.camera)
   const n8aoNode = new N8AONode({

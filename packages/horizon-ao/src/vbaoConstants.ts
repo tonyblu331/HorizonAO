@@ -103,29 +103,16 @@ export type VBAOQualityPreset = keyof typeof VBAO_QUALITY_TIERS
  * `vbao(...)` factory.
  *
  * `sectors` is intentionally NOT a key — the value is compile-time in v1.
+ * The public surface is `quality | radius | contact | strength | softness |
+ * advanced`; older flat aliases are accepted at runtime as untyped shims
+ * (see {@link VbaoDeprecatedOptionAliases}) but are not documented API.
  */
 export interface VBAONodeOptions {
   readonly quality?: VBAOQualityPreset
-  /** @deprecated Use `quality`; kept temporarily for older HorizonAO callers. */
-  readonly preset?: VBAOQualityPreset
   readonly radius?: number
   readonly contact?: number
-  /** @deprecated Use `contact` or `advanced.thickness`; kept for older callers. */
-  readonly thickness?: number
   readonly strength?: number
-  /** @deprecated Use `advanced.contrast`; kept for older callers. */
-  readonly contrast?: number
   readonly softness?: number
-  /** @deprecated Use `contrast`; kept for GTAONode-style compatibility. */
-  readonly scale?: number
-  /** @deprecated Use `strength`; kept for older HorizonAO callers. */
-  readonly intensity?: number
-  /** @deprecated Use `advanced.slices`; kept for evidence and older callers. */
-  readonly slices?: number
-  /** @deprecated Use `advanced.samples`; kept for evidence and older callers. */
-  readonly samples?: number
-  /** @deprecated Use `advanced.resolutionScale`; kept for evidence and older callers. */
-  readonly resolutionScale?: number
   readonly advanced?: {
     readonly thickness?: number
     readonly contrast?: number
@@ -133,6 +120,31 @@ export interface VBAONodeOptions {
     readonly samples?: number
     readonly resolutionScale?: number
   }
+}
+
+/**
+ * Legacy flat aliases still honored at runtime for older HorizonAO callers
+ * and GTAONode-style option bags. Internal constructor shims only: this type
+ * is intentionally NOT exported from the package entrypoint and the aliases
+ * are not part of the documented `VBAONodeOptions` surface.
+ */
+export interface VbaoDeprecatedOptionAliases {
+  /** @deprecated Use `quality`. */
+  readonly preset?: VBAOQualityPreset
+  /** @deprecated Use `contact` or `advanced.thickness`. */
+  readonly thickness?: number
+  /** @deprecated Use `advanced.contrast`. */
+  readonly contrast?: number
+  /** @deprecated Use `advanced.contrast`; GTAONode-style alias. */
+  readonly scale?: number
+  /** @deprecated Use `strength`. */
+  readonly intensity?: number
+  /** @deprecated Use `advanced.slices`. */
+  readonly slices?: number
+  /** @deprecated Use `advanced.samples`. */
+  readonly samples?: number
+  /** @deprecated Use `advanced.resolutionScale`. */
+  readonly resolutionScale?: number
 }
 
 export interface VBAOResolvedNodeOptions {
@@ -149,9 +161,12 @@ export interface VBAOResolvedNodeOptions {
 
 /**
  * Clamp a partial options bag against {@link VBAO_CLAMP_RANGES} and fill
- * any missing keys with {@link VBAO_DEFAULTS}.
+ * any missing keys with {@link VBAO_DEFAULTS}. Accepts the deprecated flat
+ * aliases so older callers keep resolving through the shim path.
  */
-export function clampVbaoNodeOptions(options: VBAONodeOptions): VBAOResolvedNodeOptions {
+export function clampVbaoNodeOptions(
+  options: VBAONodeOptions & VbaoDeprecatedOptionAliases,
+): VBAOResolvedNodeOptions {
   const qualityName = options.quality ?? options.preset
   const quality = qualityName === undefined ? undefined : VBAO_QUALITY_TIERS[qualityName]
   const advanced = options.advanced ?? {}

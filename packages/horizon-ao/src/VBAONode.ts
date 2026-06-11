@@ -59,6 +59,7 @@ import {
   VBAO_NEAR_SAMPLE_THICKNESS_RATIO,
   VBAO_QUALITY_TIERS,
   clampVbaoNodeOptions,
+  type VbaoDeprecatedOptionAliases,
   type VBAONodeOptions,
 } from './vbaoConstants'
 import { VBAOFullResPolishNode } from './VBAOFullResPolishNode'
@@ -186,7 +187,10 @@ export class VBAONode extends TempNode<'float'> {
   }
 
   configure(options: VBAONodeOptions): void {
-    const qualityName = options.quality ?? options.preset
+    // Deprecated flat aliases stay runtime-accepted as untyped shims; they are
+    // not part of the documented VBAONodeOptions surface.
+    const legacy = options as VBAONodeOptions & VbaoDeprecatedOptionAliases
+    const qualityName = options.quality ?? legacy.preset
     const quality = qualityName === undefined ? undefined : VBAO_QUALITY_TIERS[qualityName]
     const advanced = options.advanced ?? {}
     const fallback = {
@@ -201,28 +205,27 @@ export class VBAONode extends TempNode<'float'> {
       resolutionScale: this.resolutionScale,
     }
     const mergedOptions = {
-      ...(options.quality === undefined ? {} : { quality: options.quality }),
-      ...(options.preset === undefined ? {} : { preset: options.preset }),
+      ...(qualityName === undefined ? {} : { quality: qualityName }),
       radius: options.radius ?? fallback.radius,
       contact: options.contact ?? fallback.contact,
-      strength: options.strength ?? options.intensity ?? fallback.strength,
+      strength: options.strength ?? legacy.intensity ?? fallback.strength,
       softness: options.softness ?? fallback.softness,
       advanced: {
         ...(() => {
           const thickness =
             advanced.thickness ??
-            options.thickness ??
+            legacy.thickness ??
             (options.radius === undefined && options.contact === undefined
               ? fallback.thickness
               : undefined)
           return thickness === undefined ? {} : { thickness }
         })(),
-        contrast: advanced.contrast ?? options.contrast ?? options.scale ?? fallback.contrast,
-        slices: advanced.slices ?? options.slices ?? quality?.slices ?? fallback.slices,
-        samples: advanced.samples ?? options.samples ?? quality?.samples ?? fallback.samples,
+        contrast: advanced.contrast ?? legacy.contrast ?? legacy.scale ?? fallback.contrast,
+        slices: advanced.slices ?? legacy.slices ?? quality?.slices ?? fallback.slices,
+        samples: advanced.samples ?? legacy.samples ?? quality?.samples ?? fallback.samples,
         resolutionScale:
           advanced.resolutionScale ??
-          options.resolutionScale ??
+          legacy.resolutionScale ??
           quality?.resolutionScale ??
           fallback.resolutionScale,
       },
