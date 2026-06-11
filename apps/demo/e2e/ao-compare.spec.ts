@@ -236,7 +236,7 @@ test('museum exposes evidence controls for raw/product output and full-resolutio
 
   const fullResolution = page.locator('[data-full-resolution]')
   await expect(fullResolution).toBeVisible()
-  await expect(fullResolution).toBeChecked()
+  await expect(fullResolution).not.toBeChecked()
 
   const backend = await page.locator('[data-renderer-backend]').first().getAttribute('data-renderer-backend')
   if (backend !== 'webgpu') {

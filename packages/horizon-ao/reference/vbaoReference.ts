@@ -9,8 +9,17 @@ import {
   buildGtVbaoSampleInterval,
   cosineMeasureReduction,
   sampleGtVbaoAxialSliceDirection,
-  type Vec3,
 } from './vbaoGtVbaoMath'
+import {
+  add3,
+  cross3,
+  dot3,
+  length3,
+  normalize3,
+  scale3,
+  sub3,
+  type Vec3,
+} from './vec3Math'
 
 export type { Vec3 }
 
@@ -74,39 +83,6 @@ export interface DirectionalVisibilityReferenceResult {
 
 const DIRECTIONAL_BUCKET_LIMIT = 2
 const DIRECTIONAL_BUCKET_MERGE_DOT = 0.92
-
-function dot3(a: Vec3, b: Vec3): number {
-  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-function add3(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-}
-
-function sub3(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-function scale3(v: Vec3, s: number): Vec3 {
-  return [v[0] * s, v[1] * s, v[2] * s]
-}
-
-function cross3(a: Vec3, b: Vec3): Vec3 {
-  return [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ]
-}
-
-function length3(v: Vec3): number {
-  return Math.hypot(v[0], v[1], v[2])
-}
-
-function normalize3(v: Vec3): Vec3 {
-  const len = length3(v)
-  return len < 1e-10 ? [0, 0, 0] : [v[0] / len, v[1] / len, v[2] / len]
-}
 
 function buildViewLocalFrame(pixelPosition: Vec3): {
   readonly viewDir: Vec3

@@ -11,7 +11,6 @@ import {
   TempNode,
   Vector2,
   type Camera,
-  type Node,
   type NodeFrame,
   type TextureNode,
 } from 'three/webgpu'
@@ -72,13 +71,10 @@ import {
 } from './vbaoKernelPrimitives'
 import { getSharedVbaoNoiseTexture } from './vbaoNoise'
 import { VBAO_PHASE_ATLAS_PHASES } from './vbaoSampling'
+import { type Node, type SampleableNode } from './vbaoUtils'
 
 const quadMesh = new QuadMesh()
 const size = new Vector2()
-
-type SampleableNode = Node & {
-  sample: (uvCoord: Node) => any
-}
 
 type VbaoRawLoopShape = {
   readonly slices: number
@@ -531,7 +527,7 @@ export class VBAONode extends TempNode<'float'> {
       ;(Loop as any)(
         { start: int(0), end: sliceLoopEnd, type: 'int', condition: '<' },
         ({ i }: any) => {
-          // GT-VBAO++ axial slice orientation: mirrored two-sided sampling covers π, not 2π.
+          // Axial slice orientation: mirrored two-sided sampling covers π, not 2π.
           const sliceNoiseTexel = sampleNoisePhase(i, int(0))
           const rotation = sliceNoiseTexel.x.toVar('vbaoSliceRotation')
           const phi = float(i).add(rotation).div(sliceCount).mul(PI)

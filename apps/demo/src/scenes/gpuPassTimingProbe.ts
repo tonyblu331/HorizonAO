@@ -115,6 +115,7 @@ export function createGpuPassTimingProbe(renderer: WebGPURenderer): {
     },
     dispose: () => {
       backend.beginRender = originalBeginRender
+      contextByUid.clear()
     },
   }
 }

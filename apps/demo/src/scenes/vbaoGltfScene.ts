@@ -14,6 +14,7 @@ import {
   DirectionalLight,
   Color,
   Fog,
+  Mesh,
   PerspectiveCamera,
   Scene,
   WebGPURenderer,
@@ -229,6 +230,14 @@ export async function runVbaoGltfScene(
     controls.dispose()
     comparePanel.remove()
     aoPipelines?.dispose()
+    scene.traverse((child) => {
+      if (child instanceof Mesh) {
+        child.geometry?.dispose()
+        const mat = child.material
+        if (Array.isArray(mat)) mat.forEach((m) => m?.dispose())
+        else mat?.dispose()
+      }
+    })
     renderer.dispose()
     canvas.remove()
   })

@@ -62,23 +62,16 @@ import {
   vbaoIntervalMaskStochasticFn as intervalMaskStochasticFn,
 } from './vbaoKernelPrimitives'
 import { getSharedVbaoNoiseTexture } from './vbaoNoise'
+import { clampResolutionScale, type SampleableNode } from './vbaoUtils'
 
 const receiverConfidenceQuadMesh = new QuadMesh()
 const receiverConfidenceSize = new Vector2()
-
-type SampleableNode = Node & {
-  sample: (uvCoord: Node) => any
-}
 
 export interface VBAOReceiverConfidenceNodeOptions {
   readonly resolutionScale?: number
   readonly slices?: number
   readonly samples?: number
   readonly noiseTexture?: DataTexture
-}
-
-function clampResolutionScale(value: number): number {
-  return Number.isFinite(value) ? Math.max(0.05, Math.min(1, value)) : 0.5
 }
 
 function clampLoopBound(value: number, minValue: number, maxValue: number): number {

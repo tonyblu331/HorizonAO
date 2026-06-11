@@ -1,24 +1,33 @@
 # Runtime Boundary Audit
 
-## VBAOResolvePolishNode
+## Fused Resolve/Polish Candidate
 
-`packages/horizon-ao/src/VBAOResolvePolishNode.ts` is not public API, but it is
-still runtime source:
+`packages/horizon-ao/src/VBAOResolvePolishNode.ts` is no longer active runtime
+source. Current source audit found no file at that path and no package export for
+that candidate.
 
-- source tests import it as raw text;
-- `apps/demo/src/scenes/MuseumScene.tsx` imports it directly for evidence-only
-  fused resolve/polish capture;
-- `packages/horizon-ao/src/index.ts` is tested not to export it.
+Resolved end state for this SDD: deleted/removed from active runtime source.
+Future fused resolve/polish work must reopen through a fresh evidence gate; it
+must not reappear as public API or as an unlabelled product path.
 
-Acceptable end states for this SDD:
+## Private Benchmark And Temporal Options
 
-1. Move the fused candidate behind a clearer evidence/debug boundary and update
-   demo imports.
-2. Keep it in `src` only if tests explicitly prove it is private, evidence-only,
-   and not part of product output.
-3. Delete/archive it if no current evidence command needs it.
+Current source keeps benchmark and temporal controls private:
 
-Do not promote it to public API.
+- `packages/horizon-ao/src/index.ts` exports only `VBAONode`, `vbao`, and public
+  option types.
+- `VBAONodeOptions` does not expose `benchmark`, `noiseTexture`,
+  `temporalMode`, `historyWeight`, velocity, or denoise controls.
+- `VBAONode.ts` has an internal-only `VbaoInternalBenchmarkOptions` type for
+  demo/evidence noise texture injection and host temporal phase mode.
+- `resolveInternalTemporalMode` maps unsupported internal temporal requests,
+  including `velocity-internal`, back to product `off`.
+- `apps/demo/src/scenes/MuseumScene.tsx` and benchmark scripts may carry
+  `velocity-internal` labels for rejected/private evidence rows, but those do
+  not cross the package export boundary.
+
+Resolved end state for this SDD: retain benchmark/temporal evidence hooks as
+private/demo-internal only, with package tests guarding public option leakage.
 
 ## Renderer State Ownership
 

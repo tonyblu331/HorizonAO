@@ -64,7 +64,7 @@ export function createAoPipelines(options: AoPipelineOptions): AoPipelines {
   const softness = options.softness ?? 0.65
   const samples = options.samples ?? 8
   const slices = options.slices ?? 3
-  const resolutionScale = options.resolutionScale ?? 1.0
+  const resolutionScale = options.resolutionScale ?? 0.5
   const sceneColor = options.sceneColor as { readonly rgb: TslVec3 }
   const gtaoNode = gtao(options.depthNode as never, options.normalNode as never, options.camera)
   gtaoNode.radius.value = radius

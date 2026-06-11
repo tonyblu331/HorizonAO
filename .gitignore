@@ -24,3 +24,9 @@ apps/demo/src/routeTree.gen.ts
 /artifacts/benchmarks/*-summary.md
 /artifacts/benchmarks/debug-*/
 /artifacts/benchmarks/screenshots-*/
+
+# AI/profiler tool state — never commit (bf64f23 accidentally shipped ~850K lines of traces)
+.gpu-profiler/
+.beagle/
+.commandcode/
+.claire/

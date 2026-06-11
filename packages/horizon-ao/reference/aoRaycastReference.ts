@@ -7,7 +7,18 @@
  * whose reference accessibility is computed by explicit hemisphere rays.
  */
 
-export type RaycastVec3 = readonly [number, number, number]
+import {
+  add3,
+  cross3,
+  dot3,
+  length3,
+  normalize3Up as normalize3,
+  scale3,
+  sub3,
+  type Vec3,
+} from './vec3Math'
+
+export type RaycastVec3 = Vec3
 
 export interface RaycastAoSphere {
   readonly type: 'sphere'
@@ -40,39 +51,6 @@ export interface RaycastAoResult {
 
 const EPSILON = 1e-4
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5))
-
-function dot3(a: RaycastVec3, b: RaycastVec3): number {
-  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-function add3(a: RaycastVec3, b: RaycastVec3): RaycastVec3 {
-  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
-}
-
-function sub3(a: RaycastVec3, b: RaycastVec3): RaycastVec3 {
-  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-function scale3(v: RaycastVec3, s: number): RaycastVec3 {
-  return [v[0] * s, v[1] * s, v[2] * s]
-}
-
-function cross3(a: RaycastVec3, b: RaycastVec3): RaycastVec3 {
-  return [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ]
-}
-
-function length3(v: RaycastVec3): number {
-  return Math.hypot(v[0], v[1], v[2])
-}
-
-function normalize3(v: RaycastVec3): RaycastVec3 {
-  const len = length3(v)
-  return len < 1e-10 ? [0, 1, 0] : [v[0] / len, v[1] / len, v[2] / len]
-}
 
 function buildFrame(normal: RaycastVec3): {
   readonly n: RaycastVec3

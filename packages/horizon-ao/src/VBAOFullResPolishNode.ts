@@ -3,7 +3,6 @@ import {
   QuadMesh,
   Vector2,
   type Camera,
-  type Node,
   type NodeFrame,
   type TextureNode,
 } from 'three/webgpu'
@@ -31,6 +30,7 @@ import {
 
 import { computeVbaoBilateralGeometryWeight } from './vbaoBilateralWeight'
 import { VBAOEffectPass } from './VBAOEffectPass'
+import { clamp01, type Node, type SampleableNode } from './vbaoUtils'
 
 export interface VBAOFullResPolishNodeOptions {
   readonly enabled?: boolean
@@ -52,13 +52,7 @@ const POISSON8 = Object.freeze([
 const fullResPolishQuadMesh = new QuadMesh()
 const fullResPolishSize = new Vector2()
 
-type SampleableNode = Node & {
-  sample: (uvCoord: Node) => any
-}
 
-function clamp01(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1
-}
 
 /**
  * Optional full-resolution scalar AO polish.

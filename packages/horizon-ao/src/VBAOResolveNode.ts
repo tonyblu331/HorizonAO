@@ -3,7 +3,6 @@ import {
   QuadMesh,
   Vector2,
   type Camera,
-  type Node,
   type NodeFrame,
   type TextureNode,
 } from 'three/webgpu'
@@ -30,13 +29,10 @@ import {
 
 import { computeVbaoBilateralGeometryWeight } from './vbaoBilateralWeight'
 import { VBAOEffectPass } from './VBAOEffectPass'
+import { type Node, type SampleableNode } from './vbaoUtils'
 
 const resolveQuadMesh = new QuadMesh()
 const resolveSize = new Vector2()
-
-type SampleableNode = Node & {
-  sample: (uvCoord: Node) => any
-}
 
 /**
  * Temporal-free JBU4 product resolve for raw VBAO.

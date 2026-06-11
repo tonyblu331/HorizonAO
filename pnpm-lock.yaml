@@ -53,9 +53,9 @@ importers:
       three:
         specifier: 0.184.0
         version: 0.184.0
-      threejs-debug-compose:
-        specifier: ^0.1.1
-        version: 0.1.1(@react-three/drei@10.7.7(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@types/react@19.2.14)(@types/three@0.184.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0)
+      threejs-debug-view:
+        specifier: 0.2.15
+        version: 0.2.15(@react-three/drei@10.7.7(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@types/react@19.2.14)(@types/three@0.184.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0)
     devDependencies:
       '@babel/core':
         specifier: 7.29.0
@@ -1209,8 +1209,8 @@ packages:
   three@0.184.0:
     resolution: {integrity: sha512-wtTRjG92pM5eUg/KuUnHsqSAlPM296brTOcLgMRqEeylYTh/CdtvKUvCyyCQTzFuStieWxvZb8mVTMvdPyUpxg==}
 
-  threejs-debug-compose@0.1.1:
-    resolution: {integrity: sha512-bZoJSx325EEoxTAhShamdF2cZFF8aG38GOrkwGcw94WGzR/pDqwBplnuXY+uK/iyPGg0dpK4S2GKJTnafJAUjg==}
+  threejs-debug-view@0.2.15:
+    resolution: {integrity: sha512-tCQ+No2y6WfGhLHBfV9DTpSQnSBeMe04NrSaZRzzCBMw4Qmxg86Ia/D4nXzU+QjDdWXJXkYsWbzhhhTvneR1Kw==}
     peerDependencies:
       '@react-three/drei': '>=10'
       '@react-three/fiber': '>=9'
@@ -2407,7 +2407,7 @@ snapshots:
 
   three@0.184.0: {}
 
-  threejs-debug-compose@0.1.1(@react-three/drei@10.7.7(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@types/react@19.2.14)(@types/three@0.184.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0):
+  threejs-debug-view@0.2.15(@react-three/drei@10.7.7(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@types/react@19.2.14)(@types/three@0.184.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(@react-three/fiber@9.6.1(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(three@0.184.0):
     dependencies:
       three: 0.184.0
     optionalDependencies:

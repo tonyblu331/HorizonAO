@@ -29,7 +29,7 @@ describe('VBAO evidence alignment contract', () => {
 
   it('keeps GT-VBAO reference math out of runtime src', () => {
     expect(canonicalReferenceSource).not.toContain('../src/vbaoGtVbaoMath')
-    expect(canonicalReferenceSource).toContain('./vbaoGtVbaoMath')
+    expect(canonicalReferenceSource).toContain('./vec3Math')
   })
 
   it('documents visibility-bitmask AO with selected GT-VBAO corrections without overclaiming', () => {
