@@ -4,6 +4,55 @@ Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
 This file is the gate for later adaptive thickness, sampling, denoise, or depth
 hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
+## 2026-06-11 — VBAO half-res cleanup on/skip comparison (P4 merge-decision evidence)
+
+Status: **rendered proxy evidence captured; cleanup contribution within run variance on 3 of 4 rows; ray-cast thin-gap product observation still missing**.
+
+Question under test (review item P4): does the separate `VBAOHalfResCleanupNode`
+pass measurably improve the half-res product over `raw → resolve` alone? If not,
+merging cleanup + resolve into one wider bilateral upsample is a viable
+simplification. Softness 0.2 (default) keeps polish strength at 0, so the runs
+isolate exactly the cleanup pass.
+
+Commands (identical except `AO_BENCHMARK_VBAO_CLEANUP_MODE` and output paths):
+
+```sh
+AO_BENCHMARK_SCENES='museum' AO_BENCHMARK_MODES='vbao' AO_BENCHMARK_VIEWS='beauty,ao' \
+AO_BENCHMARK_DENOISE_STATES='true' AO_BENCHMARK_VBAO_RESOLUTION_STATES='half' \
+AO_BENCHMARK_VBAO_TEMPORAL_MODE='off' AO_BENCHMARK_PASS_TIMING_SAMPLES='3' \
+AO_BENCHMARK_REQUIRE_WEBGPU='1' AO_BENCHMARK_VBAO_CLEANUP_MODE='on'   # then 'skip'
+pnpm --filter @horizonao/demo benchmark:ao
+```
+
+Artifacts: `artifacts/benchmarks/vbao-p4-cleanup-{on,skip}.{json,md}`.
+
+| Row (half-res product) | Thin-gap ↑ on | Thin-gap ↑ skip | Edge bleed ↓ on | Edge bleed ↓ skip | Noise ↓ on | Noise ↓ skip | Stripe ↓ on | Stripe ↓ skip |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1920x1080 beauty | 0.00520 | 0.00530 | 0.02075 | 0.02080 | 0.02305 | 0.02312 | 0.09887 | 0.09891 |
+| 1920x1080 ao | 0.01157 | 0.00238 | 0.02772 | 0.00527 | 0.03556 | 0.01183 | 0.08887 | 0.15190 |
+| 1280x720 beauty | 0.00541 | 0.00963 | 0.02909 | 0.03143 | 0.03521 | 0.03592 | 0.15776 | 0.17122 |
+| 1280x720 ao | 0.01680 | 0.01713 | 0.03414 | 0.03433 | 0.04275 | 0.04323 | 0.22180 | 0.22085 |
+
+Pass cost: cleanup measured 0.054–0.195 GPU ms across rows; every row carries the
+same `noise` failure label in both states; no row gains or loses `thin-gap`,
+`mud`, or `edge-bleed` labels between states.
+
+Boundary:
+
+- Both beauty rows and the 720p AO row are indistinguishable between on/skip
+  (deltas at the third decimal, well inside capture noise).
+- The 1080p AO row moves in BOTH directions (skip better on noise/edge-bleed,
+  on better on stripe/thin-gap proxy) while the raw pass itself varied ~40%
+  between the two runs at identical settings (0.732 vs 1.036 ms at 1080p
+  beauty) — this row is not stable enough to carry a verdict alone.
+- This is Museum rendered-proxy evidence only. The `thin-gap-separated-slabs`
+  ray-cast product observation the golden-diff audit requires is STILL missing;
+  the GPU collector has no slab-fixture scene to render.
+- Verdict for P4: nothing here justifies the separate cleanup pass on quality
+  grounds, but the merge decision is not yet closed — it needs either (a) a
+  merged-kernel prototype compared behind the same evidence flag, or (b) the
+  slab-fixture product observation producer, before deleting a pass that ships.
+
 ## 2026-06-09 — VBAO vs independent ground-truth delta verifier (P1)
 
 Status: **first quantitative truth-vs-VBAO baseline committed; deterministic regression anchor**.
