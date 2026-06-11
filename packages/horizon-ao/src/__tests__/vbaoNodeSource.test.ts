@@ -1274,4 +1274,15 @@ describe('modernized VBAO production source contract', () => {
     // Output is (accum, counter) packed into R and G
     expect(temporalAccumulateSource).toContain('vec4(')
   })
+
+  it('VBAOTemporalAccumulateNode isFirstFrame uniform is a class field updated each frame, not a setup-time snapshot (CRITICAL-1 fix)', () => {
+    // The uniform must be declared as a class field (initialized to 1.0 at construction),
+    // NOT constructed inline inside setup() which would freeze it at compile time.
+    // Source-literal assertion: class field declaration with uniform(1.0).
+    expect(temporalAccumulateSource).toContain('isFirstFrameUniform = uniform(1.0)')
+    // The class field must NOT be re-declared (const) inside setup() — that is the frozen-snapshot bug.
+    expect(temporalAccumulateSource).not.toContain('const isFirstFrameUniform = uniform(')
+    // updateBefore() MUST mutate .value on the class-field uniform (0.0 after first frame fires).
+    expect(temporalAccumulateSource).toContain('isFirstFrameUniform.value =')
+  })
 })
