@@ -346,7 +346,8 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
       // -------------------------------------------------------------------
       const currentDepth = sampleDepth(depthTex, uvNode).toVar('vbaoTemporalCurrentDepth')
 
-      let prevUV: ReturnType<typeof vec2>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let prevUV: any
       if (this.options.mode === 'velocity' && this.velocityNode !== undefined) {
         // Tier-2 velocity path: prevUV = uv - velocity.xy
         // velocityNode outputs screen-space UV offset: xy = uv - prevUV (curr → prev).

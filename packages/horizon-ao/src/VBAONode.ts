@@ -61,6 +61,7 @@ import {
   type VbaoDeprecatedOptionAliases,
   type VBAONodeOptions,
 } from './vbaoConstants'
+import { halton } from './vbaoTemporalMath'
 import { VBAOFullResPolishNode } from './VBAOFullResPolishNode'
 import { VBAOHalfResCleanupNode } from './VBAOHalfResCleanupNode'
 import { VBAOResolveNode } from './VBAOResolveNode'
@@ -148,6 +149,8 @@ export class VBAONode extends TempNode<'float'> {
   // VBAONode instances corrupt each other's save/restore every frame.
   private rendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
   private readonly temporalOptions: VBAONodeOptions['temporal']
+  /** Frame counter for Halton-based temporal phase selection (public temporal path only). */
+  private temporalFrameCounter = 0
 
   constructor(depthNode: Node, normalNode: Node, camera: Camera, options: VBAONodeOptions = {}) {
     if (normalNode === null || normalNode === undefined) {
@@ -502,7 +505,15 @@ export class VBAONode extends TempNode<'float'> {
     renderer.setRenderTarget(this.rawEstimateTarget)
     quadMesh.render(renderer)
 
-    if (this.temporalMode === 'host') {
+    if (this.temporalOptions !== undefined) {
+      // Public temporal path: use Halton base-2 sequence for phase selection.
+      // Provides low-discrepancy jitter across the 8-phase atlas cycle.
+      // Design decision 4: internal benchmark modes (temporalMode='host') keep
+      // the existing modulo cycling unchanged for backward compatibility.
+      const haltonPhase = halton(this.temporalFrameCounter % VBAO_PHASE_ATLAS_PHASES, 2)
+      this.temporalPhaseOffset.value = haltonPhase * VBAO_PHASE_ATLAS_PHASES
+      this.temporalFrameCounter += 1
+    } else if (this.temporalMode === 'host') {
       this.temporalPhaseOffset.value =
         (this.temporalPhaseOffset.value + 1) % VBAO_PHASE_ATLAS_PHASES
     }
