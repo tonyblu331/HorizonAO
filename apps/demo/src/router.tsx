@@ -6,6 +6,7 @@ import { VbaoParityPage } from './scenes/VbaoParityPage'
 import { VbaoScene } from './scenes/VbaoScene'
 import { VbaoSponzaScene } from './scenes/VbaoSponzaScene'
 import { VbaoSuzanneScene } from './scenes/VbaoSuzanneScene'
+import { VbaoTemporalScene } from './scenes/VbaoTemporalScene'
 
 function RootLayout() {
   return (
@@ -36,6 +37,9 @@ function RootLayout() {
           </Link>
           <Link to="/bunny" activeProps={{ className: 'active' }}>
             Bunny
+          </Link>
+          <Link to="/vbao-temporal" activeProps={{ className: 'active' }}>
+            Temporal
           </Link>
         </nav>
       </header>
@@ -96,6 +100,12 @@ const parityRoute = createRoute({
   component: VbaoParityPage,
 })
 
+const vbaoTemporalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/vbao-temporal',
+  component: VbaoTemporalScene,
+})
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   labRoute,
@@ -105,6 +115,7 @@ const routeTree = rootRoute.addChildren([
   suzanneRoute,
   bunnyRoute,
   parityRoute,
+  vbaoTemporalRoute,
 ])
 
 export const router = createRouter({
