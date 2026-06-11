@@ -4141,6 +4141,47 @@ Note: two-wall-corner excluded from primary aggregate: its fixable delta reflect
 ### Interpretation
 
 - R2-dense (analytic limit) improves over R0-cosine by only **0.00114 RMSE** → representation quantization is **NOT** the bottleneck.
-- The dominant error source is the large negative fixable deltas on `grazing-surface-wall` (−0.14) and `normal-sensitive-side-contact` (−0.30), indicating the VBAO slice model consistently under-occludes in these geometry configurations.
+- The dominant error source is the large negative fixable deltas on `grazing-surface-wall` (−0.14) and `normal-sensitive-side-contact` (−0.30); with the P2 convention (estimate − ssAchievable), negative means the N-tangent CPU model over-occludes (too dark) in these geometry configurations.
 - R0-angle has a substantially lower RMSE (0.0944) than all cosine candidates (~0.133), with faithfulnessDelta = 0.03909. The angle-domain codec produces a different (more fortunate) quantization pattern against the SS reference for these fixtures.
 - P3 should target slice orientation, per-tap weighting, or raw signal bias rather than sector-count increases.
+## P3-A: Runtime-Faithful Verdict
+
+### Decision Rule
+
+Per-fixture: |faithfulFixableDelta| < tau(0.05) → 'collapsed' else 'residual'. Primary: grazing-surface-wall + normal-sensitive-side-contact. aggregateRMSE = sqrt(mean(delta² over primaries)). Verdict: both-collapsed AND rmse<tau → 'cpu-model-artifact'; exactly-one-collapsed → 'mixed'; else → 'kernel-error-confirmed'.
+
+**tau**: 0.05
+
+### Primary Fixture Results
+
+| Fixture | faithfulAccessibility | ssAchievable | faithfulFixableDelta | r0CosineAccessibility | vsR0Delta | verdict |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| grazing-surface-wall | 0.84104 | 0.60034 | -0.24070 | 0.45877 | 0.38227 | residual |
+| normal-sensitive-side-contact | 0.89036 | 0.67358 | -0.21677 | 0.36940 | 0.52096 | residual |
+
+### All Fixtures
+
+| Fixture | faithfulAccessibility | ssAchievable | faithfulFixableDelta | r0CosineAccessibility | vsR0Delta |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| flat-plane-open | 1.00000 | 1.00000 | 0.00000 | 1.00000 | 0.00000 |
+| sphere-contact | 0.91458 | 0.95435 | 0.03976 | 0.86633 | 0.04826 |
+| box-contact | 0.88742 | 0.81201 | -0.07541 | 0.86633 | 0.02109 |
+| two-wall-corner | 0.44103 | 0.97192 | 0.53090 | 0.76895 | -0.32792 |
+| broad-wall-contact | 0.74928 | 0.67676 | -0.07252 | 0.79749 | -0.04821 |
+| thin-gap-separated-slabs | 0.86274 | 0.81567 | -0.04707 | 0.88448 | -0.02174 |
+| grazing-surface-wall | 0.84104 | 0.60034 | -0.24070 | 0.45877 | 0.38227 |
+| normal-sensitive-side-contact | 0.89036 | 0.67358 | -0.21677 | 0.36940 | 0.52096 |
+| far-object-outside-radius | 1.00000 | 1.00000 | 0.00000 | 1.00000 | 0.00000 |
+
+### Verdict
+
+**Verdict**: kernel-error-confirmed
+**aggregateRMSE**: 0.22905
+**tau**: 0.05
+
+### Interpretation
+
+The runtime-faithful CPU model diverges from ssAchievable beyond tau on primary fixtures. The faithful kernel reports MORE accessibility than screen-space geometry allows: it UNDER-occludes these fixtures (too bright), so a correction must add occlusion. Kernel-level correction is indicated (P3-B scope). Note this is the OPPOSITE direction from the N-tangent CPU models of P1/P2, which over-occluded the same fixtures — the unfaithful models inverted the error direction.
+
+*Generated at: 1970-01-01T00:00:00.000Z*
+*Camera set: ssao-cam-v1*
