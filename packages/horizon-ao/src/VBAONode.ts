@@ -448,8 +448,8 @@ export class VBAONode extends TempNode<'float'> {
         this.temporalAccumulateNode = new VBAOTemporalAccumulateNode(
           output,
           this.rawEstimateTextureNode,
-          this.depthNode as unknown as import('three/webgpu').TextureNode,
-          this.normalNode as unknown as import('three/webgpu').TextureNode,
+          this.depthNode,
+          this.normalNode,
           this.camera,
           this.temporalOptions,
         )

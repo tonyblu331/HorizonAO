@@ -28,6 +28,7 @@ import {
   RGFormat,
   Vector2,
   type Camera,
+  type Node,
   type NodeFrame,
   type TextureNode,
 } from 'three/webgpu'
@@ -56,6 +57,15 @@ import {
 
 import { VBAOEffectPass } from './VBAOEffectPass'
 import type { VBAOTemporalOptions } from './vbaoConstants'
+
+/**
+ * Structural type for nodes that expose a `.sample()` method.
+ * Used for depthNode and normalNode to avoid requiring the more specific TextureNode
+ * and eliminate unsafe double-casts at call sites.
+ */
+type SampleableNode = Node & {
+  sample: (uvCoord: Node) => any
+}
 
 const quadMesh = new QuadMesh()
 const size = new Vector2()
@@ -93,10 +103,10 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
   readonly rawAoNode: TextureNode
 
   /** Input: current-frame depth texture for view-position reconstruction. */
-  readonly depthNode: TextureNode
+  readonly depthNode: SampleableNode
 
   /** Input: current-frame normal texture for validity gating. */
-  readonly normalNode: TextureNode
+  readonly normalNode: SampleableNode
 
   private readonly camera: Camera
   private readonly options: Readonly<Required<Pick<VBAOTemporalOptions, 'alpha'>> & { reliabilityCounter: boolean }>
@@ -123,12 +133,18 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
   private readonly projInvUniform: ReturnType<typeof uniform>
   private readonly cameraNear: ReturnType<typeof reference>
   private readonly cameraFar: ReturnType<typeof reference>
+  /**
+   * Per-frame first-frame gate uniform: 1.0 on first frame (or after resize reset), 0.0 on
+   * subsequent frames. Must be a class-field uniform updated in updateBefore() — NOT a
+   * setup()-time snapshot, which would freeze permanently at 1.0 and disable all accumulation.
+   */
+  private readonly isFirstFrameUniform = uniform(1.0)
 
   constructor(
     productAoNode: TextureNode,
     rawAoNode: TextureNode,
-    depthNode: TextureNode,
-    normalNode: TextureNode,
+    depthNode: SampleableNode,
+    normalNode: SampleableNode,
     camera: Camera,
     options: VBAOTemporalOptions,
   ) {
@@ -199,6 +215,7 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
       // Reset history on resize — next frame is a cold start (α forced to 1).
       this.isFirstFrame = true
       this.hasPrevFrame = false
+      this.isFirstFrameUniform.value = 1.0
     }
 
     super.setSize(w, h)
@@ -236,6 +253,10 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
     // Update projInv uniform (camera.projectionMatrixInverse is live on the camera).
     this.projInvUniform.value = this.camera.projectionMatrixInverse
 
+    // Sync the per-frame first-frame uniform before rendering so the shader sees the
+    // correct gate value. 1.0 on first frame (history invalid), 0.0 on subsequent frames.
+    this.isFirstFrameUniform.value = this.isFirstFrame ? 1.0 : 0.0
+
     quadMesh.material = this.material
     quadMesh.name = 'VBAOTemporalAccumulate'
 
@@ -254,7 +275,6 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
 
   override setup(builder: any): TextureNode {
     const uvNode = uv()
-    const isFirstFrameUniform = uniform(this.isFirstFrame ? 1.0 : 0.0)
 
     // Retrieve all input textures.
     const productAo = (this.productAoNode as any).sample(uvNode)
@@ -361,7 +381,7 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
       const validHistory = validUv
         .and(validDepth)
         .and(validNormal)
-        .and(isFirstFrameUniform.lessThan(float(0.5)))
+        .and(this.isFirstFrameUniform.lessThan(float(0.5)))
         .toVar('vbaoTemporalValidHistory')
 
       // -------------------------------------------------------------------
