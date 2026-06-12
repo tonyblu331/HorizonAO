@@ -235,11 +235,13 @@ async function runVbaoTemporalScene(container: HTMLDivElement, signal: AbortSign
     ? null
     : new VBAONode(depthNode, normalNode, camera, {
         radius: 1.25,
-        contrast: 1.8,
         softness: 0.65,
-        samples: 8,
-        slices: 3,
-        resolutionScale: 1.0,
+        advanced: {
+          contrast: 1.8,
+          samples: 8,
+          slices: 3,
+          resolutionScale: 1.0,
+        },
       })
 
   // ── VBAO temporal pipeline ─────────────────────────────────────────────────
@@ -252,11 +254,13 @@ async function runVbaoTemporalScene(container: HTMLDivElement, signal: AbortSign
     ? null
     : new VBAONode(depthNode, normalNode, camera, {
         radius: 1.25,
-        contrast: 1.8,
         softness: 0.65,
-        samples: temporalPreset.samplesPerSlice,
-        slices: temporalPreset.slices,
-        resolutionScale: 1.0,
+        advanced: {
+          contrast: 1.8,
+          samples: temporalPreset.samplesPerSlice,
+          slices: temporalPreset.slices,
+          resolutionScale: 1.0,
+        },
         temporal: temporalOptions,
       })
 
