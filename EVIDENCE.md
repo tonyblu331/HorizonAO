@@ -4185,3 +4185,44 @@ The runtime-faithful CPU model diverges from ssAchievable beyond tau on primary 
 
 *Generated at: 1970-01-01T00:00:00.000Z*
 *Camera set: ssao-cam-v1*
+
+## P3-B: Kernel Ablation Study
+
+### Selection Rule
+
+Winner: realizable cell (probeFrame=V) with min primaryAggregateRMSE that passes regression guard (all non-primary non-excluded |delta| growth ≤ ε=0.03 vs baseline) AND improves primary RMSE by ≥ 0.02 vs baseline. Stage2Gate=proceed-tsl: at least one realizable cell passes guard AND both primary |delta| reduced ≥ 50% vs baseline (or |delta| < τ=0.05). Excluded: two-wall-corner (methodology artifact — corner geometry violates sliced-horizon assumption).
+
+### Winner
+
+**Winner**: V-boundary-cosineWeighted
+**Reason**: V-boundary-cosineWeighted selected (primaryRMSE=0.19929)
+
+**Stage-2 Gate**: defer
+**Baseline Anchor Check**: true
+**tau**: 0.05  **epsilon**: 0.03
+
+### Ablation Matrix
+
+| Cell | realizable | primaryRMSE | regressionGuardPass | grazing-surface-wall Δ | normal-sensitive-side-contact Δ |
+| --- | --- | ---: | --- | ---: | ---: |
+| V-boundary-uniform (BASELINE) | true | 0.22905 | baseline | -0.24070 | -0.21677 |
+| V-boundary-cosineWeighted | true | 0.19929 | true | -0.21026 | -0.18767 |
+| V-foldToHorizon-uniform | true | 0.22905 | true | -0.24070 | -0.21677 |
+| V-foldToHorizon-cosineWeighted | true | 0.19929 | true | -0.21026 | -0.18767 |
+| V-skip-uniform | true | 0.22905 | true | -0.24070 | -0.21677 |
+| Nproj-boundary-uniform (DIAGNOSTIC) | false | 0.22905 | true | -0.24070 | -0.21677 |
+| Nproj-foldToHorizon-uniform (DIAGNOSTIC) | false | 0.22905 | true | -0.24070 | -0.21677 |
+| Nproj-foldToHorizon-cosineWeighted (DIAGNOSTIC) | false | 0.19929 | true | -0.21026 | -0.18767 |
+
+### Exclusion Notes
+
+- **two-wall-corner**: excluded from primary metrics, regression guard, and winner selection. Methodology artifact — corner geometry violates sliced-horizon assumption of the VBAO kernel.
+
+*Generated at: 1970-01-01T00:00:00.000Z*
+*Camera set: ssao-cam-v1*
+
+### Verification Notes (P3-B Stage 1)
+
+- **Nproj diagnostic rows are geometrically vacuous**: Nproj lies in the {S,V} slice plane by construction, so the Nproj probe sweep samples the same 3D arc as the V sweep — identical results are expected by construction. The cross-slice solid-angle coverage hypothesis (exploration H1) was NOT tested by this matrix and remains open.
+- **codecClip variants (foldToHorizon, skip) are correctly wired** (unit-proven on synthetic below-horizon directions); their zero fixture-level effect is a real finding: no occluded probe direction in the 9 fixtures falls below the Nproj horizon.
+- **Stage-2 gate: defer (pre-registered rule)**. The only effective realizable knob is the cosine-weighted resolve (primary RMSE 0.229 → 0.199, ~13%), far short of the ≥50% reduction the gate requires. No TSL kernel edit is justified by this evidence.

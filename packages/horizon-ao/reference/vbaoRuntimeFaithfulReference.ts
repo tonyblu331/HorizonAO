@@ -122,7 +122,7 @@ export function faithfulCosineU(
 
 // ─── Count set bits in a 32-bit integer ──────────────────────────────────────
 
-function countOneBits(n: number): number {
+export function countOneBits(n: number): number {
   // Treat n as unsigned 32-bit (>>> 0)
   let x = n >>> 0
   x = x - ((x >>> 1) & 0x55555555)
