@@ -8,14 +8,16 @@
 promotion for a reconstruction path whose committed evidence is still marked
 demoted, rejected, or not promoted.
 
-#### Scenario: Half-resolution default policy follows evidence
+#### Scenario: Default policy follows half-resolution evidence
 
-- **GIVEN** all product quality tiers default to half-resolution
-- **AND** committed evidence marks half-resolution product output as not promoted
+- **GIVEN** committed evidence marks half-resolution product output as not
+  promoted
 - **WHEN** release-candidate readiness is reviewed
-- **THEN** the SDD SHALL classify the default policy as failing
-- **AND** implementation SHALL either update defaults to match promoted evidence
-  or keep half-resolution behind an explicit non-default evidence route.
+- **THEN** product defaults SHALL NOT use half-resolution for every quality tier
+- **AND** `quality` and `ultra` SHALL use full-resolution raw AO unless a later
+  evidence gate changes the preset policy
+- **AND** explicit half-resolution rows SHALL remain evidence/advanced routes
+  until they are promoted by committed evidence.
 
 #### Scenario: Evidence-only passes stay private
 
@@ -32,3 +34,37 @@ demoted, rejected, or not promoted.
 - **THEN** the SDD SHALL name the files with module-level state
 - **AND** any refactor SHALL preserve pass labels, public exports, and evidence
   capture behavior.
+
+#### Scenario: Pasted benchmark claims are reconciled with committed evidence
+
+- **GIVEN** a pasted review claims a competitor, noise-source, timing, edge, or
+  thin-gap result
+- **WHEN** committed `EVIDENCE.md` contains newer or conflicting data
+- **THEN** the SDD SHALL prefer committed evidence for product decisions
+- **AND** the pasted claim SHALL remain review pressure until reproduced or
+  superseded by current harness artifacts.
+
+#### Scenario: Temporal prototype constants do not reopen public temporal
+
+- **GIVEN** private temporal source contains prototype thresholds or weights
+- **AND** committed evidence rejects temporal promotion
+- **WHEN** product-node hardening is planned
+- **THEN** those constants SHALL NOT become public product options
+- **AND** any rederivation SHALL require a separate temporal SDD with evidence.
+
+#### Scenario: Competitor benchmark claims require current harness evidence
+
+- **GIVEN** a pasted review compares VBAO against GTAO, SSAO, or N8AO
+- **WHEN** the SDD changes product claims based on that comparison
+- **THEN** current benchmark artifacts SHALL include all compared algorithms
+- **AND** the rows SHALL use the same scene, camera, resolution, view, and output
+  semantics.
+
+#### Scenario: Product promotion requires fixture observations
+
+- **GIVEN** a product AO row is used for release, README, or marketing quality
+  claims
+- **WHEN** the production reference gate is evaluated
+- **THEN** every required production reference fixture SHALL be observed
+- **AND** screenshot proxy metrics SHALL NOT replace ray-cast/reference fixture
+  observations.

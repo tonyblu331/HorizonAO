@@ -11,9 +11,8 @@
 /**
  * Number of sectors in the per-slice visibility bitmask.
  *
- * Fixed at 32 in v1 to ship a single shader variant and to take advantage
- * of native WGSL `countOneBits()` on a `u32` value (1 cycle on WebGPU,
- * ~12 ALU ops in the GLSL emulation on WebGL2).
+ * Fixed at 32 in v1 to ship a single shader variant and use native WGSL
+ * `countOneBits()` on a `u32` value where available.
  */
 export const SECTOR_COUNT = 32 as const
 

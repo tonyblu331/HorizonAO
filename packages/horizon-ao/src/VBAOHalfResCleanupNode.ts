@@ -3,7 +3,6 @@ import {
   QuadMesh,
   Vector2,
   type Camera,
-  type Node,
   type NodeFrame,
   type TextureNode,
 } from 'three/webgpu'
@@ -26,6 +25,7 @@ import {
 
 import { computeVbaoBilateralGeometryWeight } from './vbaoBilateralWeight'
 import { VBAOEffectPass } from './VBAOEffectPass'
+import { clamp01, clampResolutionScale, type Node, type SampleableNode } from './vbaoUtils'
 
 export interface VBAOHalfResCleanupNodeOptions {
   readonly enabled?: boolean
@@ -47,18 +47,6 @@ const HALF_RES_CLEANUP_OFFSETS = Object.freeze([
 
 const halfResCleanupQuadMesh = new QuadMesh()
 const halfResCleanupSize = new Vector2()
-
-type SampleableNode = Node & {
-  sample: (uvCoord: Node) => any
-}
-
-function clamp01(value: number): number {
-  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1
-}
-
-function clampResolutionScale(value: number): number {
-  return Number.isFinite(value) ? Math.max(0.05, Math.min(1, value)) : 0.5
-}
 
 /**
  * Optional low-resolution AO cleanup before JBU resolve.

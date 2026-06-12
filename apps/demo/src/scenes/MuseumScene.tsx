@@ -55,7 +55,7 @@ import { ao as gtao } from 'three/addons/tsl/display/GTAONode.js'
 import { denoise } from 'three/addons/tsl/display/DenoiseNode.js'
 import { traa } from 'three/addons/tsl/display/TRAANode.js'
 import { N8AONode, createN8AOScenePass } from 'n8ao-webgpu'
-import { createDebugViewportPlan, createDebugViewportRects } from 'threejs-debug-compose'
+import { createDebugViewportPlan, createDebugViewportRects } from 'threejs-debug-view'
 import { VBAONode } from '@horizonao/core'
 import { VBAOFullResPolishNode } from '../../../../packages/horizon-ao/src/VBAOFullResPolishNode'
 import { VBAOHalfResCleanupNode } from '../../../../packages/horizon-ao/src/VBAOHalfResCleanupNode'
@@ -240,6 +240,17 @@ declare global {
   interface Window {
     __aoBenchmark?: AoBenchmarkApi
   }
+}
+
+function disposeSceneGraph(root: Group) {
+  root.traverse((child) => {
+    if (child instanceof Mesh) {
+      child.geometry?.dispose()
+      const mat = child.material
+      if (Array.isArray(mat)) mat.forEach((m) => m?.dispose())
+      else mat?.dispose()
+    }
+  })
 }
 
 function isComposeDebugMode(value: string | undefined): value is ComposeDebugMode {
@@ -510,7 +521,7 @@ async function runGtaoReferenceScene(
   let composeDebugModes: readonly ComposeDebugMode[] = ['ssao', 'gtao', 'vbao', 'n8ao']
   const sceneVariant = initialVariant
   let denoiseEnabled = true
-  let fullResolutionVbao = true
+  let fullResolutionVbao = false
 
   const labels = createSplitLabels(container)
   const panel = createReferencePanel(container, {
@@ -699,12 +710,14 @@ async function runGtaoReferenceScene(
   signal.addEventListener('abort', () => {
     cancelAnimationFrame(rafId)
     if (resizeRafId !== 0) cancelAnimationFrame(resizeRafId)
-    resizeObserver.disconnect()
-    controls.dispose()
-    panel.remove()
-    labels.remove()
-    benchmark.dispose()
-    gpuPassTimingProbe.dispose()
+    resizeObserver?.disconnect()
+    controls?.dispose()
+    disposeSceneGraph(variants.cityRoot)
+    disposeSceneGraph(variants.museumRoot)
+    panel?.remove()
+    labels?.remove()
+    benchmark?.dispose()
+    gpuPassTimingProbe?.dispose()
     pipelines?.dispose()
     renderer.dispose()
     canvas.remove()

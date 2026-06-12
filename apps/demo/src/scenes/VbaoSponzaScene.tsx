@@ -41,7 +41,7 @@ export function VbaoSponzaScene() {
       controls: { minDistance: 1.4, maxDistance: 22, maxPolarAngle: Math.PI * 0.49 },
       ambientIntensity: 0.55,
       sunPosition: [10, 20, 8],
-      vbao: { radius: 0.42, thickness: 0.12, samples: 8, slices: 3, resolutionScale: 1.0 },
+      vbao: { radius: 0.42, thickness: 0.12, samples: 8, slices: 3 },
     }).then(
       () => {
         if (!disposed) setPageState('ready')

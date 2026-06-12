@@ -71,6 +71,15 @@ the same or justified cost. A more interesting graph is not a win.
 
 Goal: define the exact rows used for comparison.
 
+What this looks like:
+
+- regenerate any product reports that predate `productQualityMatrix`;
+- produce one matrix-aware evidence packet for the current candidate and known
+  controls;
+- make every row explain its role, axes, promotion boundary, timing, labels,
+  screenshot path, and reference status;
+- keep generated local caches out of the evidence packet.
+
 Deliverables:
 
 - freeze the candidate and control matrix;
@@ -83,13 +92,27 @@ Deliverables:
 
 Acceptance:
 
-- every row has screenshot path, resolution, view, pass timings, labels, and
-  candidate/control classification;
-- no row with missing reference observations can pass.
+- every product row has screenshot path, resolution, scene, view, output, pass
+  timings, labels, `matrixRole`, `matrixRows`, and `promotionBoundary`;
+- compute and temporal appear as matrix axes unless the row is explicitly
+  `compute-smoke-observability` or `velocity-internal-private`;
+- every regenerated report includes `productQualityMatrix` and
+  `productQualityMatrixRows`;
+- no row with `missing-reference-observation` can pass;
+- clean-checkout reproducibility is either proven or recorded as a blocker.
 
 ## Phase 1: Reference Observation Gate
 
 Goal: remove `missing-reference-observation` as the first promotion blocker.
+
+What this looks like:
+
+- attach fixture observations to product rows through the existing reference
+  gate shape;
+- keep screenshot proxy metrics as steering data, not promotion truth;
+- record exactly which fixtures are observed, missing, passing, warning, or
+  failing;
+- fail closed when fixture data is absent or stale.
 
 Required fixtures:
 
@@ -103,13 +126,28 @@ Required fixtures:
 
 Acceptance:
 
-- product rows report observed fixture coverage;
-- missing fixtures fail closed;
-- screenshot proxies remain secondary evidence.
+- all required fixtures are present for each promotable product row;
+- each fixture records observed value, expected/reference range, status, and
+  source artifact;
+- missing, partial, or stale observations produce
+  `missing-reference-observation`;
+- screenshot proxy metrics cannot override a failed or missing reference gate;
+- focused reference gate tests prove missing observations remain hard blockers.
 
 ## Phase 2: Same-Cost Matrix
 
 Goal: decide whether confidence-guided reconstruction earns its cost.
+
+What this looks like:
+
+- capture the candidate and controls at identical scenes, camera pins,
+  resolutions, views, and output semantics;
+- run confidence-guided and scalar-control as separate benchmark invocations
+  because the collector accepts one receiver-confidence mode per run;
+- record raw, confidence, cleanup, resolve, polish, compute, temporal, and
+  total-product pass timing where applicable;
+- treat `compute-smoke-observability` and `velocity-internal-private` as
+  observability/private evidence, not product contenders.
 
 Compare:
 
@@ -126,11 +164,28 @@ Acceptance:
 - include any legacy 2560x1440 rows only as continuity evidence, not as the
   release matrix;
 - pass timing separates raw, confidence, cleanup, resolve, polish, compute;
-- candidate must reduce a named blocking label or beat same-cost samples.
+- candidate must reduce a named blocking label or beat same-cost samples at a
+  justified cost;
+- if same-cost raw sampling wins, confidence remains private and the next slice
+  becomes sampling/noise provenance;
+- if confidence wins but reference observations are incomplete, the result stays
+  candidate-only;
+- all non-candidate matrix rows emit `control-only`, `observability-only`, or
+  `private-only` verdicts.
 
 ## Phase 3: Noise Kill Gate
 
 Goal: kill visible hatch/stripe noise before adding more subsystems.
+
+What this looks like:
+
+- choose one noise hypothesis from Phase 2 evidence;
+- change only one sampling/reconstruction/polish variable per artifact unless
+  the report declares a coupled experiment;
+- capture raw/intermediate/final rows when possible so the failure source is
+  visible;
+- reject prettier stills that trade noise for contact loss, mud, halo, or thin
+  geometry regressions.
 
 Allowed investigations:
 
@@ -146,12 +201,25 @@ Acceptance:
 - `noise` and stripe metrics improve without introducing `mud`, `halo`,
   `thin-gap`, `edge-bleed`, `false-curvature`, or `scale-mismatch`;
 - screenshots visually confirm metric movement;
-- no default product claim changes until reference gates pass.
+- reference observations remain complete and passing for any candidate under
+  consideration;
+- pass cost is recorded and compared against same-cost raw alternatives;
+- no default product claim changes until reference and same-cost gates pass.
 
 ## Phase 4: Edge Metadata Gate
 
 Goal: attack `edge-bleed` with named receiver compatibility data instead of
 more blind filtering.
+
+What this looks like:
+
+- enter this phase only after Phase 3 shows noise is no longer the dominant
+  blocker or edge bleed remains after the cheapest sampling/reconstruction fix;
+- design the metadata contract before wiring shader consumers;
+- name the target owner, format, lifetime, backend assumptions, and consuming
+  stages;
+- compare the metadata path against spending the same cost on raw samples or
+  existing compatibility filters.
 
 Deliverables:
 
@@ -162,13 +230,24 @@ Deliverables:
 
 Acceptance:
 
+- the metadata contract is documented before runtime use;
+- source tests prevent the metadata from becoming public API or release output;
 - edge metadata replaces repeated depth/normal compatibility ambiguity;
 - target format, lifetime, backend, and timing are recorded;
-- edge metrics improve without worse noise or thin-gap behavior.
+- edge metrics improve without worse noise or thin-gap behavior;
+- equivalent same-cost non-metadata controls do not beat it.
 
 ## Phase 5: Product Candidate Bakeoff
 
 Goal: choose one candidate or reject all current candidates.
+
+What this looks like:
+
+- assemble a decision packet from tracked artifacts only;
+- compare the candidate, controls, private lanes, and rejected experiments in
+  one table;
+- choose the next slice from measured blockers instead of subsystem preference;
+- record rejected candidates so the team does not re-run the same dead ends.
 
 Decision table:
 
@@ -185,11 +264,21 @@ Acceptance:
 - decision is based on tracked artifacts;
 - decision records the dominant blocker and the cheapest credible next fix;
 - rejected candidates are recorded with measured reasons;
+- private, diagnostic, and observability lanes remain non-promotable;
+- any `promote-private-candidate` result still preserves scalar public API;
 - no README or EVIDENCE release claim unless release gates pass.
 
 ## Phase 6: Release Claim Gate
 
 Goal: decide whether product docs can change.
+
+What this looks like:
+
+- run the release gate after the candidate has already passed reference,
+  same-cost, failure-label, timing, and reproducibility checks;
+- update `EVIDENCE.md` with tracked artifacts and exact commands;
+- update README only for claims that the evidence packet supports;
+- leave incomplete gates explicit instead of hiding them in optimistic wording.
 
 Required before any claim:
 
@@ -202,8 +291,12 @@ Required before any claim:
 
 Acceptance:
 
-- `EVIDENCE.md` is updated only after the gate passes;
-- README remains explicit about incomplete readiness until then.
+- `EVIDENCE.md` cites tracked screenshots, GPU timings, reference observations,
+  threshold status, and reproduction commands;
+- README claims are no stronger than the gate result;
+- no blocking failure labels remain;
+- generated local caches are excluded;
+- README remains explicit about incomplete readiness until the gate passes.
 
 ## Verification
 

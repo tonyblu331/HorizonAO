@@ -55,9 +55,7 @@ export function createVbaoSectorConfidenceComputeCandidate(width: number, height
     ],
     target,
     computeNode,
-    textureNode: texture(target),
     compute: (renderer: WebGPURenderer) => renderer.compute(computeNode),
-    computeAsync: (renderer: WebGPURenderer) => renderer.computeAsync(computeNode),
     dispose: () => target.dispose(),
   }
 }

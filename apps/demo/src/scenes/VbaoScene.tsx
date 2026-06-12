@@ -21,6 +21,7 @@ import {
   Fog,
   InstancedMesh,
   Matrix4,
+  Mesh,
   MeshStandardMaterial,
   Object3D,
   PerspectiveCamera,
@@ -108,7 +109,7 @@ async function runVbaoScene(container: HTMLDivElement, signal: AbortSignal): Pro
   canvas.className = 'scene-canvas'
   container.appendChild(canvas)
 
-  // ── renderer ────────────────────────────────────────────────────────────────
+
   const renderer = new WebGPURenderer({
     canvas,
     antialias: true,
@@ -127,7 +128,7 @@ async function runVbaoScene(container: HTMLDivElement, signal: AbortSignal): Pro
     return
   }
 
-  // ── camera ──────────────────────────────────────────────────────────────────
+
   const camera = new PerspectiveCamera(42, 1, 0.1, 120)
   camera.position.set(9, 7, 12)
   camera.lookAt(0, 0, 0)
@@ -281,6 +282,14 @@ async function runVbaoScene(container: HTMLDivElement, signal: AbortSignal): Pro
     controls.dispose()
     comparePanel.remove()
     aoPipelines?.dispose()
+    scene.traverse((child) => {
+      if (child instanceof Mesh) {
+        child.geometry?.dispose()
+        const mat = child.material
+        if (Array.isArray(mat)) mat.forEach((m) => m?.dispose())
+        else mat?.dispose()
+      }
+    })
     renderer.dispose()
     canvas.remove()
   })
