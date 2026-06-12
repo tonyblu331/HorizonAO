@@ -156,7 +156,11 @@ export type VBAOTemporalPreset = keyof typeof VBAO_TEMPORAL_PRESETS
  * are only valid when the temporal path is active.
  *
  * @param preset - The preset key to look up.
- * @param temporal - The caller's temporal options. Must be defined.
+ * @param temporal - The caller's temporal options. Used as a **presence/validation
+ *   guard only** — the function checks that it is defined and throws if not, but
+ *   does not read any properties from it. The preset's slice/sample values are
+ *   returned directly from {@link VBAO_TEMPORAL_PRESETS}. Do NOT change the
+ *   public signature: callers and tests depend on passing `VBAOTemporalOptions`.
  */
 export function resolveTemporalPreset(
   preset: VBAOTemporalPreset,
