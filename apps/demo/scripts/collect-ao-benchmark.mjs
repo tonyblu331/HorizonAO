@@ -159,6 +159,15 @@ const vbaoCleanupMode = (() => {
     `AO_BENCHMARK_VBAO_CLEANUP_MODE must be "on" or "skip", received "${requested}".`,
   )
 })()
+// P4 evidence flag: 'separate' (shipping two-pass cleanup+resolve) vs 'merged'
+// (single full-res VBAOMergedResolveNode). Drives the museum vbaoResolveMode param.
+const vbaoResolveMode = (() => {
+  const requested = process.env.AO_BENCHMARK_VBAO_RESOLVE_MODE ?? 'separate'
+  if (requested === 'separate' || requested === 'merged') return requested
+  throw new Error(
+    `AO_BENCHMARK_VBAO_RESOLVE_MODE must be "separate" or "merged", received "${requested}".`,
+  )
+})()
 const vbaoComputeCandidateMode = (() => {
   const requested = process.env.AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE ?? 'off'
   if (requested === 'off' || requested === 'sector-confidence-smoke') return requested
@@ -209,6 +218,9 @@ function createSceneUrl(scene) {
   }
   if (vbaoCleanupMode === 'skip') {
     url.searchParams.set('vbaoCleanup', 'skip')
+  }
+  if (vbaoResolveMode === 'merged') {
+    url.searchParams.set('vbaoResolveMode', 'merged')
   }
   if (vbaoComputeCandidateMode !== 'off') {
     url.searchParams.set('vbaoComputeCandidate', vbaoComputeCandidateMode)

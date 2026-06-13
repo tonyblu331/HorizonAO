@@ -23,6 +23,7 @@ import {
   Vector3,
   Vector4,
   WebGPURenderer,
+  type TextureNode,
 } from 'three/webgpu'
 import {
   Fn,
@@ -59,6 +60,7 @@ import { createDebugViewportPlan, createDebugViewportRects } from 'threejs-debug
 import { VBAONode } from '@horizonao/core'
 import { VBAOFullResPolishNode } from '../../../../packages/horizon-ao/src/VBAOFullResPolishNode'
 import { VBAOHalfResCleanupNode } from '../../../../packages/horizon-ao/src/VBAOHalfResCleanupNode'
+import { VBAOMergedResolveNode } from '../../../../packages/horizon-ao/src/VBAOMergedResolveNode'
 import { VBAOReceiverConfidenceNode } from '../../../../packages/horizon-ao/src/VBAOReceiverConfidenceNode'
 import { VBAOResolveNode } from '../../../../packages/horizon-ao/src/VBAOResolveNode'
 import {
@@ -100,6 +102,9 @@ type VbaoSampleMode =
 type VbaoTemporalMode = 'off' | 'host' | 'velocity-internal'
 type VbaoHostTaaMode = 'off' | 'traa'
 type VbaoCleanupMode = 'on' | 'skip'
+// P4 evidence flag: 'separate' = half-res cleanup + JBU resolve as two passes;
+// 'merged' = single full-res VBAOMergedResolveNode folding both.
+type VbaoResolveMode = 'separate' | 'merged'
 type VbaoComputeCandidateMode = 'off' | typeof VBAO_COMPUTE_CANDIDATE_LABEL
 type VbaoBenchmarkTemporalMode = VbaoTemporalMode | 'n/a'
 type VbaoBenchmarkHostTaaMode = VbaoHostTaaMode | 'n/a'
@@ -314,6 +319,11 @@ function getRequestedVbaoCleanupMode(): VbaoCleanupMode {
   return requested === 'skip' ? 'skip' : 'on'
 }
 
+function getRequestedVbaoResolveMode(): VbaoResolveMode {
+  const requested = new URLSearchParams(window.location.search).get('vbaoResolveMode')
+  return requested === 'merged' ? 'merged' : 'separate'
+}
+
 function getRequestedVbaoComputeCandidateMode(): VbaoComputeCandidateMode {
   const requested = new URLSearchParams(window.location.search).get('vbaoComputeCandidate')
   return requested === VBAO_COMPUTE_CANDIDATE_LABEL ? VBAO_COMPUTE_CANDIDATE_LABEL : 'off'
@@ -493,6 +503,7 @@ async function runGtaoReferenceScene(
   const vbaoTemporalMode = getRequestedVbaoTemporalMode()
   const vbaoHostTaaMode = getRequestedVbaoHostTaaMode()
   const vbaoCleanupMode = getRequestedVbaoCleanupMode()
+  const vbaoResolveMode = getRequestedVbaoResolveMode()
   const vbaoComputeCandidateMode = getRequestedVbaoComputeCandidateMode()
   const vbaoReceiverConfidenceMode = getRequestedVbaoReceiverConfidenceMode()
   const vbaoSoftness = getRequestedVbaoSoftness()
@@ -509,6 +520,7 @@ async function runGtaoReferenceScene(
         vbaoTemporalMode,
         vbaoHostTaaMode,
         vbaoCleanupMode,
+        vbaoResolveMode,
         vbaoComputeCandidateMode,
         vbaoReceiverConfidenceMode,
         vbaoSoftness,
@@ -733,6 +745,7 @@ function createReferencePipelines(
   vbaoTemporalMode: VbaoTemporalMode,
   vbaoHostTaaMode: VbaoHostTaaMode,
   vbaoCleanupMode: VbaoCleanupMode,
+  vbaoResolveMode: VbaoResolveMode,
   vbaoComputeCandidateMode: VbaoComputeCandidateMode,
   vbaoReceiverConfidenceMode: VbaoReceiverConfidenceMode,
   vbaoSoftness: number,
@@ -1036,30 +1049,63 @@ function createReferencePipelines(
     ]
 
     if (!fullResolution) {
-      const cleanupNode = new VBAOHalfResCleanupNode(
-        vbaoNode.getRawTextureNode(),
-        prePassDepth,
-        prePassNormal,
-        camera,
-        vbaoNode.radius,
-        {
-          enabled: vbaoCleanupMode === 'on',
-          strength: vbaoSoftness,
-          resolutionScale: 0.5,
-          confidenceNode: vbaoNode.getRawTextureNode(),
-        },
-      )
-      const cleanupTextureNode = cleanupNode.getTextureNode()
-      const resolveNode = new VBAOResolveNode(
-        vbaoCleanupMode === 'on' ? cleanupTextureNode : vbaoNode.getRawTextureNode(),
-        prePassDepth,
-        prePassNormal,
-        camera,
-        vbaoNode.radius,
-      )
       const polishStrength = Math.max(0, (vbaoOptions.softness ?? 0) - 0.5) * 2
+
+      // Reconstruction topology is selected by the P4 evidence flag. 'merged'
+      // folds half-res cleanup + JBU resolve into one full-res pass; 'separate'
+      // is the shipping two-pass path. Both feed the same full-res polish and
+      // produce a `reconstruct` stage capture so the A/B compares like for like.
+      let reconstructTextureNode: TextureNode
+      let cleanupStageScalar: ReturnType<typeof makeAoPipeline> | undefined
+
+      if (vbaoResolveMode === 'merged') {
+        const mergedResolveNode = new VBAOMergedResolveNode(
+          vbaoNode.getRawTextureNode(),
+          prePassDepth,
+          prePassNormal,
+          camera,
+          vbaoNode.radius,
+          {
+            strength: vbaoSoftness,
+            confidenceNode: vbaoNode.getRawTextureNode(),
+          },
+        )
+        reconstructTextureNode = mergedResolveNode.getTextureNode()
+        stageNodes.push(mergedResolveNode)
+      } else {
+        const cleanupNode = new VBAOHalfResCleanupNode(
+          vbaoNode.getRawTextureNode(),
+          prePassDepth,
+          prePassNormal,
+          camera,
+          vbaoNode.radius,
+          {
+            enabled: vbaoCleanupMode === 'on',
+            strength: vbaoSoftness,
+            resolutionScale: 0.5,
+            confidenceNode: vbaoNode.getRawTextureNode(),
+          },
+        )
+        const cleanupTextureNode = cleanupNode.getTextureNode()
+        const resolveNode = new VBAOResolveNode(
+          vbaoCleanupMode === 'on' ? cleanupTextureNode : vbaoNode.getRawTextureNode(),
+          prePassDepth,
+          prePassNormal,
+          camera,
+          vbaoNode.radius,
+        )
+        reconstructTextureNode = resolveNode.getTextureNode()
+        cleanupStageScalar = makeAoPipeline(
+          cleanupTextureNode.r,
+          VBAO_AO_ONLY_DISPLAY_GAMMA,
+          VBAO_AO_ONLY_DISPLAY_BOOST,
+          VBAO_AO_ONLY_DISPLAY_FLOOR,
+        )
+        stageNodes.push(cleanupNode, resolveNode)
+      }
+
       const polishNode = new VBAOFullResPolishNode(
-        resolveNode.getTextureNode(),
+        reconstructTextureNode,
         prePassDepth,
         prePassNormal,
         camera,
@@ -1070,13 +1116,12 @@ function createReferencePipelines(
           confidenceNode: vbaoNode.getRawTextureNode(),
         },
       )
-      const cleanupScalar = cleanupTextureNode.r
-      const resolveScalar = resolveNode.getTextureNode().r
+      const resolveScalar = reconstructTextureNode.r
       const polishTextureNode = polishNode.getTextureNode()
       const polishScalar = polishTextureNode.r
       vbaoProductNode = polishTextureNode
       vbaoProductScalar = polishScalar
-      stageNodes.push(cleanupNode, resolveNode, polishNode)
+      stageNodes.push(polishNode)
       stagePipelines = {
         raw: makeAoPipeline(
           vbaoRawScalar,
@@ -1084,12 +1129,7 @@ function createReferencePipelines(
           VBAO_AO_ONLY_DISPLAY_BOOST,
           VBAO_AO_ONLY_DISPLAY_FLOOR,
         ),
-        cleanup: makeAoPipeline(
-          cleanupScalar,
-          VBAO_AO_ONLY_DISPLAY_GAMMA,
-          VBAO_AO_ONLY_DISPLAY_BOOST,
-          VBAO_AO_ONLY_DISPLAY_FLOOR,
-        ),
+        ...(cleanupStageScalar === undefined ? {} : { cleanup: cleanupStageScalar }),
         resolve: makeAoPipeline(
           resolveScalar,
           VBAO_AO_ONLY_DISPLAY_GAMMA,
