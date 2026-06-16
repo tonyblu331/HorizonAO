@@ -1285,4 +1285,22 @@ describe('modernized VBAO production source contract', () => {
     // updateBefore() MUST mutate .value on the class-field uniform (0.0 after first frame fires).
     expect(temporalAccumulateSource).toContain('isFirstFrameUniform.value =')
   })
+
+  it('VBAOTemporalAccumulateNode declares updateBeforeType = NodeUpdateType.FRAME so the TSL scheduler invokes updateBefore() every frame (judge CRITICAL)', () => {
+    // TSL node scheduler defaults to NodeUpdateType.NONE when updateBeforeType is absent.
+    // Any node that overrides updateBefore() MUST also declare updateBeforeType = NodeUpdateType.FRAME
+    // or the scheduler silently never calls it — the temporal pass becomes a no-op at runtime.
+    // This is the same pattern VBAONode, VBAOVelocityTemporalNode, and VBAOFullResPolishNode use.
+    expect(temporalAccumulateSource).toContain('NodeUpdateType')
+    expect(temporalAccumulateSource).toContain('updateBeforeType = NodeUpdateType.FRAME')
+  })
+
+  it('VBAOTemporalAccumulateNode uses a per-instance renderer state field, not a local variable (judge renderer-state fix)', () => {
+    // A module-level or local-const renderer state slot lets two simultaneous instances
+    // corrupt each other's save/restore. The fix uses a named class field.
+    // VBAOEffectPass already has 'private rendererState'; this node needs a distinct name.
+    expect(temporalAccumulateSource).toContain('temporalRendererState')
+    // The unsafe `undefined as never` cast must not reappear — it was replaced by the class field.
+    expect(temporalAccumulateSource).not.toContain('undefined as never')
+  })
 })

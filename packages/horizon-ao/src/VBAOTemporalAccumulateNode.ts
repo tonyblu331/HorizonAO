@@ -21,6 +21,7 @@ import {
   HalfFloatType,
   Matrix4,
   NearestFilter,
+  NodeUpdateType,
   NoColorSpace,
   QuadMesh,
   RenderTarget,
@@ -96,6 +97,13 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
     return 'VBAOTemporalAccumulateNode'
   }
 
+  /**
+   * TSL node scheduler hook: FRAME causes updateBefore() to be called once
+   * per frame. Without this declaration the scheduler defaults to NONE and
+   * updateBefore() is never invoked, making the temporal pass a silent no-op.
+   */
+  override updateBeforeType = NodeUpdateType.FRAME
+
   /** Input: the resolved/polished full-res product AO texture. */
   readonly productAoNode: TextureNode
 
@@ -109,11 +117,15 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
   readonly normalNode: SampleableNode
 
   private readonly camera: Camera
-  private readonly options: Readonly<Required<Pick<VBAOTemporalOptions, 'alpha'>> & { reliabilityCounter: boolean }>
+  private readonly options: Readonly<Required<Pick<VBAOTemporalOptions, 'alpha'>> & { reliabilityCounter: boolean; mode: VBAOTemporalOptions['mode'] }>
+  /** Velocity texture node for mode='velocity' (Tier-2 path). UV offset: xy = uv - prevUV. */
+  private readonly velocityNode: SampleableNode | undefined
   private readonly historyTarget: RenderTarget
 
   /** CPU-side reprojection matrix: proj_prev * view_prev * view_curr_inv */
   private readonly reprojMatrix = new Matrix4()
+  /** Scratch matrix reused every frame to avoid per-frame allocation. */
+  private readonly tempMatrix = new Matrix4()
   /** Previous frame's view-projection (view * proj) for next-frame reprojection. */
   private readonly prevViewMatrix = new Matrix4()
   private readonly prevProjMatrix = new Matrix4()
@@ -122,6 +134,10 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
   private isFirstFrame = true
   private lastWidth = 0
   private lastHeight = 0
+  // Per-instance renderer state for this node's own updateBefore() render pass.
+  // Named distinctly to avoid shadowing VBAOEffectPass's private rendererState
+  // while preserving proper per-instance save/restore tracking across frames.
+  private temporalRendererState: ReturnType<typeof RendererUtils.resetRendererState> | undefined
 
   // ---------------------------------------------------------------------------
   // TSL uniforms — updated in updateBefore each frame
@@ -154,10 +170,10 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
       )
     }
 
-    if (options.mode === 'velocity') {
+    if (options.mode === 'velocity' && options.velocityNode === undefined) {
       throw new TypeError(
-        'VBAOTemporalAccumulateNode: mode="velocity" is not yet implemented (PR3). ' +
-          'Use mode="depth-reprojection" for PR1/PR2.',
+        'VBAOTemporalAccumulateNode: mode="velocity" requires velocityNode to be set. ' +
+          'Provide a TextureNode outputting screen-space UV offset (xy = uv - prevUV).',
       )
     }
 
@@ -170,9 +186,11 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
     this.camera = camera
 
     this.options = {
+      mode: options.mode,
       alpha: options.alpha ?? { min: 0.05, max: 0.25 },
       reliabilityCounter: options.reliabilityCounter !== false,
     }
+    this.velocityNode = options.velocityNode as SampleableNode | undefined
 
     this.projInvUniform = uniform(camera.projectionMatrixInverse)
     this.cameraNear = reference('near', 'float', camera)
@@ -225,7 +243,7 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
     const renderer = frame.renderer
     if (renderer === null || renderer === undefined) return undefined
 
-    const rendererState = RendererUtils.resetRendererState(renderer, undefined as never)
+    this.temporalRendererState = RendererUtils.resetRendererState(renderer, this.temporalRendererState as never)
 
     const drawingBufferSize = renderer.getDrawingBufferSize(size)
     this.setSize(drawingBufferSize.width, drawingBufferSize.height)
@@ -237,12 +255,13 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
       // view_curr_inv = camera.matrixWorld (inverse of matrixWorldInverse)
       // We compute: proj_prev * (view_prev * matrixWorld_curr)
       const viewCurrInv = this.camera.matrixWorld
-      const temp = new Matrix4().multiplyMatrices(this.prevViewMatrix, viewCurrInv)
-      this.reprojMatrix.multiplyMatrices(this.prevProjMatrix, temp)
+      this.tempMatrix.multiplyMatrices(this.prevViewMatrix, viewCurrInv)
+      this.reprojMatrix.multiplyMatrices(this.prevProjMatrix, this.tempMatrix)
       this.reprojMatrixUniform.value = this.reprojMatrix
     } else {
-      // First frame: use identity so prevUV = uvNode (maps to itself — will fail validity)
-      this.reprojMatrixUniform.value = new Matrix4()
+      // First frame: use identity so prevUV = uvNode (maps to itself — will fail validity).
+      // Re-use the pre-allocated reprojMatrix instead of allocating a new Matrix4.
+      this.reprojMatrixUniform.value = this.reprojMatrix.identity()
     }
 
     // Snapshot current-frame matrices for use as prev-frame next frame.
@@ -269,7 +288,7 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
 
     this.isFirstFrame = false
 
-    RendererUtils.restoreRendererState(renderer, rendererState)
+    RendererUtils.restoreRendererState(renderer, this.temporalRendererState)
     return true
   }
 
@@ -338,17 +357,33 @@ export class VBAOTemporalAccumulateNode extends VBAOEffectPass {
       }
 
       // -------------------------------------------------------------------
-      // Per-pixel GPU reprojection: reconstruct view position, apply reproj matrix
+      // prevUV computation: Tier-1 (depth-reprojection) or Tier-2 (velocity)
       // -------------------------------------------------------------------
       const currentDepth = sampleDepth(depthTex, uvNode).toVar('vbaoTemporalCurrentDepth')
-      const P_view = getViewPosition(uvNode, currentDepth, this.projInvUniform).toVar('vbaoTemporalPView')
 
-      // Compute prevUV via reproj matrix: P_prev_clip = reprojMatrix * vec4(P_view, 1)
-      const reprojNode = this.reprojMatrixUniform as any
-      const P4 = vec4(P_view.x, P_view.y, P_view.z, float(1))
-      const P_prev_clip = (reprojNode.mul(P4 as any) as any).toVar('vbaoTemporalPPrevClip')
-      const invW = float(1).div(P_prev_clip.w.add(float(1e-8))).toVar('vbaoTemporalInvW')
-      const prevUV = P_prev_clip.xy.mul(invW).mul(float(0.5)).add(float(0.5)).toVar('vbaoTemporalPrevUv')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let prevUV: any
+      if (this.options.mode === 'velocity') {
+        if (this.velocityNode === undefined) {
+          throw new Error(
+            'VBAOTemporalAccumulateNode: mode="velocity" requires velocityNode but it is undefined at setup() time. ' +
+              'Provide a TextureNode outputting screen-space UV offset (xy = uv - prevUV).',
+          )
+        }
+        // Tier-2 velocity path: prevUV = uv - velocity.xy
+        // velocityNode outputs screen-space UV offset: xy = uv - prevUV (curr → prev).
+        const velocityTex = this.velocityNode as any
+        const vel = velocityTex.sample(uvNode).xy.toVar('vbaoTemporalVelocity')
+        prevUV = uvNode.sub(vel).toVar('vbaoTemporalPrevUv')
+      } else {
+        // Tier-1 depth-reprojection path: reconstruct view position, apply reproj matrix.
+        const P_view = getViewPosition(uvNode, currentDepth, this.projInvUniform).toVar('vbaoTemporalPView')
+        const reprojNode = this.reprojMatrixUniform as any
+        const P4 = vec4(P_view.x, P_view.y, P_view.z, float(1))
+        const P_prev_clip = (reprojNode.mul(P4 as any) as any).toVar('vbaoTemporalPPrevClip')
+        const invW = float(1).div(P_prev_clip.w.add(float(1e-8))).toVar('vbaoTemporalInvW')
+        prevUV = P_prev_clip.xy.mul(invW).mul(float(0.5)).add(float(0.5)).toVar('vbaoTemporalPrevUv')
+      }
 
       // -------------------------------------------------------------------
       // Validity sub-test 1: prevUV in [0,1]²

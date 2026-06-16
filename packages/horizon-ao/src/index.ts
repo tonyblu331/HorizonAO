@@ -9,4 +9,5 @@
 
 export { VBAONode, vbao } from './VBAONode'
 export { VBAOTemporalAccumulateNode } from './VBAOTemporalAccumulateNode'
-export type { VBAONodeOptions, VBAOQualityPreset, VBAOTemporalOptions } from './vbaoConstants'
+export { VBAO_TEMPORAL_PRESETS, resolveTemporalPreset } from './vbaoConstants'
+export type { VBAONodeOptions, VBAOQualityPreset, VBAOTemporalOptions, VBAOTemporalPreset } from './vbaoConstants'

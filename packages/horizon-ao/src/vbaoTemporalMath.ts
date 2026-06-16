@@ -250,3 +250,40 @@ export function updateReliabilityCounter(counter: number, valid: boolean): numbe
 export function counterToAlphaScale(counter: number): number {
   return 1.0 - counter / 15
 }
+
+// ---------------------------------------------------------------------------
+// §Halton Temporal Phase (PR3)
+//
+// Spec: halton(index, base) — low-discrepancy Van der Corput sequence.
+//   - index: sample index (0-based, non-negative integer)
+//   - base:  prime base (2 for x, 3 for y in Halton 2D)
+//
+// The caller is responsible for the mod-N wrap:
+//   haltonPhase = halton(frameCounter % N, base)
+//
+// base=2, index=0..7 → [0, 0.5, 0.25, 0.75, 0.125, 0.625, 0.375, 0.875]
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the `index`-th value of the Van der Corput sequence in the given `base`.
+ *
+ * Pure function; no side effects. Output is in [0, 1).
+ *
+ * Usage for temporal phase selection (8-phase Halton-2 cycle):
+ * ```ts
+ * const phase = halton(frameCounter % 8, 2)
+ * ```
+ */
+export function halton(index: number, base: number): number {
+  let result = 0
+  let f = 1
+  let i = index
+
+  while (i > 0) {
+    f = f / base
+    result += f * (i % base)
+    i = Math.floor(i / base)
+  }
+
+  return result
+}

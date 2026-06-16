@@ -18,6 +18,8 @@ import {
   emaBlend,
   adaptiveAlpha,
   counterToAlphaScale,
+  updateReliabilityCounter,
+  halton,
 } from '../vbaoTemporalMath'
 
 // ---------------------------------------------------------------------------
@@ -246,18 +248,15 @@ describe('counterToAlphaScale', () => {
 
   it('counter increment: counter goes from 7 to 8 on valid reprojection (pure increment logic)', () => {
     // This tests the spec requirement for counter increment — pure function
-    const counterIncrement = (c: number, valid: boolean): number => valid ? Math.min(15, c + 1) : 0
-    expect(counterIncrement(7, true)).toBe(8)
+    expect(updateReliabilityCounter(7, true)).toBe(8)
   })
 
   it('counter saturation: counter stays at 15 when already at max', () => {
-    const counterIncrement = (c: number, valid: boolean): number => valid ? Math.min(15, c + 1) : 0
-    expect(counterIncrement(15, true)).toBe(15)
+    expect(updateReliabilityCounter(15, true)).toBe(15)
   })
 
   it('counter reset: counter goes to 0 on validity failure', () => {
-    const counterIncrement = (c: number, valid: boolean): number => valid ? Math.min(15, c + 1) : 0
-    expect(counterIncrement(10, false)).toBe(0)
+    expect(updateReliabilityCounter(10, false)).toBe(0)
   })
 })
 
@@ -288,14 +287,14 @@ describe('VBAOTemporalOptions — construction guards (via VBAOTemporalAccumulat
     ).toThrow(TypeError)
   })
 
-  it('throws TypeError with message mentioning "PR3" for velocity mode — guard-without-impl documented', async () => {
+  it('throws TypeError mentioning "velocityNode" when mode="velocity" without velocityNode (PR3: guard-without-impl removed)', async () => {
     const { VBAOTemporalAccumulateNode } = await import('../VBAOTemporalAccumulateNode')
     const fakeNode = {} as any
     const fakeCamera = {} as any
 
     expect(() =>
       new VBAOTemporalAccumulateNode(fakeNode, fakeNode, fakeNode, fakeNode, fakeCamera, { mode: 'velocity' }),
-    ).toThrow(/PR3/)
+    ).toThrow(/velocityNode/)
   })
 })
 
@@ -322,6 +321,133 @@ function scalingMat4(s: number): number[] {
     0, 0, 0, 1,
   ]
 }
+
+// ---------------------------------------------------------------------------
+// §Halton Temporal Phase (PR3)
+//
+// Spec: halton(index, base) — low-discrepancy sequence
+//   base=2, index=0..7 → [0, 0.5, 0.25, 0.75, 0.125, 0.625, 0.375, 0.875]
+//   Mod-N wrap: halton(t % N, base) gives same value as halton(t, base) for t<N
+// ---------------------------------------------------------------------------
+
+describe('halton', () => {
+  // Known Halton values for base=2, indices 0..7 (spec §Halton Temporal Phase)
+  const knownBase2 = [0, 0.5, 0.25, 0.75, 0.125, 0.625, 0.375, 0.875] as const
+
+  it('returns 0 for index=0, base=2', () => {
+    expect(halton(0, 2)).toBeCloseTo(0)
+  })
+
+  it('returns 0.5 for index=1, base=2', () => {
+    expect(halton(1, 2)).toBeCloseTo(0.5)
+  })
+
+  it('returns correct values for all 8 known base-2 entries', () => {
+    for (let i = 0; i < 8; i++) {
+      expect(halton(i, 2)).toBeCloseTo(knownBase2[i]!, 10)
+    }
+  })
+
+  it('is deterministic: calling halton(i, base) twice returns the same value', () => {
+    expect(halton(3, 2)).toBe(halton(3, 2))
+    expect(halton(5, 3)).toBe(halton(5, 3))
+  })
+
+  it('returns values in [0,1) for all indices 0..15 with base=2', () => {
+    for (let i = 0; i < 16; i++) {
+      const v = halton(i, 2)
+      expect(v).toBeGreaterThanOrEqual(0)
+      expect(v).toBeLessThan(1)
+    }
+  })
+
+  it('returns values in [0,1) for base=3 across indices 0..15', () => {
+    for (let i = 0; i < 16; i++) {
+      const v = halton(i, 3)
+      expect(v).toBeGreaterThanOrEqual(0)
+      expect(v).toBeLessThan(1)
+    }
+  })
+
+  it('mod-N wrap: halton(N, base) equals halton(0, base) via caller mod', () => {
+    // Spec: caller does t % N; halton(0, 2) and halton(8 % 8, 2) are both index=0
+    const N = 8
+    expect(halton(8 % N, 2)).toBeCloseTo(halton(0, 2))
+    // Additional triangulation: periodic wrap at t=9 and t=15
+    expect(halton(9 % N, 2)).toBeCloseTo(halton(1, 2))
+    expect(halton(15 % N, 2)).toBeCloseTo(halton(7, 2))
+  })
+})
+
+// ---------------------------------------------------------------------------
+// §Temporal Budget Presets (PR3)
+// These tests exercise the VBAO constants resolver for temporal presets.
+// ---------------------------------------------------------------------------
+
+describe('temporal budget presets', () => {
+  it('resolves temporal-fast to { slices: 1, samples: 2 }', async () => {
+    const { VBAO_TEMPORAL_PRESETS } = await import('../vbaoConstants')
+    expect(VBAO_TEMPORAL_PRESETS['temporal-fast']).toEqual({ slices: 1, samplesPerSlice: 2 })
+  })
+
+  it('resolves temporal-balanced to { slices: 2, samples: 3 }', async () => {
+    const { VBAO_TEMPORAL_PRESETS } = await import('../vbaoConstants')
+    expect(VBAO_TEMPORAL_PRESETS['temporal-balanced']).toEqual({ slices: 2, samplesPerSlice: 3 })
+  })
+
+  it('resolves temporal-quality to { slices: 2, samples: 4 }', async () => {
+    const { VBAO_TEMPORAL_PRESETS } = await import('../vbaoConstants')
+    expect(VBAO_TEMPORAL_PRESETS['temporal-quality']).toEqual({ slices: 2, samplesPerSlice: 4 })
+  })
+
+  it('throws TypeError when temporal preset is used without temporal option (via resolveTemporalPreset)', async () => {
+    const { resolveTemporalPreset } = await import('../vbaoConstants')
+    expect(() => resolveTemporalPreset('temporal-fast', undefined)).toThrow(TypeError)
+  })
+
+  it('returns the preset when temporal option is present', async () => {
+    const { resolveTemporalPreset } = await import('../vbaoConstants')
+    const fakeTemporalOptions = { mode: 'depth-reprojection' as const }
+    expect(resolveTemporalPreset('temporal-fast', fakeTemporalOptions)).toEqual({ slices: 1, samplesPerSlice: 2 })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// §Velocity path construction guard (PR3)
+// Spec: velocityNode required when mode='velocity'; TypeError must NOT fire anymore
+// (the PR3 guard-without-impl is REPLACED by a real implementation + validation).
+// ---------------------------------------------------------------------------
+
+describe('VBAOTemporalAccumulateNode — velocity path (PR3)', () => {
+  it('does NOT throw for mode="velocity" with a velocityNode provided', async () => {
+    const { VBAOTemporalAccumulateNode } = await import('../VBAOTemporalAccumulateNode')
+    const fakeNode = {} as any
+    const fakeCamera = {} as any
+    const fakeVelocityNode = {} as any
+
+    // PR3 removes the "not yet implemented" TypeError — should construct cleanly
+    expect(() =>
+      new VBAOTemporalAccumulateNode(fakeNode, fakeNode, fakeNode, fakeNode, fakeCamera, {
+        mode: 'velocity',
+        velocityNode: fakeVelocityNode,
+      }),
+    ).not.toThrow()
+  })
+
+  it('still throws TypeError for mode="velocity" when velocityNode is missing', async () => {
+    const { VBAOTemporalAccumulateNode } = await import('../VBAOTemporalAccumulateNode')
+    const fakeNode = {} as any
+    const fakeCamera = {} as any
+
+    expect(() =>
+      new VBAOTemporalAccumulateNode(fakeNode, fakeNode, fakeNode, fakeNode, fakeCamera, {
+        mode: 'velocity',
+      }),
+    ).toThrow(TypeError)
+  })
+})
+
+// ---------------------------------------------------------------------------
 
 /**
  * Applies a column-major 4x4 matrix to a 4-element column vector.
