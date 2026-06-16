@@ -125,6 +125,40 @@ export type VBAOQualityPreset = keyof typeof VBAO_QUALITY_TIERS
  * advanced`; older flat aliases are accepted at runtime as untyped shims
  * (see {@link VbaoDeprecatedOptionAliases}) but are not documented API.
  */
+/**
+ * Options for the public opt-in temporal AO accumulation path.
+ *
+ * Added in vbao-temporal PR1. `mode='velocity'` is guarded at construction
+ * (Tier-2 implementation deferred to PR3; throws TypeError until then).
+ */
+export interface VBAOTemporalOptions {
+  /**
+   * Temporal reprojection mode.
+   * - `'depth-reprojection'`: Tier-1 — uses depth + camera matrices.
+   * - `'velocity'`: Tier-2 — uses an external velocity texture (PR3 only; throws at construction in PR1/PR2).
+   */
+  readonly mode: 'depth-reprojection' | 'velocity'
+  /**
+   * External velocity texture node. Required when `mode = 'velocity'`.
+   * The constructor throws a TypeError if `mode = 'velocity'` and this is absent.
+   */
+  readonly velocityNode?: unknown
+  /**
+   * EMA blend bounds. `min` = blend weight at full confidence (minimum history weight).
+   * `max` = blend weight at zero confidence (maximum history weight).
+   * Both in (0, 1). Defaults to `{ min: 0.05, max: 0.25 }`.
+   *
+   * PR1 note: adaptive alpha driven by the confidence channel is PR2 scope.
+   * PR1 uses `alpha.min` as the fixed blend weight.
+   */
+  readonly alpha?: { readonly min: number; readonly max: number }
+  /**
+   * Enable TSVGF 4-bit reliability counter packed into the G channel of the
+   * RG16F history buffer. Default `true`. Counter logic is PR2 scope.
+   */
+  readonly reliabilityCounter?: boolean
+}
+
 export interface VBAONodeOptions {
   readonly quality?: VBAOQualityPreset
   readonly radius?: number
@@ -138,6 +172,14 @@ export interface VBAONodeOptions {
     readonly samples?: number
     readonly resolutionScale?: number
   }
+  /**
+   * Opt-in temporal AO accumulation. When absent or `undefined` the system
+   * behaves identically to the current spatial-only path (zero behavior change,
+   * no history buffers allocated).
+   *
+   * Added in vbao-temporal PR1.
+   */
+  readonly temporal?: VBAOTemporalOptions
 }
 
 /**

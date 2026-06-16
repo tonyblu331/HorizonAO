@@ -17,9 +17,15 @@ describe('VBAO evidence alignment contract', () => {
     expect(indexSource).not.toContain('VBAO_SECTOR_SINES')
     expect(optionsSource).not.toContain('samplingSchedule')
     expect(optionsSource).not.toContain('readonly denoise?: boolean')
-    expect(optionsSource).not.toContain('temporal')
+    // vbao-temporal PR1: VBAOTemporalOptions is the public opt-in temporal API.
+    // Positive assertion: the type MUST be exported so downstream code can type opt-in usage.
+    expect(optionsSource).toContain('VBAOTemporalOptions')
+    // Guard against OLD internal/experimental temporal identifiers only.
+    expect(optionsSource).not.toContain('historyWeight')
+    expect(optionsSource).not.toContain('internalTemporal')
     expect(optionsSource).not.toContain('visibilityBucket')
-    expect(optionsSource).not.toContain('confidence')
+    // Guard against experimental confidence FIELD (not descriptive comments in temporal options)
+    expect(optionsSource).not.toContain('readonly confidence?:')
     expect(optionsSource).not.toContain('VBAO_SECTOR_ANGLES')
     expect(optionsSource).not.toContain('VBAO_SECTOR_COSINES')
     expect(optionsSource).not.toContain('VBAO_SECTOR_SINES')
