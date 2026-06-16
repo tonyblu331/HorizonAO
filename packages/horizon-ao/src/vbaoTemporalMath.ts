@@ -179,3 +179,74 @@ export function buildReprojMatrix(
 export function emaBlend(history: number, raw: number, alpha: number): number {
   return history + (raw - history) * alpha
 }
+
+// ---------------------------------------------------------------------------
+// §Confidence-Adaptive α (PR2)
+//
+// Spec: α = mix(alpha.min, alpha.max, 1.0 − confidence)
+// confidence=1 → α=min (maximum accumulation — fully confident, trust history)
+// confidence=0 → α=max (minimum accumulation — no confidence, weight new frame)
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute the adaptive blend weight α from a per-pixel confidence value.
+ *
+ * Implements: `α = mix(bounds.min, bounds.max, 1.0 - confidence)`
+ *
+ * `confidence` is sampled from channel-G of the half-res raw VBAONode output
+ * (bilinear upsample at full-res UV is acceptable — see design decision on
+ * confidence reconciliation).
+ *
+ * Regardless of this formula, validity failure must override α to 1.0 (the
+ * caller is responsible for applying the override; this function is pure).
+ */
+export function adaptiveAlpha(
+  confidence: number,
+  bounds: { readonly min: number; readonly max: number },
+): number {
+  const t = 1.0 - confidence
+  return bounds.min + (bounds.max - bounds.min) * t
+}
+
+// ---------------------------------------------------------------------------
+// §TSVGF Reliability Counter → α scale (PR2)
+//
+// Spec: 4-bit counter per pixel, packed into the G channel of the RG16F
+// ping-pong pair. Counter increments on valid reprojection (saturating at 15),
+// resets to 0 on failure. Used to scale α so low-counter pixels get higher
+// blend weight (less history trust).
+//
+// RG16F G channel stores counter as a direct integer (0.0..15.0).
+// fp16 can represent integers 0-2048 exactly, so 0-15 round-trips correctly.
+//
+// Design decision: store raw integer, retrieve with floor(g).
+// ---------------------------------------------------------------------------
+
+/**
+ * Updates the 4-bit reliability counter for a single pixel.
+ *
+ * - `valid=true` → increment by 1, saturate at 15.
+ * - `valid=false` → reset to 0.
+ *
+ * This is a pure function; the result is written into the history G channel
+ * each frame by `VBAOTemporalAccumulateNode`.
+ */
+export function updateReliabilityCounter(counter: number, valid: boolean): number {
+  return valid ? Math.min(15, counter + 1) : 0
+}
+
+/**
+ * Maps a 4-bit reliability counter (0–15) to an α scale factor.
+ *
+ * Scale decreases monotonically as the counter increases:
+ * - `counter=0` → `scale=1.0` (no history, force full new-frame weight)
+ * - `counter=15` → `scale=0.0` (fully warmed up, use adaptive α as-is)
+ *
+ * The final blend weight is: `α_final = max(adaptiveAlpha, scale)`
+ * (or equivalently, `scale` overrides adaptive α only when counter is low).
+ *
+ * Formula: `scale = 1.0 - counter / 15`
+ */
+export function counterToAlphaScale(counter: number): number {
+  return 1.0 - counter / 15
+}

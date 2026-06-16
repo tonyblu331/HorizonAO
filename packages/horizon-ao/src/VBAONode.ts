@@ -445,7 +445,14 @@ export class VBAONode extends TempNode<'float'> {
         this.temporalAccumulateNode.productAoNode !== output
       ) {
         this.temporalAccumulateNode?.dispose()
-        this.temporalAccumulateNode = new VBAOTemporalAccumulateNode(output, this.temporalOptions)
+        this.temporalAccumulateNode = new VBAOTemporalAccumulateNode(
+          output,
+          this.rawEstimateTextureNode,
+          this.depthNode,
+          this.normalNode,
+          this.camera,
+          this.temporalOptions,
+        )
       }
       output = this.temporalAccumulateNode.getTextureNode()
     } else {
