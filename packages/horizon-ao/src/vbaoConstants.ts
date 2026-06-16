@@ -23,7 +23,20 @@ export const SECTOR_COUNT = 32 as const
  * so reference gates can fit replacements without brittle source-literal tests.
  */
 export const VBAO_CONTACT_THICKNESS_RADIUS_RATIO = 0.3 as const
-export const VBAO_NEAR_SAMPLE_THICKNESS_RATIO = 0.85 as const
+/**
+ * Near-sample thickness ceiling ratio for the x²-spaced sample loop.
+ *
+ * Raised from 0.85 → 0.95 (Issue-2 contact-occlusion recovery).
+ * With the old value of 0.85, the closest x²-spaced samples (indices 0–3 of 8)
+ * had their effective thickness zeroed, making the thin-interval branch
+ * unreachable and preventing contact-shadow mask bits from being set.
+ * At 0.95, those samples retain finite effective thickness so the branch is
+ * reachable and contact occlusion is correctly captured.
+ *
+ * CALLER CONTRACT: `near >= 0.1` is required for acceptable depth precision.
+ * Results are undefined for smaller near values until reverse-Z is implemented.
+ */
+export const VBAO_NEAR_SAMPLE_THICKNESS_RATIO = 0.95 as const
 export const VBAO_CONTACT_THICKNESS_MIN_RATIO = 0.12 as const
 export const VBAO_DEFAULT_CONTACT = 0.45 as const
 
@@ -53,7 +66,7 @@ export const VBAO_DEFAULTS = Object.freeze({
   contact: VBAO_DEFAULT_CONTACT,
   thickness: resolveVbaoContactThickness(1.25, VBAO_DEFAULT_CONTACT),
   strength: 1.0,
-  contrast: 1.0,
+  contrast: 1.8,
   softness: 0.0,
   slices: 3,
   samples: 8,
@@ -90,6 +103,12 @@ export const VBAO_CLAMP_RANGES = Object.freeze({
  */
 export const VBAO_QUALITY_TIERS = Object.freeze({
   performance: { resolutionScale: 0.5, slices: 2, samples: 4, sectors: 32 },
+  /**
+   * 3-slice preset. Note: with 3 uniformly-spaced slices a surface whose normal
+   * happens to be perpendicular to every slice direction will produce NprojLen ≈ 0
+   * (degeneracy), collapsing the projected-normal weighting. The `quality` and
+   * `ultra` presets use 4 slices which avoids this degeneracy by construction.
+   */
   balanced: { resolutionScale: 0.75, slices: 3, samples: 6, sectors: 32 },
   quality: { resolutionScale: 1.0, slices: 4, samples: 8, sectors: 32 },
   ultra: { resolutionScale: 1.0, slices: 4, samples: 10, sectors: 32 },
