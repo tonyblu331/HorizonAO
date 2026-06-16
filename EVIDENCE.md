@@ -4,6 +4,69 @@ Every rendering claim for `VBAONode` needs reproducible screenshots and timing.
 This file is the gate for later adaptive thickness, sampling, denoise, or depth
 hierarchy work. No "looks muddy" shortcut: evidence first, then math.
 
+## 2026-06-16 — VBAO merged vs separate reconstruction A/B (P4 prototype evidence)
+
+Status: **merged single-pass prototype built and measured; cheaper reconstruction
+in 3 of 4 rows but a 1080p thin-gap/stripe proxy regression; promotion still
+gated on the missing ray-cast slab observation**.
+
+Closes the build-the-prototype fork the prior P4 section left open.
+`VBAOMergedResolveNode` folds the half-res cleanup (3x3 edge-aware filter) and
+JBU resolve (2x2 upsample) into ONE full-resolution pass: a tight bilinear-quad
+JBU lobe reproduces `VBAOResolveNode`'s output (softness-0 behavior), a wide 3x3
+Gaussian gather reproduces the cleanup contribution, and the two are blended by
+`strength * (1 - confidence)`. Behind the `vbaoResolveMode` evidence flag so it
+A/B's against the shipping two-pass path. Softness 0.2 (polish inactive), so the
+runs isolate reconstruction.
+
+Commands (identical except `AO_BENCHMARK_VBAO_RESOLVE_MODE` and output paths):
+
+```sh
+AO_BENCHMARK_SCENES='museum' AO_BENCHMARK_MODES='vbao' AO_BENCHMARK_VIEWS='beauty,ao' \
+AO_BENCHMARK_DENOISE_STATES='true' AO_BENCHMARK_VBAO_RESOLUTION_STATES='half' \
+AO_BENCHMARK_VBAO_TEMPORAL_MODE='off' AO_BENCHMARK_PASS_TIMING_SAMPLES='3' \
+AO_BENCHMARK_REQUIRE_WEBGPU='1' AO_BENCHMARK_VBAO_RESOLVE_MODE='separate'   # then 'merged'
+pnpm --filter @horizonao/demo benchmark:ao
+```
+
+Artifacts: `artifacts/benchmarks/vbao-p4-resolve-{separate,merged}.{json,md}`.
+
+Reconstruction GPU cost — separate `cleanup + resolve` vs merged single pass
+(median of 3 steady-state samples; raw-pass variance excluded):
+
+| Row (half-res product) | Separate cleanup+resolve (ms) | Merged single pass (ms) |
+| --- | ---: | ---: |
+| 1920x1080 beauty | 0.249 | 0.274 |
+| 1920x1080 ao | 0.511 | 0.352 |
+| 1280x720 beauty | 0.226 | 0.098 |
+| 1280x720 ao | 0.251 | 0.194 |
+
+Screenshot quality proxies (Thin-gap ↑, Edge bleed ↓, Noise ↓, Stripe ↓):
+
+| Row | Thin-gap sep / merged | Edge bleed sep / merged | Noise sep / merged | Stripe sep / merged |
+| --- | --- | --- | --- | --- |
+| 1920x1080 beauty | 0.00520 / 0.00288 | 0.02075 / 0.01675 | 0.02305 / 0.02218 | 0.09887 / 0.09354 |
+| 1920x1080 ao | 0.01157 / 0.00229 | 0.02772 / 0.00523 | 0.03556 / 0.01177 | 0.08887 / 0.15263 |
+| 1280x720 beauty | 0.00541 / 0.00951 | 0.02909 / 0.03140 | 0.03521 / 0.03588 | 0.15776 / 0.17096 |
+| 1280x720 ao | 0.01680 / 0.01676 | 0.03414 / 0.03414 | 0.04275 / 0.04276 | 0.22180 / 0.22174 |
+
+Boundary:
+
+- Merged removes one render target and one fullscreen dispatch. Its single pass
+  is cheaper than the separate `cleanup + resolve` sum in 3 of 4 rows (1080p
+  beauty is ~marginally slower, inside the per-row timing noise documented in
+  the 2026-06-11 section).
+- Quality is mixed. Merged lowers edge-bleed and noise at 1080p and is
+  near-identical at 720p, BUT the 1080p AO row shows a clear thin-gap proxy drop
+  (0.0116 -> 0.0023, less preservation) and a stripe increase (0.089 -> 0.153).
+  Thin-gap preservation is exactly what the screenshot proxy cannot adjudicate
+  authoritatively.
+- Therefore this is NOT a promote signal. The prototype proves the merged
+  topology is viable and generally cheaper, but the merge-vs-keep decision still
+  needs the `thin-gap-separated-slabs` ray-cast product observation (still
+  missing — no slab-fixture GPU producer) before the separate cleanup pass can
+  be deleted. The node stays internal and behind the evidence flag.
+
 ## 2026-06-11 — VBAO half-res cleanup on/skip comparison (P4 merge-decision evidence)
 
 Status: **rendered proxy evidence captured; cleanup contribution within run variance on 3 of 4 rows; ray-cast thin-gap product observation still missing**.

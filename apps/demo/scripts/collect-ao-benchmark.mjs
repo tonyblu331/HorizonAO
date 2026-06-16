@@ -367,6 +367,9 @@ function mapAoPassLabel(label, mode) {
   if (label === 'VBAO.Raw') return 'raw'
   if (label === 'VBAO.HalfResCleanup') return 'cleanup'
   if (label === 'VBAO.Resolve') return 'resolve'
+  // Merged reconstruction (P4 evidence flag) replaces cleanup+resolve with one
+  // pass; it occupies the 'resolve' slot so the pass-timing contract stays valid.
+  if (label === 'VBAO.MergedResolve') return 'resolve'
   if (label === 'VBAO.FullResPolish') return 'polish'
   if (label === 'VBAO.VelocityTemporal') return 'temporal'
   if (label === 'VBAO.VelocityTemporalDiagnostics') return 'diagnostics'
@@ -424,6 +427,7 @@ function createVbaoPassTimingRows({
   denoise,
   fullResolutionVbao,
   cleanupMode,
+  resolveMode,
   temporalMode,
   receiverConfidenceMode,
   vbaoReconstructionStage,
@@ -434,10 +438,14 @@ function createVbaoPassTimingRows({
   const diagnosticOutput = vbaoReconstructionStage === 'confidence'
   const productOutput = denoise === true
   const lowResolution = fullResolutionVbao === false
+  // Merged reconstruction folds cleanup into the single resolve-slot pass, so no
+  // standalone cleanup pass is emitted; resolve stays enabled (the merged pass).
+  const mergedReconstruction = resolveMode === 'merged'
   const cleanupEnabled =
     productOutput &&
     !diagnosticOutput &&
     lowResolution &&
+    !mergedReconstruction &&
     cleanupMode !== 'skip' &&
     vbaoDemoSoftness > 0
   const resolveEnabled = productOutput && !diagnosticOutput && lowResolution
@@ -782,6 +790,7 @@ try {
                               denoise,
                               fullResolutionVbao,
                               cleanupMode: vbaoCleanupMode,
+                              resolveMode: vbaoResolveMode,
                               temporalMode: vbaoTemporalMode,
                               receiverConfidenceMode: vbaoReceiverConfidenceMode,
                               vbaoReconstructionStage,
