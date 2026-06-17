@@ -183,13 +183,18 @@ const vbaoReceiverConfidenceMode = (() => {
   )
 })()
 const vbaoProductReconstructionStages = ['raw', 'cleanup', 'resolve', 'polish', 'final']
-const vbaoReconstructionStages =
+const vbaoReconstructionStages = (
   process.env.AO_BENCHMARK_VBAO_RECONSTRUCTION_STAGES === '1'
     ? vbaoProductReconstructionStages
     : (process.env.AO_BENCHMARK_VBAO_RECONSTRUCTION_STAGES ?? 'final')
         .split(',')
         .map((value) => value.trim())
         .filter(Boolean)
+)
+  // Merged reconstruction folds cleanup into the single resolve-slot pass, so the
+  // 'cleanup' stage does not exist; requesting it would silently capture the
+  // product frame mislabeled as cleanup. Drop it instead of miscapturing.
+  .filter((stage) => !(vbaoResolveMode === 'merged' && stage === 'cleanup'))
 const validVbaoReconstructionStages = new Set([
   ...vbaoProductReconstructionStages,
   'confidence',
@@ -534,9 +539,11 @@ function createVbaoPassTimingRows({
         'cleanup',
         cleanupEnabled,
         productOutput
-          ? cleanupMode === 'skip'
-            ? 'Skipped by evidence-only cleanup removal experiment.'
-            : 'Skipped for full-resolution output.'
+          ? mergedReconstruction
+            ? 'Folded into merged single-pass reconstruction.'
+            : cleanupMode === 'skip'
+              ? 'Skipped by evidence-only cleanup removal experiment.'
+              : 'Skipped for full-resolution output.'
           : 'Skipped for raw debug output.',
       ),
     },
