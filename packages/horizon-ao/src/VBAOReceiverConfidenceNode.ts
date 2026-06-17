@@ -25,7 +25,6 @@ import {
   bitOr,
   clamp,
   cos,
-  countOneBits,
   cross,
   dot,
   float,
@@ -51,7 +50,6 @@ import {
 } from 'three/tsl'
 
 import {
-  SECTOR_COUNT,
   VBAO_CONTACT_THICKNESS_RADIUS_RATIO,
   VBAO_DEFAULTS,
   VBAO_NEAR_SAMPLE_THICKNESS_RATIO,
@@ -59,6 +57,7 @@ import {
 import {
   createVbaoNoisePhaseSampler,
   vbaoCosineMeasureNoAtan,
+  vbaoCosineWeightedResolveFn as cosineWeightedResolveFn,
   vbaoIntervalMaskStochasticFn as intervalMaskStochasticFn,
 } from './vbaoKernelPrimitives'
 import { getSharedVbaoNoiseTexture } from './vbaoNoise'
@@ -410,12 +409,7 @@ export class VBAOReceiverConfidenceNode extends TempNode<'float'> {
             },
           )
 
-          const blockedSectors = float(countOneBits(occludedMask) as any).toVar(
-            'vbaoReceiverConfidenceBlockedSectors',
-          )
-          const sliceAccessibility = float(1)
-            .sub(blockedSectors.div(float(SECTOR_COUNT)))
-            .toVar('vbaoReceiverConfidenceSliceAccessibility')
+          const sliceAccessibility = (cosineWeightedResolveFn as any)(occludedMask).toVar('vbaoReceiverConfidenceSliceAccessibility')
           sliceCounter.addAssign(float(1))
           const sliceDelta = sliceAccessibility.sub(sliceMean).toVar(
             'vbaoReceiverConfidenceSliceDelta',
