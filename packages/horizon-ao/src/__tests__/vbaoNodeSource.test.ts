@@ -305,8 +305,17 @@ describe('modernized VBAO production source contract', () => {
     expect(source).not.toContain('weightSum.addAssign(float(1))')
   })
 
-  it('reduces cosine-measure sector masks by popcount without a second cosine loop', () => {
-    expect(source).toContain('countOneBits(occludedMask)')
+  it('reduces cosine-measure sector masks by cosine-weighted resolve without a second cosine loop', () => {
+    expect(source).toContain("(cosineWeightedResolveFn as any)(occludedMask).toVar('sliceAccessibility')")
+    expect(source).not.toContain('countOneBits(occludedMask)')
+    // Diagnostic resolve site (VBAOReceiverConfidenceNode) must use the same Fn — locks W-1.
+    expect(receiverConfidenceSource).toContain(
+      "(cosineWeightedResolveFn as any)(occludedMask).toVar('vbaoReceiverConfidenceSliceAccessibility')",
+    )
+    expect(receiverConfidenceSource).not.toContain('countOneBits(occludedMask)')
+    expect(kernelPrimitivesSource).toContain('export const vbaoCosineWeightedResolveFn = (Fn as any)')
+    expect(kernelPrimitivesSource).toContain('bitAnd(shiftRight(mask, uint(k)), uint(1))')
+    expect(kernelPrimitivesSource).toContain('return float(1).sub(occludedWeight.div(float(COSINE_WEIGHT_TOTAL)))')
     expect(kernelPrimitivesSource).toContain('export const vbaoIntervalMaskStochasticFn = (Fn as any)')
     expect(kernelPrimitivesSource).toContain(
       "const intervalSectors = u1.sub(u0).mul(float(SECTOR_COUNT)).toVar('vbaoIntervalSectors')",

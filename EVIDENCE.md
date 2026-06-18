@@ -4226,3 +4226,40 @@ Winner: realizable cell (probeFrame=V) with min primaryAggregateRMSE that passes
 - **Nproj diagnostic rows are geometrically vacuous**: Nproj lies in the {S,V} slice plane by construction, so the Nproj probe sweep samples the same 3D arc as the V sweep — identical results are expected by construction. The cross-slice solid-angle coverage hypothesis (exploration H1) was NOT tested by this matrix and remains open.
 - **codecClip variants (foldToHorizon, skip) are correctly wired** (unit-proven on synthetic below-horizon directions); their zero fixture-level effect is a real finding: no occluded probe direction in the 9 fixtures falls below the Nproj horizon.
 - **Stage-2 gate: defer (pre-registered rule)**. The only effective realizable knob is the cosine-weighted resolve (primary RMSE 0.229 → 0.199, ~13%), far short of the ≥50% reduction the gate requires. No TSL kernel edit is justified by this evidence.
+
+---
+
+## 2026-06-17 — P3-D: Cosine-Weighted Slice Resolve shipped to TSL kernel
+
+### What changed
+
+- `packages/horizon-ao/src/vbaoKernelPrimitives.ts`: added `Loop` + `bitAnd` imports, exported `COSINE_WEIGHT_TOTAL` constant (25.175614463412174), appended `vbaoCosineWeightedResolveFn` TSL Fn.
+- `packages/horizon-ao/src/VBAONode.ts`: replaced `countOneBits`-based resolve at line 654 with `(cosineWeightedResolveFn as any)(occludedMask).toVar('sliceAccessibility')`. Removed `countOneBits` import.
+- `packages/horizon-ao/src/VBAOReceiverConfidenceNode.ts`: same swap at line 413. Removed `countOneBits` and now-unused `SECTOR_COUNT` imports.
+
+### Formula-equivalence result
+
+**PASS** — max abs diff between JS transcription and `applyResolve(mask,'cosineWeighted')` = **0** (exact floating-point match across all 12 representative masks including edges).
+
+COSINE_WEIGHT_TOTAL src-vs-reference diff = **0** (exact match, well within < 1e-12 threshold).
+
+### CPU-predicted quality improvement
+
+Per P3-B ablation evidence: cosine-weighted resolve reduces primary RMSE from 0.229 → 0.199 (**+13% improvement** over uniform resolve baseline). This is now shipped to the TSL kernel.
+
+### Test suite
+
+- vitest: **325 / 325 passed** (305 pre-existing + 20 new: 2 src constant tests + 18 cross-reference formula-equivalence + edge tests)
+- tsc `tsconfig.json` (src): **clean** (exit 0)
+- tsc `tsconfig.reference.json`: **clean** (exit 0)
+
+### GPU acceptance gates (PENDING — manual readback required)
+
+| Gate | Status | Notes |
+|------|--------|-------|
+| (a) Formula equivalence — CPU | PASS | vitest green, max diff = 0 |
+| (b) GPU readback — no regression | **PENDING** | Requires WebGPU device + collect-ao-gpu-readback-baseline.mjs |
+| (b) GPU readback — tilted-normal improved-or-neutral | **PENDING** | Requires WebGPU device |
+| (c) Raw-pass overhead ≤ 6% | **PENDING** | Requires WebGPU device + GPU timing |
+
+GPU gates deferred to `sdd-verify` phase. REJECT triggers: visual regression, tilted-normal worsening, >6% raw-pass overhead.

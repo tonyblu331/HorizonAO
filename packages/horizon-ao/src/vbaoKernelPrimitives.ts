@@ -2,6 +2,8 @@ import type { Node } from 'three/webgpu'
 import {
   Fn,
   If,
+  Loop,
+  bitAnd,
   bitNot,
   ceil,
   clamp,
@@ -142,6 +144,44 @@ export const vbaoIntervalMaskStochasticFn = (Fn as any)(([u0_in, u1_in, xi_in]: 
     { name: 'u1', type: 'float' },
     { name: 'xi', type: 'float' },
   ],
+})
+
+/**
+ * Sum of cosine half-disk weights for all 32 sectors.
+ * Computed from the same closed-form as reference/vbaoKernelAblation.ts so
+ * the two are exactly equal in floating-point — no cross-import from reference/.
+ */
+export const COSINE_WEIGHT_TOTAL = Array.from({ length: SECTOR_COUNT }, (_, k) => {
+  const u = (k + 0.5) / SECTOR_COUNT
+  const s = 2 * u - 1
+  return Math.sqrt(Math.max(1 - s * s, 0))
+}).reduce((a, b) => a + b, 0)
+
+/**
+ * Cosine-weighted slice accessibility from a 32-bit occluded sector bitmask.
+ *
+ * Returns `1 − (Σ_k bit_k · w_k) / COSINE_WEIGHT_TOTAL` where
+ * `w_k = sqrt(1 − (2·(k+0.5)/32 − 1)²)` is the cosine half-disk weight for
+ * sector k, and bit_k is 1 if sector k is occluded.
+ */
+export const vbaoCosineWeightedResolveFn = (Fn as any)(([mask_in]: any[]) => {
+  const mask = uint(mask_in)
+  const occludedWeight = float(0).toVar('vbaoCosineOccludedWeight')
+  ;(Loop as any)(
+    { start: int(0), end: int(SECTOR_COUNT), type: 'int', condition: '<', name: 'k' },
+    ({ k }: any) => {
+      const bitSet = bitAnd(shiftRight(mask, uint(k)), uint(1)).equal(uint(1))
+      const u = float(k).add(float(0.5)).div(float(SECTOR_COUNT)) // u_k = (k+0.5)/32
+      const sinBeta = u.mul(float(2)).sub(float(1)) // 2u_k - 1
+      const w = sqrt(max(float(1).sub(sinBeta.mul(sinBeta)), float(0)))
+      occludedWeight.addAssign((bitSet as any).select(w, float(0)))
+    },
+  )
+  return float(1).sub(occludedWeight.div(float(COSINE_WEIGHT_TOTAL)))
+}).setLayout({
+  name: 'vbaoCosineWeightedResolve',
+  type: 'float',
+  inputs: [{ name: 'mask', type: 'uint' }],
 })
 
 export interface VbaoNoisePhaseSamplerOptions {

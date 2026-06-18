@@ -22,7 +22,6 @@ import {
   bitOr,
   clamp,
   cos,
-  countOneBits,
   cross,
   dot,
   float,
@@ -69,6 +68,7 @@ import { VBAOTemporalAccumulateNode } from './VBAOTemporalAccumulateNode'
 import {
   createVbaoNoisePhaseSampler,
   vbaoCosineMeasureNoAtan,
+  vbaoCosineWeightedResolveFn as cosineWeightedResolveFn,
   vbaoIntervalMaskStochasticFn as intervalMaskStochasticFn,
 } from './vbaoKernelPrimitives'
 import { getSharedVbaoNoiseTexture } from './vbaoNoise'
@@ -704,10 +704,7 @@ export class VBAONode extends TempNode<'float'> {
             },
           )
 
-          const blockedSectors = float(countOneBits(occludedMask) as any).toVar('blockedSectors')
-          const sliceAccessibility = float(1)
-            .sub(blockedSectors.div(float(SECTOR_COUNT)))
-            .toVar('sliceAccessibility')
+          const sliceAccessibility = (cosineWeightedResolveFn as any)(occludedMask).toVar('sliceAccessibility')
           weightedAccessibility.addAssign(sliceAccessibility.mul(NprojLen))
           weightSum.addAssign(NprojLen)
           // Welford online variance of per-slice accessibility → slice agreement.
