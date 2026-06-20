@@ -159,6 +159,15 @@ const vbaoCleanupMode = (() => {
     `AO_BENCHMARK_VBAO_CLEANUP_MODE must be "on" or "skip", received "${requested}".`,
   )
 })()
+// P4 evidence flag: 'separate' (shipping two-pass cleanup+resolve) vs 'merged'
+// (single full-res VBAOMergedResolveNode). Drives the museum vbaoResolveMode param.
+const vbaoResolveMode = (() => {
+  const requested = process.env.AO_BENCHMARK_VBAO_RESOLVE_MODE ?? 'separate'
+  if (requested === 'separate' || requested === 'merged') return requested
+  throw new Error(
+    `AO_BENCHMARK_VBAO_RESOLVE_MODE must be "separate" or "merged", received "${requested}".`,
+  )
+})()
 const vbaoComputeCandidateMode = (() => {
   const requested = process.env.AO_BENCHMARK_VBAO_COMPUTE_CANDIDATE ?? 'off'
   if (requested === 'off' || requested === 'sector-confidence-smoke') return requested
@@ -174,13 +183,18 @@ const vbaoReceiverConfidenceMode = (() => {
   )
 })()
 const vbaoProductReconstructionStages = ['raw', 'cleanup', 'resolve', 'polish', 'final']
-const vbaoReconstructionStages =
+const vbaoReconstructionStages = (
   process.env.AO_BENCHMARK_VBAO_RECONSTRUCTION_STAGES === '1'
     ? vbaoProductReconstructionStages
     : (process.env.AO_BENCHMARK_VBAO_RECONSTRUCTION_STAGES ?? 'final')
         .split(',')
         .map((value) => value.trim())
         .filter(Boolean)
+)
+  // Merged reconstruction folds cleanup into the single resolve-slot pass, so the
+  // 'cleanup' stage does not exist; requesting it would silently capture the
+  // product frame mislabeled as cleanup. Drop it instead of miscapturing.
+  .filter((stage) => !(vbaoResolveMode === 'merged' && stage === 'cleanup'))
 const validVbaoReconstructionStages = new Set([
   ...vbaoProductReconstructionStages,
   'confidence',
@@ -209,6 +223,9 @@ function createSceneUrl(scene) {
   }
   if (vbaoCleanupMode === 'skip') {
     url.searchParams.set('vbaoCleanup', 'skip')
+  }
+  if (vbaoResolveMode === 'merged') {
+    url.searchParams.set('vbaoResolveMode', 'merged')
   }
   if (vbaoComputeCandidateMode !== 'off') {
     url.searchParams.set('vbaoComputeCandidate', vbaoComputeCandidateMode)
@@ -355,6 +372,9 @@ function mapAoPassLabel(label, mode) {
   if (label === 'VBAO.Raw') return 'raw'
   if (label === 'VBAO.HalfResCleanup') return 'cleanup'
   if (label === 'VBAO.Resolve') return 'resolve'
+  // Merged reconstruction (P4 evidence flag) replaces cleanup+resolve with one
+  // pass; it occupies the 'resolve' slot so the pass-timing contract stays valid.
+  if (label === 'VBAO.MergedResolve') return 'resolve'
   if (label === 'VBAO.FullResPolish') return 'polish'
   if (label === 'VBAO.VelocityTemporal') return 'temporal'
   if (label === 'VBAO.VelocityTemporalDiagnostics') return 'diagnostics'
@@ -412,6 +432,7 @@ function createVbaoPassTimingRows({
   denoise,
   fullResolutionVbao,
   cleanupMode,
+  resolveMode,
   temporalMode,
   receiverConfidenceMode,
   vbaoReconstructionStage,
@@ -422,10 +443,14 @@ function createVbaoPassTimingRows({
   const diagnosticOutput = vbaoReconstructionStage === 'confidence'
   const productOutput = denoise === true
   const lowResolution = fullResolutionVbao === false
+  // Merged reconstruction folds cleanup into the single resolve-slot pass, so no
+  // standalone cleanup pass is emitted; resolve stays enabled (the merged pass).
+  const mergedReconstruction = resolveMode === 'merged'
   const cleanupEnabled =
     productOutput &&
     !diagnosticOutput &&
     lowResolution &&
+    !mergedReconstruction &&
     cleanupMode !== 'skip' &&
     vbaoDemoSoftness > 0
   const resolveEnabled = productOutput && !diagnosticOutput && lowResolution
@@ -514,9 +539,11 @@ function createVbaoPassTimingRows({
         'cleanup',
         cleanupEnabled,
         productOutput
-          ? cleanupMode === 'skip'
-            ? 'Skipped by evidence-only cleanup removal experiment.'
-            : 'Skipped for full-resolution output.'
+          ? mergedReconstruction
+            ? 'Folded into merged single-pass reconstruction.'
+            : cleanupMode === 'skip'
+              ? 'Skipped by evidence-only cleanup removal experiment.'
+              : 'Skipped for full-resolution output.'
           : 'Skipped for raw debug output.',
       ),
     },
@@ -770,6 +797,7 @@ try {
                               denoise,
                               fullResolutionVbao,
                               cleanupMode: vbaoCleanupMode,
+                              resolveMode: vbaoResolveMode,
                               temporalMode: vbaoTemporalMode,
                               receiverConfidenceMode: vbaoReceiverConfidenceMode,
                               vbaoReconstructionStage,
